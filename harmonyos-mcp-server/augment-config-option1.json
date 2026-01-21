@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "harmonyos-tools": {
+      "command": "python",
+      "args": [
+        "run_mcp.py"
+      ],
+      "cwd": "d:/lxl/ho_dev_app_mcp/harmonyos-mcp-server"
+    }
+  }
+}
+
