@@ -330,20 +330,46 @@ class UIOperations:
         解析bounds字符串
 
         Args:
-            bounds_str: bounds字符串，格式为 "[left,top][right,bottom]"
+            bounds_str: bounds字符串，支持多种格式:
+                - "[left,top][right,bottom]" (Android 风格)
+                - "RectT (x, y) - [width x height]" (HarmonyOS FrameRect 格式)
+                - "[x y width height]" (HarmonyOS Bounds 格式)
 
         Returns:
-            (left, top, right, bottom) 元组，解析失败返回None
+            (left, top, width, height) 元组，解析失败返回None
         """
-        # 匹配格式: [left,top][right,bottom]
+        if not bounds_str:
+            return None
+
+        # 格式1: [left,top][right,bottom] (Android 风格)
         match = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', bounds_str)
         if match:
+            left = int(match.group(1))
+            top = int(match.group(2))
+            right = int(match.group(3))
+            bottom = int(match.group(4))
+            return (left, top, right - left, bottom - top)
+
+        # 格式2: RectT (x, y) - [width x height] (HarmonyOS FrameRect 格式)
+        match = re.match(r'RectT\s*\(\s*([\d.]+)\s*,\s*([\d.]+)\s*\)\s*-\s*\[\s*([\d.]+)\s*x\s*([\d.]+)\s*\]', bounds_str)
+        if match:
             return (
-                int(match.group(1)),
-                int(match.group(2)),
-                int(match.group(3)),
-                int(match.group(4))
+                int(float(match.group(1))),
+                int(float(match.group(2))),
+                int(float(match.group(3))),
+                int(float(match.group(4)))
             )
+
+        # 格式3: [x y width height] (HarmonyOS Bounds 格式，空格分隔)
+        match = re.match(r'\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]', bounds_str)
+        if match:
+            return (
+                int(float(match.group(1))),
+                int(float(match.group(2))),
+                int(float(match.group(3))),
+                int(float(match.group(4)))
+            )
+
         return None
 
     @staticmethod
@@ -352,14 +378,14 @@ class UIOperations:
         计算bounds的中心点坐标
 
         Args:
-            bounds: (left, top, right, bottom) 元组
+            bounds: (left, top, width, height) 元组
 
         Returns:
             (x, y) 中心点坐标
         """
-        left, top, right, bottom = bounds
-        x = (left + right) // 2
-        y = (top + bottom) // 2
+        left, top, width, height = bounds
+        x = left + width // 2
+        y = top + height // 2
         return (x, y)
 
     @staticmethod
@@ -368,7 +394,7 @@ class UIOperations:
         从bounds字符串计算中心点坐标
 
         Args:
-            bounds_str: bounds字符串，格式为 "[left,top][right,bottom]"
+            bounds_str: bounds字符串，支持多种格式
 
         Returns:
             (x, y) 中心点坐标，解析失败返回None
@@ -408,10 +434,13 @@ class UIOperations:
                 if element_type and node.get('type') != element_type:
                     match = False
 
-                # 检查文本
+                # 检查文本（同时检查 Text 和 Label 属性）
                 if text and match:
-                    node_text = node.get('properties', {}).get('Text', '')
-                    if text.lower() not in str(node_text).lower():
+                    props = node.get('properties', {})
+                    node_text = props.get('Text', '')
+                    node_label = props.get('Label', '')
+                    combined_text = f"{node_text} {node_label}".lower()
+                    if text.lower() not in combined_text:
                         match = False
 
                 # 检查ID
@@ -421,14 +450,53 @@ class UIOperations:
                         match = False
 
                 if match and (text or element_type or element_id):
-                    # 获取bounds并计算中心点
-                    bounds_str = node.get('properties', {}).get('Bounds', '')
-                    center = self.bounds_to_center(bounds_str)
+                    props = node.get('properties', {})
+
+                    # 尝试多种属性名获取bounds
+                    bounds_str = ''
+                    center = None
+
+                    # 1. 尝试 FrameRect
+                    frame_rect = props.get('FrameRect', '')
+                    if frame_rect:
+                        bounds_str = frame_rect
+                        center = self.bounds_to_center(frame_rect)
+
+                    # 2. 尝试 PaintRect without transform
+                    if not center:
+                        paint_rect = props.get('PaintRect without transform', '')
+                        if paint_rect:
+                            bounds_str = paint_rect
+                            center = self.bounds_to_center(paint_rect)
+
+                    # 3. 尝试 Bounds
+                    if not center:
+                        bounds = props.get('Bounds', '')
+                        if bounds:
+                            bounds_str = bounds
+                            center = self.bounds_to_center(bounds)
+
+                    # 4. 尝试从 CanvasNode 解析
+                    if not center:
+                        for key, value in props.items():
+                            if 'CanvasNode' in key and 'Bounds' in str(value):
+                                # 格式: "CanvasNode[...] ... Bounds[x y w h]..."
+                                import re
+                                match_bounds = re.search(r'Bounds\[([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\]', str(value))
+                                if match_bounds:
+                                    bounds_str = f"[{match_bounds.group(1)} {match_bounds.group(2)} {match_bounds.group(3)} {match_bounds.group(4)}]"
+                                    center = self.bounds_to_center(bounds_str)
+                                    break
+
+                    # 获取 Label（按钮文本等）
+                    label = props.get('Label', '')
+                    text_content = props.get('Text', label)
 
                     element_info = {
                         'type': node.get('type'),
-                        'text': node.get('properties', {}).get('Text', ''),
-                        'id': node.get('properties', {}).get('ID', ''),
+                        'text': text_content,
+                        'label': label,
+                        'id': props.get('ID', ''),
                         'bounds': bounds_str,
                         'depth': depth
                     }
