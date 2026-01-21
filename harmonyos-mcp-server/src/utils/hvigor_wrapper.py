@@ -224,8 +224,8 @@ class HvigorWrapper:
             '-p', f'product={product}',
             '--analyze=normal',
             '--parallel',
-            '--incremental',
-            '--no-daemon'
+            '--incremental'
+            # 移除 --no-daemon 参数，因为我们使用 DEVNULL 避免了所有 daemon 相关问题
         ]
         result = self._execute_command(args)
 
