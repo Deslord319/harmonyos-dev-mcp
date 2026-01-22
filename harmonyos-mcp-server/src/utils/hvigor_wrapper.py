@@ -1,11 +1,10 @@
 r"""
 hvigor构建工具封装
 
-重要发现 (2026-01-21):
-- 不应使用项目目录下的hvigorw.bat/hvigorw脚本
-- 应该使用DevEco Studio自带的hvigorw.js
-- 路径: C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js
-- 需要配合DevEco Studio自带的Node.js使用
+说明:
+- 使用 DevEco Studio 自带的 hvigorw.js 进行构建
+- 需要配合 DevEco Studio 自带的 Node.js 使用
+- 支持通过环境变量 DEVECO_STUDIO_PATH 配置 DevEco Studio 路径
 """
 import subprocess
 import os
@@ -29,65 +28,73 @@ class HvigorWrapper:
 
         Args:
             project_path: HarmonyOS项目路径
-            deveco_path: DevEco Studio安装路径（可选，会自动检测）
+            deveco_path: DevEco Studio安装路径（可选，优先使用环境变量或自动检测）
         """
         self.project_path = Path(project_path)
         if not self.project_path.exists():
             raise ValueError(f"项目路径不存在: {project_path}")
 
-        # 查找DevEco Studio路径
+        # 查找DevEco Studio路径（优先级：参数 > 环境变量 > Config > 自动检测）
         self.deveco_path = self._find_deveco_studio(deveco_path)
         if not self.deveco_path:
-            raise ValueError("未找到DevEco Studio安装路径")
+            raise ValueError(
+                "未找到 DevEco Studio 安装路径。请设置环境变量 DEVECO_STUDIO_PATH 或安装 DevEco Studio"
+            )
 
-        # 设置工具路径
-        self.node_exe = self.deveco_path / "tools" / "node" / ("node.exe" if platform.system() == "Windows" else "node")
-        self.hvigorw_js = self.deveco_path / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        # 设置工具路径（优先使用 Config 中已检测的路径）
+        if Config.NODE_PATH and Path(Config.NODE_PATH).exists():
+            self.node_exe = Path(Config.NODE_PATH)
+        else:
+            node_name = "node.exe" if platform.system() == "Windows" else "node"
+            self.node_exe = self.deveco_path / "tools" / "node" / node_name
+
+        if Config.HVIGOR_PATH and Path(Config.HVIGOR_PATH).exists():
+            self.hvigorw_js = Path(Config.HVIGOR_PATH)
+        else:
+            self.hvigorw_js = self.deveco_path / "tools" / "hvigor" / "bin" / "hvigorw.js"
 
         # 验证工具存在
         if not self.node_exe.exists():
-            raise ValueError(f"未找到Node.js: {self.node_exe}")
+            raise ValueError(f"未找到 Node.js: {self.node_exe}")
         if not self.hvigorw_js.exists():
-            raise ValueError(f"未找到hvigorw.js: {self.hvigorw_js}")
+            raise ValueError(f"未找到 hvigorw.js: {self.hvigorw_js}")
 
-        # 不修改local.properties，让DevEco Studio使用默认配置
-
-        logger.info(f"初始化HvigorWrapper")
+        logger.info(f"初始化 HvigorWrapper")
         logger.info(f"  项目路径: {project_path}")
-        logger.info(f"  DevEco路径: {self.deveco_path}")
+        logger.info(f"  DevEco 路径: {self.deveco_path}")
         logger.info(f"  Node.js: {self.node_exe}")
         logger.info(f"  hvigorw.js: {self.hvigorw_js}")
 
     def _find_deveco_studio(self, custom_path: Optional[str] = None) -> Optional[Path]:
-        """查找DevEco Studio安装路径"""
+        """
+        查找 DevEco Studio 安装路径
+
+        优先级：参数 > 环境变量 > Config > 自动检测
+        """
+        # 1. 使用传入的自定义路径
         if custom_path:
             path = Path(custom_path)
             if path.exists():
                 return path
 
-        # Windows常见路径
-        if platform.system() == "Windows":
-            possible_paths = [
-                Path("C:/Program Files/Huawei/DevEco Studio"),
-                Path("C:/Program Files (x86)/Huawei/DevEco Studio"),
-                Path(os.path.expanduser("~/AppData/Local/Huawei/DevEco Studio")),
-            ]
-        # macOS路径
-        elif platform.system() == "Darwin":
-            possible_paths = [
-                Path("/Applications/DevEco Studio.app/Contents"),
-                Path(os.path.expanduser("~/Applications/DevEco Studio.app/Contents")),
-            ]
-        # Linux路径
-        else:
-            possible_paths = [
-                Path(os.path.expanduser("~/DevEco Studio")),
-                Path("/opt/DevEco Studio"),
-            ]
-
-        for path in possible_paths:
+        # 2. 使用环境变量
+        env_path = os.getenv('DEVECO_STUDIO_PATH')
+        if env_path:
+            path = Path(env_path)
             if path.exists():
-                logger.info(f"找到DevEco Studio: {path}")
+                logger.info(f"使用环境变量 DEVECO_STUDIO_PATH: {path}")
+                return path
+
+        # 3. 使用 Config 中已检测的路径
+        if Config.DEVECO_STUDIO_PATH:
+            path = Path(Config.DEVECO_STUDIO_PATH)
+            if path.exists():
+                return path
+
+        # 4. 自动检测（使用 Config 的搜索逻辑）
+        for path in Config._get_deveco_search_paths():
+            if path.exists():
+                logger.info(f"自动检测到 DevEco Studio: {path}")
                 return path
 
         return None
