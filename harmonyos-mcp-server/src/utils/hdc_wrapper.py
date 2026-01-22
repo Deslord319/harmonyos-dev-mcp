@@ -396,7 +396,7 @@ class HdcWrapper:
 
     def get_ui_tree_raw(self, device_id: str, window_id: int) -> Dict[str, Any]:
         """
-        获取指定窗口的UI组件树原始输出
+        获取指定窗口的UI组件树原始输出（使用 -inspector 参数获取屏幕绝对坐标）
 
         Args:
             device_id: 设备ID
@@ -406,7 +406,8 @@ class HdcWrapper:
             包含UI组件树原始文本的字典
         """
         logger.info(f"获取窗口 {window_id} 的UI组件树")
-        command = f"hidumper -s WindowManagerService -a '-w {window_id} -default -c'"
+        # 使用 -inspector 参数，返回的坐标是屏幕绝对坐标，可直接用于点击操作
+        command = f"hidumper -s WindowManagerService -a '-w {window_id} -inspector'"
         result = self.execute_shell(device_id, command)
 
         if not result['success']:

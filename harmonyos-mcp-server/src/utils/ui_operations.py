@@ -413,7 +413,7 @@ class UIOperations:
                              element_type: str = None,
                              element_id: str = None) -> List[Dict[str, Any]]:
         """
-        在UI树中查找元素
+        在UI树中查找元素（支持 -inspector 格式，坐标为屏幕绝对坐标）
 
         Args:
             ui_tree: UI树结构（从get_ui_tree返回）
@@ -422,7 +422,7 @@ class UIOperations:
             element_id: 元素ID
 
         Returns:
-            匹配的元素列表，每个元素包含坐标信息
+            匹配的元素列表，每个元素包含屏幕绝对坐标（可直接用于点击）
         """
         results = []
 
@@ -434,13 +434,11 @@ class UIOperations:
                 if element_type and node.get('type') != element_type:
                     match = False
 
-                # 检查文本（同时检查 Text 和 Label 属性）
+                # 检查文本（-inspector 格式使用小写 'text' 属性）
                 if text and match:
                     props = node.get('properties', {})
-                    node_text = props.get('Text', '')
-                    node_label = props.get('Label', '')
-                    combined_text = f"{node_text} {node_label}".lower()
-                    if text.lower() not in combined_text:
+                    node_text = str(props.get('text', ''))
+                    if text.lower() not in node_text.lower():
                         match = False
 
                 # 检查ID
@@ -452,58 +450,31 @@ class UIOperations:
                 if match and (text or element_type or element_id):
                     props = node.get('properties', {})
 
-                    # 尝试多种属性名获取bounds
-                    bounds_str = ''
-                    center = None
+                    # -inspector 格式直接提供 top, left, width, height（屏幕绝对坐标）
+                    top = props.get('top', 0)
+                    left = props.get('left', 0)
+                    width = props.get('width', 0)
+                    height = props.get('height', 0)
 
-                    # 1. 尝试 FrameRect
-                    frame_rect = props.get('FrameRect', '')
-                    if frame_rect:
-                        bounds_str = frame_rect
-                        center = self.bounds_to_center(frame_rect)
-
-                    # 2. 尝试 PaintRect without transform
-                    if not center:
-                        paint_rect = props.get('PaintRect without transform', '')
-                        if paint_rect:
-                            bounds_str = paint_rect
-                            center = self.bounds_to_center(paint_rect)
-
-                    # 3. 尝试 Bounds
-                    if not center:
-                        bounds = props.get('Bounds', '')
-                        if bounds:
-                            bounds_str = bounds
-                            center = self.bounds_to_center(bounds)
-
-                    # 4. 尝试从 CanvasNode 解析
-                    if not center:
-                        for key, value in props.items():
-                            if 'CanvasNode' in key and 'Bounds' in str(value):
-                                # 格式: "CanvasNode[...] ... Bounds[x y w h]..."
-                                import re
-                                match_bounds = re.search(r'Bounds\[([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\]', str(value))
-                                if match_bounds:
-                                    bounds_str = f"[{match_bounds.group(1)} {match_bounds.group(2)} {match_bounds.group(3)} {match_bounds.group(4)}]"
-                                    center = self.bounds_to_center(bounds_str)
-                                    break
-
-                    # 获取 Label（按钮文本等）
-                    label = props.get('Label', '')
-                    text_content = props.get('Text', label)
+                    # 计算中心点（屏幕绝对坐标，可直接用于 uitest uiInput click）
+                    center_x = int(left + width / 2)
+                    center_y = int(top + height / 2)
 
                     element_info = {
                         'type': node.get('type'),
-                        'text': text_content,
-                        'label': label,
+                        'text': props.get('text', ''),
                         'id': props.get('ID', ''),
-                        'bounds': bounds_str,
+                        'compid': props.get('compid', ''),
+                        'top': top,
+                        'left': left,
+                        'width': width,
+                        'height': height,
+                        'x': center_x,  # 屏幕绝对坐标
+                        'y': center_y,  # 屏幕绝对坐标
+                        'visible': props.get('visible', False),
+                        'clickable': props.get('clickable', False),
                         'depth': depth
                     }
-
-                    if center:
-                        element_info['x'] = center[0]
-                        element_info['y'] = center[1]
 
                     results.append(element_info)
 
