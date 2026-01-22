@@ -196,6 +196,49 @@ harmonyos-mcp-server/
 1. 确保项目可以在 DevEco Studio 中正常构建
 2. 检查 `local.properties` 中的 SDK 路径配置
 
+## 📦 安装方式
+
+### 方式 1：pip 安装（推荐）
+
+```bash
+# 从 PyPI 安装（发布后可用）
+pip install harmonyos-mcp
+
+# 或从源码安装
+git clone https://github.com/Deslord319/mcp_ho_dev.git
+cd mcp_ho_dev/harmonyos-mcp-server
+pip install .
+```
+
+### 方式 2：开发模式安装
+
+```bash
+cd harmonyos-mcp-server
+pip install -e .
+```
+
+### 运行方式
+
+```bash
+# 命令行运行
+harmonyos-mcp
+
+# 或作为 Python 模块运行
+python -m harmonyos_mcp
+```
+
+### AI IDE 配置
+
+安装后，在 AI IDE 中配置：
+
+```json
+{
+  "harmonyos-tools": {
+    "command": "harmonyos-mcp"
+  }
+}
+```
+
 ## 📄 许可证
 
 MIT License
