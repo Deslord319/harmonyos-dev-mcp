@@ -156,12 +156,29 @@ class Config:
         """初始化配置（自动检测工具路径）"""
 
         # 1. 检测 DevEco Studio 路径
+        # 优先级: DEVECO_STUDIO_PATH 环境变量 > "DevEco Studio" 环境变量 > 自动检测
         if not cls.DEVECO_STUDIO_PATH:
-            for path in cls._get_deveco_search_paths():
-                if path.exists():
-                    cls.DEVECO_STUDIO_PATH = str(path)
-                    logger.info(f"自动检测到 DevEco Studio: {path}")
-                    break
+            # 尝试从 "DevEco Studio" 环境变量获取（路径形如 ...\bin; 需要去掉 \bin 和分号）
+            deveco_env = os.getenv('DevEco Studio')
+            if deveco_env:
+                # 处理可能的分号分隔（取第一个路径）和去掉末尾分号
+                deveco_env = deveco_env.split(';')[0].strip()
+                if deveco_env:
+                    deveco_path = Path(deveco_env)
+                    # 如果路径以 bin 结尾，取其父目录
+                    if deveco_path.name.lower() == 'bin':
+                        deveco_path = deveco_path.parent
+                    if deveco_path.exists():
+                        cls.DEVECO_STUDIO_PATH = str(deveco_path)
+                        logger.info(f"从环境变量 'DevEco Studio' 检测到: {deveco_path}")
+
+            # 如果仍未找到，尝试自动检测常见路径
+            if not cls.DEVECO_STUDIO_PATH:
+                for path in cls._get_deveco_search_paths():
+                    if path.exists():
+                        cls.DEVECO_STUDIO_PATH = str(path)
+                        logger.info(f"自动检测到 DevEco Studio: {path}")
+                        break
 
         # 2. 检测 SDK 路径
         if not cls.HARMONYOS_SDK_PATH:
