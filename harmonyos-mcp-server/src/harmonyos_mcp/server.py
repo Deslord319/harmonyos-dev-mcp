@@ -244,7 +244,7 @@ def install_app(hap_path: str, device_id: str = None) -> dict:
 
 
 @server.tool()
-def run_app(bundle_name: str, device_id: str = None, ability_name: str = "EntryAbility") -> dict:
+def run_app(bundle_name: str, device_id: str = None, ability_name: str = "EntryAbility", module_name: str = "entry") -> dict:
     """
     运行应用
 
@@ -252,6 +252,7 @@ def run_app(bundle_name: str, device_id: str = None, ability_name: str = "EntryA
         bundle_name: 应用包名
         device_id: 设备ID,如果为None则使用第一个设备
         ability_name: Ability名称
+        module_name: 模块名称
 
     Returns:
         运行结果
@@ -269,13 +270,14 @@ def run_app(bundle_name: str, device_id: str = None, ability_name: str = "EntryA
                 }
             device_id = devices[0]
 
-        success = hdc.start_app(device_id, bundle_name, ability_name)
+        success = hdc.start_app(device_id, bundle_name, ability_name, module_name)
 
         return {
             'success': success,
             'device_id': device_id,
             'bundle_name': bundle_name,
-            'ability_name': ability_name
+            'ability_name': ability_name,
+            'module_name': module_name
         }
     except Exception as e:
         logger.error(f"运行应用失败: {e}")

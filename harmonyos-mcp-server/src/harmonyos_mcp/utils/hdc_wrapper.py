@@ -204,7 +204,7 @@ class HdcWrapper:
             logger.error(f"获取日志失败: {result['stderr']}")
             return ""
 
-    def start_app(self, device_id: str, bundle_name: str, ability_name: str = "EntryAbility") -> bool:
+    def start_app(self, device_id: str, bundle_name: str, ability_name: str = "EntryAbility", module_name: str = "entry") -> bool:
         """
         启动应用
 
@@ -212,14 +212,15 @@ class HdcWrapper:
             device_id: 设备ID
             bundle_name: 应用包名
             ability_name: Ability名称
+            module_name: 模块名称
 
         Returns:
             是否启动成功
         """
-        logger.info(f"启动应用: {bundle_name}/{ability_name}")
+        logger.info(f"启动应用: {bundle_name}/{ability_name} (module: {module_name})")
 
-        # 使用aa start命令启动应用
-        command = f"aa start -a {ability_name} -b {bundle_name}"
+        # 使用aa start命令启动应用，添加-m参数指定模块
+        command = f"aa start -a {ability_name} -b {bundle_name} -m {module_name}"
         result = self.execute_shell(device_id, command)
 
         if result['success']:
