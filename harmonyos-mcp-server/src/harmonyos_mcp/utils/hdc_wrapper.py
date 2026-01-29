@@ -4,6 +4,8 @@ hdc命令行工具封装
 import subprocess
 import time
 import re
+import os
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 from loguru import logger
 
@@ -456,4 +458,118 @@ class HdcWrapper:
 
         logger.warning(f"未找到应用 {bundle_name} 的窗口")
         return None
+
+    # ========================================================================
+    # hilog文件相关方法 - 获取系统日志文件
+    # ========================================================================
+
+    def hilog_receive(self, device_id: str, local_dir: Optional[str] = None) -> Dict[str, Any]:
+        """
+        从设备的 /data/log/hilog 目录中获取所有 hilog 日志文件和 dict 解密文件
+
+        Args:
+            device_id: 设备ID
+            local_dir: 本地保存目录，如果为None则使用当前工作目录
+
+        Returns:
+            包含成功状态、获取的文件列表和详细信息的字典
+        """
+        logger.info(f"开始获取设备 {device_id} 的 hilog 文件")
+        
+        # 如果没有指定目录，使用当前工作目录下的 hilog_files 子目录
+        if not local_dir:
+            local_dir = os.path.join(os.getcwd(), 'hilog_files')
+        
+        local_dir = os.path.abspath(local_dir)
+        
+        # 确保本地目录存在
+        os.makedirs(local_dir, exist_ok=True)
+        logger.info(f"本地目录: {local_dir}")
+        
+        # 步骤1: 列出 /data/log/hilog 目录下的所有文件
+        logger.info("列出设备 /data/log/hilog 目录文件...")
+        list_cmd = "ls -la /data/log/hilog"
+        result = self.execute_shell(device_id, list_cmd)
+        
+        if not result['success']:
+            error_msg = f"无法访问 /data/log/hilog 目录: {result.get('stderr', '未知错误')}"
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'error': error_msg,
+                'files_received': [],
+                'count': 0
+            }
+        
+        # 步骤2: 解析文件列表，找出 hilog 和 dict 文件
+        hilog_files = []
+        dict_files = []
+        
+        for line in result['stdout'].split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 解析 ls -la 的输出，获取文件名（最后一列）
+            parts = line.split()
+            if len(parts) >= 8:  # ls -la 至少有 8 列
+                filename = parts[-1]
+                logger.debug(f"解析行: {len(parts)}列 => 文件名: {filename}")
+                
+                # 匹配 hilog.*.gz 文件
+                if filename.startswith('hilog.') and filename.endswith('.gz'):
+                    hilog_files.append(filename)
+                    logger.debug(f"发现 hilog 文件: {filename}")
+                
+                # 匹配 hilog_dict.*.zip 文件
+                elif filename.startswith('hilog_dict.') and filename.endswith('.zip'):
+                    dict_files.append(filename)
+                    logger.debug(f"发现 dict 文件: {filename}")
+        
+        logger.info(f"找到 {len(hilog_files)} 个 hilog 文件, {len(dict_files)} 个 dict 文件")
+        
+        if not hilog_files and not dict_files:
+            warning_msg = "/data/log/hilog 目录中没有找到任何 hilog 或 dict 文件"
+            logger.warning(warning_msg)
+            return {
+                'success': True,
+                'warning': warning_msg,
+                'files_received': [],
+                'count': 0
+            }
+        
+        # 步骤3: 拉取所有文件到本地
+        files_received = []
+        failed_files = []
+        
+        for filename in hilog_files + dict_files:
+            remote_path = f"/data/log/hilog/{filename}"
+            local_path = os.path.join(local_dir, filename)
+            
+            logger.info(f"拉取文件: {remote_path} -> {local_path}")
+            
+            if self.pull_file(device_id, remote_path, local_path):
+                files_received.append({
+                    'filename': filename,
+                    'local_path': local_path,
+                    'type': 'hilog' if filename.endswith('.gz') else 'dict',
+                    'size': os.path.getsize(local_path) if os.path.exists(local_path) else 0
+                })
+                logger.info(f"✓ 成功拉取: {filename}")
+            else:
+                failed_files.append(filename)
+                logger.error(f"✗ 拉取失败: {filename}")
+        
+        logger.info(f"共获取 {len(files_received)} 个文件，失败 {len(failed_files)} 个")
+        
+        return {
+            'success': True,
+            'files_received': files_received,
+            'count': len(files_received),
+            'failed_count': len(failed_files),
+            'failed_files': failed_files,
+            'local_dir': local_dir,
+            'hilog_count': sum(1 for f in files_received if f['type'] == 'hilog'),
+            'dict_count': sum(1 for f in files_received if f['type'] == 'dict')
+        }
 

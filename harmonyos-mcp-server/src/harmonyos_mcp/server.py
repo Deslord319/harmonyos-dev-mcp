@@ -120,6 +120,45 @@ def get_realtime_logs(device_id: str = None, lines: int = 100, bundle_name: str 
         }
 
 
+@server.tool()
+def hilog_receive(device_id: str = None, local_dir: str = None) -> dict:
+    """
+    从HarmonyOS设备的 /data/log/hilog 目录中获取所有 hilog 日志文件和 dict 解密文件
+
+    Args:
+        device_id: 设备ID，如果为None则使用第一个设备
+        local_dir: 本地保存目录，如果为None则使用当前工作目录
+
+    Returns:
+        包含获取结果、文件列表和统计信息的字典
+    """
+    try:
+        hdc = init_hdc()
+
+        # 如果没有指定设备,使用第一个设备
+        if not device_id:
+            devices = hdc.list_devices()
+            if not devices:
+                return {
+                    'success': False,
+                    'error': '没有找到连接的设备'
+                }
+            device_id = devices[0]
+
+        result = hdc.hilog_receive(device_id, local_dir)
+        
+        # 添加设备ID到结果
+        result['device_id'] = device_id
+        
+        return result
+    except Exception as e:
+        logger.error(f"获取hilog文件失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
 # ============================================================================
 # 构建工具
 # ============================================================================
