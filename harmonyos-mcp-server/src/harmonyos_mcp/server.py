@@ -68,10 +68,10 @@ def list_devices() -> dict:
 
 
 @server.tool()
-def get_logs(device_id: str = None, lines: int = 100, bundle_name: str = None,
+def get_realtime_logs(device_id: str = None, lines: int = 100, bundle_name: str = None,
              tag: str = None, pid: int = None) -> dict:
     """
-    获取设备日志
+    获取设备实时日志（hilog 缓存）
 
     Args:
         device_id: 设备ID,如果为None则使用第一个设备
@@ -96,7 +96,7 @@ def get_logs(device_id: str = None, lines: int = 100, bundle_name: str = None,
                 }
             device_id = devices[0]
 
-        logs = hdc.get_logs(device_id, lines, tag=tag, bundle_name=bundle_name, pid=pid)
+        logs = hdc.get_realtime_logs(device_id, lines, tag=tag, bundle_name=bundle_name, pid=pid)
 
         filter_info = []
         if bundle_name:

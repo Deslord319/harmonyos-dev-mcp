@@ -157,10 +157,10 @@ class HdcWrapper:
         result = self._execute_command(['-t', device_id, 'shell', command])
         return result
 
-    def get_logs(self, device_id: str, lines: int = 100, tag: Optional[str] = None,
+    def get_realtime_logs(self, device_id: str, lines: int = 100, tag: Optional[str] = None,
                  bundle_name: Optional[str] = None, pid: Optional[int] = None) -> str:
         """
-        获取设备日志
+        获取设备实时日志（hilog 缓存）
 
         Args:
             device_id: 设备ID
@@ -172,7 +172,7 @@ class HdcWrapper:
         Returns:
             日志内容
         """
-        logger.info(f"获取设备 {device_id} 的日志")
+        logger.info(f"获取设备 {device_id} 的实时日志")
 
         # 构建hilog命令
         cmd = ['-t', device_id, 'shell']
