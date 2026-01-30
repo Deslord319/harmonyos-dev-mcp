@@ -160,6 +160,166 @@ def hilog_receive(device_id: str = None, local_dir: str = None) -> dict:
 
 
 # ============================================================================
+# 三方库鸿蒙化编译工具
+# ============================================================================
+
+@server.tool()
+def check_wsl() -> dict:
+    """
+    检查当前系统是否可用 WSL 环境（用于 Windows 下的交叉编译）
+
+    Returns:
+        WSL 检查结果
+    """
+    try:
+        hdc = init_hdc()
+        result = hdc.check_wsl_available()
+        return result
+    except Exception as e:
+        logger.error(f"WSL 检查失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@server.tool()
+def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandline_tools") -> dict:
+    """
+    检查 HarmonyOS Command Line Tools 是否已安装
+
+    Args:
+        tools_dir: 工具目录路径（默认当前目录的 harmonyos_commandline_tools）
+
+    Returns:
+        工具检查结果
+    """
+    try:
+        hdc = init_hdc()
+        result = hdc.check_harmonyos_compiler_tools(tools_dir)
+        return result
+    except Exception as e:
+        logger.error(f"编译工具检查失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@server.tool()
+def clone_library(repo_url: str, local_path: str) -> dict:
+    """
+    拉取三方库代码仓库
+
+    Args:
+        repo_url: 库的 git 仓库 URL (支持 https/git 协议)
+        local_path: 本地保存路径
+
+    Returns:
+        拉取结果
+    """
+    try:
+        hdc = init_hdc()
+        result = hdc.clone_library(repo_url, local_path)
+        return result
+    except Exception as e:
+        logger.error(f"拉取三方库失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@server.tool()
+def analyze_build_system(project_dir: str) -> dict:
+    """
+    分析三方库项目的构建系统类型
+
+    Args:
+        project_dir: 项目目录路径
+
+    Returns:
+        检测到的构建系统列表及其标记文件
+    """
+    try:
+        hdc = init_hdc()
+        result = hdc.analyze_build_system(project_dir)
+        return result
+    except Exception as e:
+        logger.error(f"构建系统分析失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@server.tool()
+def compile_library(
+    project_dir: str,
+    build_system: str,
+    tools_dir: str = None,
+    output_dir: str = None,
+    extra_args: list = None
+) -> dict:
+    """
+    使用鸿蒙工具链编译三方库
+
+    Args:
+        project_dir: 项目目录路径
+        build_system: 构建系统类型 (cmake/makefile/autotools/gn)
+        tools_dir: HarmonyOS CommandLine Tools 目录路径（可选）
+        output_dir: 编译输出目录（可选）
+        extra_args: 额外的编译参数列表（可选）
+
+    Returns:
+        编译结果，包含成功状态、输出目录和生成的.so文件列表
+    """
+    try:
+        hdc = init_hdc()
+        result = hdc.compile_library(
+            project_dir=project_dir,
+            build_system=build_system,
+            tools_dir=tools_dir,
+            output_dir=output_dir,
+            extra_args=extra_args or []
+        )
+        return result
+    except Exception as e:
+        logger.error(f"编译三方库失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@server.tool()
+def verify_so_output(project_dir: str, output_dir: str = None) -> dict:
+    """
+    验证编译输出的 .so 文件
+
+    Args:
+        project_dir: 项目目录路径
+        output_dir: 输出目录（可选，默认为 project_dir/build_harmonyos）
+
+    Returns:
+        验证结果，包含文件检查、格式验证等信息
+    """
+    try:
+        hdc = init_hdc()
+        result = hdc.verify_so_output(
+            project_dir=project_dir,
+            output_dir=output_dir
+        )
+        return result
+    except Exception as e:
+        logger.error(f"验证.so文件失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+# ============================================================================
 # 构建工具
 # ============================================================================
 
