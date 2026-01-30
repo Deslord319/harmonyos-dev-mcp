@@ -283,18 +283,26 @@ def install_app(hap_path: str, device_id: str = None) -> dict:
 
 
 @server.tool()
-def run_app(bundle_name: str, device_id: str = None, ability_name: str = "EntryAbility", module_name: str = "entry") -> dict:
+def run_app(bundle_name: str, device_id: str = None, ability_name: str = None, module_name: str = None, auto_detect: bool = True) -> dict:
     """
     运行应用
 
     Args:
         bundle_name: 应用包名
         device_id: 设备ID,如果为None则使用第一个设备
-        ability_name: Ability名称
-        module_name: 模块名称
+        ability_name: Ability名称,如果为None且auto_detect=True则自动检测主Ability
+        module_name: 模块名称,如果为None且auto_detect=True则自动检测
+        auto_detect: 是否自动检测主Ability(默认True)
 
     Returns:
         运行结果
+    
+    Example:
+        # 自动检测主Ability并启动
+        run_app(bundle_name="com.huawei.hmos.settings")
+        
+        # 指定Ability启动
+        run_app(bundle_name="com.example.app", ability_name="MainAbility", module_name="entry")
     """
     try:
         hdc = init_hdc()
@@ -309,17 +317,182 @@ def run_app(bundle_name: str, device_id: str = None, ability_name: str = "EntryA
                 }
             device_id = devices[0]
 
-        success = hdc.start_app(device_id, bundle_name, ability_name, module_name)
+        # 如果没有指定ability_name，尝试自动检测
+        final_ability_name = ability_name
+        final_module_name = module_name
+        auto_detected = False
+        
+        if not final_ability_name and auto_detect:
+            logger.info(f"未指定Ability,尝试自动检测包 {bundle_name} 的主Ability")
+            main_ability_result = hdc.get_main_ability(device_id, bundle_name)
+            
+            if main_ability_result['success']:
+                final_ability_name = main_ability_result['ability_name']
+                final_module_name = final_module_name or main_ability_result['module_name']
+                auto_detected = True
+                logger.info(f"自动检测到主Ability: {final_ability_name}, module: {final_module_name}")
+            else:
+                # 自动检测失败，使用默认值
+                logger.warning(f"自动检测主Ability失败: {main_ability_result.get('error')}")
+                final_ability_name = "EntryAbility"
+                final_module_name = final_module_name or "entry"
+        
+        # 使用默认值
+        if not final_ability_name:
+            final_ability_name = "EntryAbility"
+        if not final_module_name:
+            final_module_name = "entry"
+
+        success = hdc.start_app(device_id, bundle_name, final_ability_name, final_module_name)
 
         return {
             'success': success,
             'device_id': device_id,
             'bundle_name': bundle_name,
-            'ability_name': ability_name,
-            'module_name': module_name
+            'ability_name': final_ability_name,
+            'module_name': final_module_name,
+            'auto_detected': auto_detected
         }
     except Exception as e:
         logger.error(f"运行应用失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+# ============================================================================
+# 包管理工具
+# ============================================================================
+
+@server.tool()
+def list_packages(device_id: str = None, keyword: str = None) -> dict:
+    """
+    列出设备上已安装的应用包
+    
+    Args:
+        device_id: 设备ID,如果为None则使用第一个设备
+        keyword: 可选的关键字过滤,用于搜索包名
+    
+    Returns:
+        包含已安装包列表的字典
+    
+    Example:
+        list_packages(keyword="settings")  -> 搜索包含"settings"的包
+        list_packages()  -> 列出所有已安装的包
+    """
+    try:
+        hdc = init_hdc()
+        
+        # 如果没有指定设备,使用第一个设备
+        if not device_id:
+            devices = hdc.list_devices()
+            if not devices:
+                return {
+                    'success': False,
+                    'error': '没有找到连接的设备'
+                }
+            device_id = devices[0]
+        
+        result = hdc.list_packages(device_id, keyword)
+        result['device_id'] = device_id
+        return result
+        
+    except Exception as e:
+        logger.error(f"获取包列表失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@server.tool()
+def get_package_abilities(bundle_name: str, device_id: str = None) -> dict:
+    """
+    获取指定包的所有Abilities
+    
+    Args:
+        bundle_name: 应用包名
+        device_id: 设备ID,如果为None则使用第一个设备
+    
+    Returns:
+        包含Abilities列表的字典,每个Ability包含name、module、type等信息
+    
+    Example:
+        get_package_abilities("com.huawei.hmos.settings")
+    """
+    try:
+        hdc = init_hdc()
+        
+        # 如果没有指定设备,使用第一个设备
+        if not device_id:
+            devices = hdc.list_devices()
+            if not devices:
+                return {
+                    'success': False,
+                    'error': '没有找到连接的设备'
+                }
+            device_id = devices[0]
+        
+        result = hdc.get_package_info(device_id, bundle_name)
+        
+        if result['success']:
+            # 只返回关键信息，不返回raw_output
+            return {
+                'success': True,
+                'device_id': device_id,
+                'bundle_name': bundle_name,
+                'abilities': result['abilities'],
+                'modules': result['modules'],
+                'main_ability': result['main_ability'],
+                'ability_count': len(result['abilities'])
+            }
+        else:
+            return result
+        
+    except Exception as e:
+        logger.error(f"获取包Abilities失败: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@server.tool()
+def get_main_ability(bundle_name: str, device_id: str = None) -> dict:
+    """
+    获取指定包的主入口Ability
+    
+    Args:
+        bundle_name: 应用包名
+        device_id: 设备ID,如果为None则使用第一个设备
+    
+    Returns:
+        包含主Ability信息的字典(ability_name, module_name)
+    
+    Example:
+        get_main_ability("com.huawei.hmos.settings") 
+        -> {"ability_name": "MainAbility", "module_name": "entry"}
+    """
+    try:
+        hdc = init_hdc()
+        
+        # 如果没有指定设备,使用第一个设备
+        if not device_id:
+            devices = hdc.list_devices()
+            if not devices:
+                return {
+                    'success': False,
+                    'error': '没有找到连接的设备'
+                }
+            device_id = devices[0]
+        
+        result = hdc.get_main_ability(device_id, bundle_name)
+        result['device_id'] = device_id
+        return result
+        
+    except Exception as e:
+        logger.error(f"获取主Ability失败: {e}")
         return {
             'success': False,
             'error': str(e)
