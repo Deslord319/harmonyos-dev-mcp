@@ -503,15 +503,19 @@ def run_app(bundle_name: str, device_id: str = None, ability_name: str = None, m
         if not final_module_name:
             final_module_name = "entry"
 
-        success = hdc.start_app(device_id, bundle_name, final_ability_name, final_module_name)
+        start_result = hdc.start_app(device_id, bundle_name, final_ability_name, final_module_name)
 
         return {
-            'success': success,
+            'success': start_result['success'],
             'device_id': device_id,
             'bundle_name': bundle_name,
             'ability_name': final_ability_name,
             'module_name': final_module_name,
-            'auto_detected': auto_detected
+            'auto_detected': auto_detected,
+            'command_success': start_result.get('command_success', False),
+            'window_found': start_result.get('window_found', False),
+            'window': start_result.get('window'),
+            'error': start_result.get('error')
         }
     except Exception as e:
         logger.error(f"运行应用失败: {e}")
@@ -839,7 +843,7 @@ def init_ui_operations():
 @server.tool()
 def click_element(device_id: str = None, x: int = None, y: int = None,
                   text: str = None, element_type: str = None,
-                  double_click: bool = False) -> dict:
+                  double_click: bool = False, bundle_name: str = None) -> dict:
     """
     点击屏幕上的元素
 
@@ -850,6 +854,7 @@ def click_element(device_id: str = None, x: int = None, y: int = None,
         text: 元素文本（自动查找元素并点击）
         element_type: 元素类型（如Button、Text等）
         double_click: 是否双击
+        bundle_name: 应用包名（用于定位窗口，提高查找准确性）
 
     Returns:
         操作结果
@@ -874,7 +879,7 @@ def click_element(device_id: str = None, x: int = None, y: int = None,
 
         # 如果提供了text或element_type，先查找元素
         if text or element_type:
-            result = ui_ops.find_element(device_id, text=text, element_type=element_type)
+            result = ui_ops.find_element(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
             if not result['success']:
                 return result
             if not result['elements']:
@@ -908,7 +913,8 @@ def click_element(device_id: str = None, x: int = None, y: int = None,
 
 @server.tool()
 def long_press_element(device_id: str = None, x: int = None, y: int = None,
-                       text: str = None, element_type: str = None) -> dict:
+                       text: str = None, element_type: str = None,
+                       bundle_name: str = None) -> dict:
     """
     长按屏幕上的元素
 
@@ -918,6 +924,7 @@ def long_press_element(device_id: str = None, x: int = None, y: int = None,
         y: Y坐标
         text: 元素文本（自动查找元素并长按）
         element_type: 元素类型
+        bundle_name: 应用包名（用于定位窗口）
 
     Returns:
         操作结果
@@ -938,7 +945,7 @@ def long_press_element(device_id: str = None, x: int = None, y: int = None,
 
         # 查找元素
         if text or element_type:
-            result = ui_ops.find_element(device_id, text=text, element_type=element_type)
+            result = ui_ops.find_element(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
             if not result['success']:
                 return result
             if not result['elements']:
@@ -1007,7 +1014,7 @@ def swipe(device_id: str = None, from_x: int = None, from_y: int = None,
 @server.tool()
 def input_text(device_id: str = None, x: int = None, y: int = None,
                text: str = None, element_text: str = None,
-               element_type: str = None) -> dict:
+               element_type: str = None, bundle_name: str = None) -> dict:
     """
     在输入框中输入文本
 
@@ -1018,6 +1025,7 @@ def input_text(device_id: str = None, x: int = None, y: int = None,
         text: 要输入的文本内容
         element_text: 输入框元素的文本（用于自动查找）
         element_type: 输入框元素类型（如TextInput）
+        bundle_name: 应用包名（用于定位窗口）
 
     Returns:
         操作结果
@@ -1041,7 +1049,7 @@ def input_text(device_id: str = None, x: int = None, y: int = None,
 
         # 查找元素
         if element_text or element_type:
-            result = ui_ops.find_element(device_id, text=element_text, element_type=element_type)
+            result = ui_ops.find_element(device_id, text=element_text, element_type=element_type, bundle_name=bundle_name)
             if not result['success']:
                 return result
             if not result['elements']:

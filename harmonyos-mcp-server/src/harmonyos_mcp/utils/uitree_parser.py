@@ -1,15 +1,18 @@
 """
 UI组件树解析器
-解析hidumper -inspector 输出的UI组件树文本，转换为结构化的JSON数据
+支持两种格式:
+1. hidumper -inspector 输出的文本格式
+2. uitest dumpLayout 输出的JSON格式
 坐标为屏幕绝对坐标，可直接用于 uitest uiInput click 操作
 """
 import re
+import json
 from typing import Dict, List, Any, Optional
 from loguru import logger
 
 
 class UITreeParser:
-    """UI组件树解析器（解析 -inspector 格式）"""
+    """UI组件树解析器"""
 
     def __init__(self):
         """初始化解析器"""
@@ -17,10 +20,10 @@ class UITreeParser:
 
     def parse(self, raw_tree: str) -> Dict[str, Any]:
         """
-        解析 hidumper -inspector 输出的UI组件树文本
+        解析UI组件树（自动检测格式）
 
         Args:
-            raw_tree: hidumper -inspector 输出的原始文本
+            raw_tree: UI树原始数据（JSON或文本格式）
 
         Returns:
             结构化的UI树JSON数据，坐标为屏幕绝对坐标
@@ -29,6 +32,96 @@ class UITreeParser:
             logger.warning("UI组件树文本为空")
             return {'nodes': [], 'count': 0, 'window_info': {}}
 
+        # 尝试解析为JSON（uitest dumpLayout格式）
+        raw_tree_stripped = raw_tree.strip()
+        if raw_tree_stripped.startswith('{'):
+            try:
+                json_data = json.loads(raw_tree_stripped)
+                return self._parse_uitest_json(json_data)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON解析失败，尝试文本解析: {e}")
+
+        # 回退到文本解析（hidumper -inspector格式）
+        return self._parse_inspector_text(raw_tree)
+
+    def _parse_uitest_json(self, json_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        解析 uitest dumpLayout JSON 格式
+
+        Args:
+            json_data: uitest dumpLayout 输出的JSON对象
+
+        Returns:
+            标准化的UI树结构
+        """
+        logger.info("解析 uitest dumpLayout JSON 格式")
+        
+        def convert_node(node: Dict[str, Any]) -> Dict[str, Any]:
+            """转换节点格式"""
+            attrs = node.get('attributes', {})
+            
+            # 解析 bounds: "[868,288][2464,1755]" -> left, top, width, height
+            bounds_str = attrs.get('bounds', '')
+            left, top, width, height = 0, 0, 0, 0
+            bounds_match = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', bounds_str)
+            if bounds_match:
+                x1, y1, x2, y2 = map(int, bounds_match.groups())
+                left, top = x1, y1
+                width, height = x2 - x1, y2 - y1
+
+            converted = {
+                'type': attrs.get('type', ''),
+                'properties': {
+                    'text': attrs.get('text', ''),
+                    'ID': attrs.get('accessibilityId', ''),
+                    'compid': attrs.get('hashcode', ''),
+                    'left': left,
+                    'top': top,
+                    'width': width,
+                    'height': height,
+                    'visible': attrs.get('visible', 'true') == 'true',
+                    'clickable': attrs.get('clickable', 'false') == 'true',
+                    'enabled': attrs.get('enabled', 'true') == 'true',
+                    'focused': attrs.get('focused', 'false') == 'true',
+                    'scrollable': attrs.get('scrollable', 'false') == 'true',
+                    'checked': attrs.get('checked', 'false') == 'true',
+                    'description': attrs.get('description', ''),
+                    'bundleName': attrs.get('bundleName', ''),
+                    'pagePath': attrs.get('pagePath', ''),
+                },
+                'children': []
+            }
+
+            # 递归转换子节点
+            for child in node.get('children', []):
+                converted['children'].append(convert_node(child))
+
+            return converted
+
+        # 转换根节点及其子节点
+        root_nodes = []
+        if 'children' in json_data:
+            for child in json_data['children']:
+                root_nodes.append(convert_node(child))
+        elif 'attributes' in json_data:
+            # 单个根节点
+            root_nodes.append(convert_node(json_data))
+
+        result = {
+            'nodes': root_nodes,
+            'count': self._count_nodes(root_nodes),
+            'window_info': {},
+            'format': 'uitest_json'
+        }
+
+        logger.info(f"解析完成，共 {result['count']} 个节点")
+        return result
+
+    def _parse_inspector_text(self, raw_tree: str) -> Dict[str, Any]:
+        """
+        解析 hidumper -inspector 文本格式（原有逻辑）
+        """
+        logger.info("解析 hidumper -inspector 文本格式")
         lines = raw_tree.split('\n')
         root_nodes = []
         node_stack = []  # (indent, node) 元组的栈
@@ -117,7 +210,8 @@ class UITreeParser:
         result = {
             'nodes': root_nodes,
             'count': self._count_nodes(root_nodes),
-            'window_info': self.window_info
+            'window_info': self.window_info,
+            'format': 'inspector_text'
         }
 
         logger.info(f"解析完成，共 {result['count']} 个节点")

@@ -206,7 +206,7 @@ class HdcWrapper:
             logger.error(f"获取日志失败: {result['stderr']}")
             return ""
 
-    def start_app(self, device_id: str, bundle_name: str, ability_name: str = "EntryAbility", module_name: str = "entry") -> bool:
+    def start_app(self, device_id: str, bundle_name: str, ability_name: str = "EntryAbility", module_name: str = "entry", verify: bool = True, timeout: float = 3.0) -> Dict[str, Any]:
         """
         启动应用
 
@@ -215,9 +215,11 @@ class HdcWrapper:
             bundle_name: 应用包名
             ability_name: Ability名称
             module_name: 模块名称
+            verify: 是否验证应用实际启动（检查窗口是否出现）
+            timeout: 验证超时时间（秒）
 
         Returns:
-            是否启动成功
+            包含启动状态的字典
         """
         logger.info(f"启动应用: {bundle_name}/{ability_name} (module: {module_name})")
 
@@ -225,12 +227,65 @@ class HdcWrapper:
         command = f"aa start -a {ability_name} -b {bundle_name} -m {module_name}"
         result = self.execute_shell(device_id, command)
 
-        if result['success']:
-            logger.info(f"应用启动成功")
-            return True
+        if not result['success']:
+            logger.error(f"应用启动命令失败: {result['stderr']}")
+            return {
+                'success': False,
+                'error': result['stderr'],
+                'command_success': False,
+                'window_found': False
+            }
+
+        # 如果不需要验证，直接返回命令执行结果
+        if not verify:
+            return {
+                'success': True,
+                'command_success': True,
+                'window_found': None,
+                'message': '启动命令已执行（未验证窗口）'
+            }
+
+        # 验证应用实际启动：检查窗口是否出现
+        import time
+        app_name = bundle_name.split('.')[-1].lower()
+        start_time = time.time()
+        window_found = False
+        window_info = None
+
+        while time.time() - start_time < timeout:
+            window_list = self.get_window_list(device_id)
+            if window_list['success']:
+                for window in window_list['windows']:
+                    window_name = window['window_name'].lower()
+                    if window_name.startswith(app_name) and window['is_visible']:
+                        window_found = True
+                        window_info = {
+                            'window_name': window['window_name'],
+                            'window_id': window['window_id'],
+                            'zord': window.get('zord'),
+                            'rect': window.get('rect')
+                        }
+                        break
+            if window_found:
+                break
+            time.sleep(0.3)
+
+        if window_found:
+            logger.info(f"应用启动成功，窗口已出现: {window_info['window_name']}")
+            return {
+                'success': True,
+                'command_success': True,
+                'window_found': True,
+                'window': window_info
+            }
         else:
-            logger.error(f"应用启动失败: {result['stderr']}")
-            return False
+            logger.warning(f"应用启动命令成功，但未检测到窗口 (app_name={app_name})")
+            return {
+                'success': False,
+                'error': f'应用窗口未出现（可能ability_name或module_name错误）',
+                'command_success': True,
+                'window_found': False
+            }
 
     def forward_port(self, device_id: str, local_port: int, remote_port: int) -> bool:
         """
@@ -359,27 +414,44 @@ class HdcWrapper:
             }
 
         # 解析窗口数据
+        # 实际格式: WindowName DisplayId Pid WinId Type Mode Flag ZOrd Orientation [ x y w h ] ...
+        # 其中 ZOrd > 0 表示窗口可见，ZOrd = -1 表示窗口隐藏
+        import re
         for line in lines[header_idx + 1:]:
             line = line.strip()
             if not line:
                 continue
+            # 跳过分隔线
+            if line.startswith('-'):
+                continue
 
-            # 使用正则表达式解析窗口信息
-            # 格式: WindowName DisplayId PID WinId Type Mode Flag Orient FirstFrame IsVisible ...
-            parts = line.split()
-            if len(parts) >= 10:
+            # 使用正则提取窗口信息和矩形区域
+            # 格式: WindowName DisplayId Pid WinId Type Mode Flag ZOrd Orient [ x y w h ] ...
+            match = re.match(
+                r'^(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(-?\d+)\s+(\d+)\s+\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]',
+                line
+            )
+            if match:
                 try:
+                    zord = int(match.group(8))
                     window_info = {
-                        'window_name': parts[0],
-                        'display_id': int(parts[1]),
-                        'pid': int(parts[2]),
-                        'window_id': int(parts[3]),
-                        'type': int(parts[4]),
-                        'mode': int(parts[5]),
-                        'flag': int(parts[6]),
-                        'orient': int(parts[7]),
-                        'first_frame': int(parts[8]),
-                        'is_visible': parts[9].lower() == 'true'
+                        'window_name': match.group(1),
+                        'display_id': int(match.group(2)),
+                        'pid': int(match.group(3)),
+                        'window_id': int(match.group(4)),
+                        'type': int(match.group(5)),
+                        'mode': int(match.group(6)),
+                        'flag': int(match.group(7)),
+                        'zord': zord,
+                        'orient': int(match.group(9)),
+                        'rect': {
+                            'x': int(match.group(10)),
+                            'y': int(match.group(11)),
+                            'w': int(match.group(12)),
+                            'h': int(match.group(13))
+                        },
+                        # ZOrd > 0 表示窗口在可见层级中
+                        'is_visible': zord > 0
                     }
                     windows.append(window_info)
                 except (ValueError, IndexError) as e:
@@ -393,35 +465,62 @@ class HdcWrapper:
             'count': len(windows)
         }
 
-    def get_ui_tree_raw(self, device_id: str, window_id: int) -> Dict[str, Any]:
+    def get_ui_tree_raw(self, device_id: str, window_id: int = None) -> Dict[str, Any]:
         """
-        获取指定窗口的UI组件树原始输出（使用 -inspector 参数获取屏幕绝对坐标）
+        获取UI组件树原始输出（使用 uitest dumpLayout 命令）
 
         Args:
             device_id: 设备ID
-            window_id: 窗口ID
+            window_id: 窗口ID（可选，目前 uitest dumpLayout 获取全屏UI树）
 
         Returns:
-            包含UI组件树原始文本的字典
+            包含UI组件树JSON的字典
         """
-        logger.info(f"获取窗口 {window_id} 的UI组件树")
-        # 使用 -inspector 参数，返回的坐标是屏幕绝对坐标，可直接用于点击操作
-        command = f"hidumper -s WindowManagerService -a '-w {window_id} -inspector'"
-        result = self.execute_shell(device_id, command)
-
-        if not result['success']:
-            logger.error(f"获取UI组件树失败: {result['stderr']}")
+        logger.info(f"获取UI组件树 (device: {device_id})")
+        
+        # 使用 uitest dumpLayout 命令获取UI树
+        # 该命令会将UI树保存到设备上的JSON文件
+        dump_result = self.execute_shell(device_id, "uitest dumpLayout")
+        
+        if not dump_result['success']:
+            logger.error(f"uitest dumpLayout 失败: {dump_result['stderr']}")
             return {
                 'success': False,
-                'error': result['stderr'],
+                'error': dump_result['stderr'],
                 'ui_tree': ''
             }
-
-        logger.info(f"成功获取UI组件树，输出长度: {len(result['stdout'])} 字符")
+        
+        # 解析输出获取文件路径
+        # 输出格式: "DumpLayout saved to:/data/local/tmp/layout_xxx.json"
+        output = dump_result['stdout'].strip()
+        if 'saved to:' not in output:
+            logger.error(f"无法解析 dumpLayout 输出: {output}")
+            return {
+                'success': False,
+                'error': f'无法解析 dumpLayout 输出: {output}',
+                'ui_tree': ''
+            }
+        
+        json_path = output.split('saved to:')[-1].strip()
+        logger.info(f"UI树保存路径: {json_path}")
+        
+        # 读取JSON文件内容
+        cat_result = self.execute_shell(device_id, f"cat {json_path}")
+        
+        if not cat_result['success']:
+            logger.error(f"读取UI树文件失败: {cat_result['stderr']}")
+            return {
+                'success': False,
+                'error': cat_result['stderr'],
+                'ui_tree': ''
+            }
+        
+        logger.info(f"成功获取UI组件树，长度: {len(cat_result['stdout'])} 字符")
         return {
             'success': True,
             'window_id': window_id,
-            'ui_tree': result['stdout']
+            'ui_tree': cat_result['stdout'],
+            'format': 'uitest_json'
         }
 
     def find_window_by_bundle(self, device_id: str, bundle_name: str) -> Optional[int]:
@@ -442,21 +541,26 @@ class HdcWrapper:
             logger.error("获取窗口列表失败")
             return None
 
-        # 查找匹配的窗口
+        # 从包名提取应用名称 (如 com.huawei.hmos.settings -> settings)
+        app_name = bundle_name.split('.')[-1].lower()
+        
+        # 查找匹配的可见窗口（优先返回可见窗口）
         for window in window_list['windows']:
             window_name = window['window_name'].lower()
-            # 窗口名称通常包含应用名或包名的一部分
-            if bundle_name.lower() in window_name or window_name in bundle_name.lower():
-                logger.info(f"找到匹配窗口: {window['window_name']}, ID: {window['window_id']}")
+            # 窗口名称通常是 appname + 数字，如 settings0, browser0
+            # 检查窗口名是否以应用名开头
+            if window_name.startswith(app_name) and window['is_visible']:
+                logger.info(f"找到匹配可见窗口: {window['window_name']}, ID: {window['window_id']}")
                 return window['window_id']
 
-        # 如果没有找到精确匹配，返回第一个可见窗口
+        # 如果没有找到可见匹配，查找任何匹配的窗口
         for window in window_list['windows']:
-            if window['is_visible']:
-                logger.info(f"使用第一个可见窗口: {window['window_name']}, ID: {window['window_id']}")
+            window_name = window['window_name'].lower()
+            if window_name.startswith(app_name):
+                logger.info(f"找到匹配窗口(不可见): {window['window_name']}, ID: {window['window_id']}")
                 return window['window_id']
 
-        logger.warning(f"未找到应用 {bundle_name} 的窗口")
+        logger.warning(f"未找到应用 {bundle_name} 的窗口 (app_name={app_name})")
         return None
 
     # ========================================================================
