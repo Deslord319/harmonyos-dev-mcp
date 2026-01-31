@@ -8,11 +8,13 @@ from fastmcp import FastMCP
 from loguru import logger
 
 from .config import Config
+from .config import LogSecurityConfig
 from .utils.logger import setup_logger
 from .utils.hdc_wrapper import HdcWrapper
 from .utils.hvigor_wrapper import HvigorWrapper
 from .utils.uitree_parser import UITreeParser
 from .utils.ui_operations import UIOperations
+from .utils.log_parser import LogParser, LogEntry
 
 # 设置日志
 setup_logger()
@@ -64,59 +66,6 @@ def list_devices() -> dict:
             'success': False,
             'error': str(e),
             'devices': []
-        }
-
-
-@server.tool()
-def get_realtime_logs(device_id: str = None, lines: int = 100, bundle_name: str = None,
-             tag: str = None, pid: int = None) -> dict:
-    """
-    获取设备实时日志（hilog 缓存）
-
-    Args:
-        device_id: 设备ID,如果为None则使用第一个设备
-        lines: 返回的日志行数
-        bundle_name: 应用包名,用于过滤指定应用的日志
-        tag: 日志标签过滤
-        pid: 进程ID过滤
-
-    Returns:
-        包含日志内容的字典
-    """
-    try:
-        hdc = init_hdc()
-
-        # 如果没有指定设备,使用第一个设备
-        if not device_id:
-            devices = hdc.list_devices()
-            if not devices:
-                return {
-                    'success': False,
-                    'error': '没有找到连接的设备'
-                }
-            device_id = devices[0]
-
-        logs = hdc.get_realtime_logs(device_id, lines, tag=tag, bundle_name=bundle_name, pid=pid)
-
-        filter_info = []
-        if bundle_name:
-            filter_info.append(f"bundle_name={bundle_name}")
-        if tag:
-            filter_info.append(f"tag={tag}")
-        if pid:
-            filter_info.append(f"pid={pid}")
-
-        return {
-            'success': True,
-            'device_id': device_id,
-            'filters': ', '.join(filter_info) if filter_info else 'none',
-            'logs': logs
-        }
-    except Exception as e:
-        logger.error(f"获取日志失败: {e}")
-        return {
-            'success': False,
-            'error': str(e)
         }
 
 
@@ -1148,6 +1097,397 @@ def find_element(device_id: str = None, text: str = None,
 
     except Exception as e:
         logger.error(f"查找元素失败: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+# ============================================================================
+# 日志分析工具
+# ============================================================================
+
+def _logs_fetch_impl(
+    device_id: str = None,
+    lines: int = 100,
+    level: str = None,
+    tag: str = None,
+    keyword: str = None,
+    pid: int = None,
+    start_time: str = None,
+    end_time: str = None,
+    seconds: int = None
+) -> dict:
+    """
+    日志获取的内部实现（供工具函数调用）
+    """
+    from datetime import datetime, timedelta
+    
+    try:
+        hdc = init_hdc()
+        
+        # 获取设备
+        if not device_id:
+            devices = hdc.list_devices()
+            if not devices:
+                return {'success': False, 'error': '没有找到连接的设备'}
+            device_id = devices[0]
+        
+        # 限制最大行数
+        lines = min(lines, LogSecurityConfig.MAX_LOG_LINES)
+        
+        # 获取日志（获取更多行以便过滤后仍有足够数据）
+        fetch_lines = min(lines * 5, LogSecurityConfig.MAX_LOG_LINES)
+        log_text = hdc.get_realtime_logs(device_id, lines=fetch_lines, tag=tag, pid=pid)
+        
+        if not log_text:
+            return {
+                'success': True,
+                'device_id': device_id,
+                'logs': [],
+                'total_lines': 0,
+                'message': '未获取到日志'
+            }
+        
+        # 解析日志
+        raw_lines = log_text.split('\n')
+        entries = LogParser.parse_logs(raw_lines)
+        
+        # 构建时间范围
+        time_range = None
+        if seconds:
+            # 最近N秒
+            now = datetime.now()
+            time_range = {
+                'start': (now - timedelta(seconds=seconds)).isoformat(),
+                'end': now.isoformat()
+            }
+        elif start_time or end_time:
+            time_range = {}
+            today = datetime.now().strftime('%Y-%m-%d')
+            
+            if start_time:
+                # 如果只有时间没有日期，补上今天的日期
+                if len(start_time) <= 8:  # HH:MM:SS
+                    start_time = f"{today} {start_time}"
+                time_range['start'] = start_time
+            
+            if end_time:
+                if len(end_time) <= 8:
+                    end_time = f"{today} {end_time}"
+                time_range['end'] = end_time
+        
+        # 应用过滤
+        filtered_entries = LogParser.filter_entries(
+            entries,
+            level=level,
+            tag=tag,
+            keyword=keyword,
+            time_range=time_range,
+            pid=pid,
+            seconds=seconds
+        )
+        
+        # 限制返回行数
+        truncated = len(filtered_entries) > lines
+        filtered_entries = filtered_entries[:lines]
+        
+        # 获取统计
+        summary = LogParser.analyze_summary(filtered_entries)
+        
+        return {
+            'success': True,
+            'device_id': device_id,
+            'logs': [e.raw_line for e in filtered_entries],
+            'total_lines': len(filtered_entries),
+            'truncated': truncated,
+            'filters_applied': {
+                'level': level,
+                'tag': tag,
+                'keyword': keyword,
+                'pid': pid,
+                'time_range': time_range,
+                'seconds': seconds
+            },
+            'summary': {
+                'level_stats': summary.get('level_stats', {}),
+                'time_range': summary.get('time_range')
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取日志失败: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@server.tool()
+def logs_fetch(
+    device_id: str = None,
+    lines: int = 100,
+    level: str = None,
+    tag: str = None,
+    keyword: str = None,
+    pid: int = None,
+    start_time: str = None,
+    end_time: str = None,
+    seconds: int = None
+) -> dict:
+    """
+    从设备获取日志（支持多种过滤条件）
+    
+    Args:
+        device_id: 设备ID，如果为None则使用第一个设备
+        lines: 最大返回行数（默认100，最大50000）
+        level: 日志级别过滤 (D/I/W/E/F)，会返回该级别及以上
+        tag: Tag 过滤（模糊匹配）
+        keyword: 关键字过滤（在日志内容中搜索）
+        pid: 进程ID过滤
+        start_time: 开始时间（格式：HH:MM:SS 或 YYYY-MM-DD HH:MM:SS）
+        end_time: 结束时间（格式：HH:MM:SS 或 YYYY-MM-DD HH:MM:SS）
+        seconds: 获取最近N秒内的日志（与start_time/end_time互斥）
+    
+    Returns:
+        包含日志内容、过滤信息和统计的字典
+    """
+    return _logs_fetch_impl(
+        device_id=device_id,
+        lines=lines,
+        level=level,
+        tag=tag,
+        keyword=keyword,
+        pid=pid,
+        start_time=start_time,
+        end_time=end_time,
+        seconds=seconds
+    )
+
+
+@server.tool()
+def logs_save_snapshot(
+    device_id: str = None,
+    output_path: str = None,
+    lines: int = 1000,
+    level: str = None,
+    tag: str = None,
+    keyword: str = None,
+    seconds: int = None,
+    start_time: str = None,
+    end_time: str = None,
+    include_analysis: bool = True
+) -> dict:
+    """
+    保存日志快照到本地文件（用于审计和复现）
+    
+    Args:
+        device_id: 设备ID，如果为None则使用第一个设备
+        output_path: 输出文件路径（默认自动生成，保存在 ./hm_logs/ 目录）
+        lines: 最大保存行数（默认1000）
+        level: 日志级别过滤
+        tag: Tag 过滤
+        keyword: 关键字过滤
+        seconds: 获取最近N秒内的日志
+        start_time: 开始时间
+        end_time: 结束时间
+        include_analysis: 是否在文件中包含分析摘要
+    
+    Returns:
+        保存结果，包含文件路径和统计信息
+    """
+    from datetime import datetime
+    import os
+    
+    try:
+        # 先获取日志（调用内部实现，避免 FunctionTool 问题）
+        fetch_result = _logs_fetch_impl(
+            device_id=device_id,
+            lines=lines,
+            level=level,
+            tag=tag,
+            keyword=keyword,
+            seconds=seconds,
+            start_time=start_time,
+            end_time=end_time
+        )
+        
+        if not fetch_result['success']:
+            return fetch_result
+        
+        logs = fetch_result.get('logs', [])
+        if not logs:
+            return {
+                'success': False,
+                'error': '没有日志可保存'
+            }
+        
+        # 确定输出路径
+        if not output_path:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_path = f"./hm_logs/hilog_snapshot_{timestamp}.txt"
+        
+        # 验证路径白名单
+        valid, result_path = LogSecurityConfig.validate_save_path(output_path)
+        if not valid:
+            return {
+                'success': False,
+                'error': result_path
+            }
+        
+        # 确保目录存在
+        output_dir = os.path.dirname(result_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        
+        # 写入文件
+        with open(result_path, 'w', encoding='utf-8') as f:
+            # 写入头部信息
+            f.write("=" * 80 + "\n")
+            f.write(f"HarmonyOS 日志快照\n")
+            f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"设备ID: {fetch_result.get('device_id', 'N/A')}\n")
+            f.write(f"日志行数: {len(logs)}\n")
+            
+            # 写入过滤条件
+            filters = fetch_result.get('filters_applied', {})
+            active_filters = {k: v for k, v in filters.items() if v}
+            if active_filters:
+                f.write(f"过滤条件: {active_filters}\n")
+            
+            f.write("=" * 80 + "\n\n")
+            
+            # 写入分析摘要
+            if include_analysis:
+                summary = fetch_result.get('summary', {})
+                if summary:
+                    f.write("--- 日志分析摘要 ---\n")
+                    level_stats = summary.get('level_stats', {})
+                    if level_stats:
+                        f.write(f"级别统计: {level_stats}\n")
+                    time_range = summary.get('time_range')
+                    if time_range:
+                        f.write(f"时间范围: {time_range.get('start', 'N/A')} ~ {time_range.get('end', 'N/A')}\n")
+                    f.write("\n")
+            
+            f.write("--- 日志内容 ---\n\n")
+            
+            # 写入日志内容
+            for line in logs:
+                f.write(line + "\n")
+        
+        # 获取文件大小
+        file_size = os.path.getsize(result_path)
+        
+        return {
+            'success': True,
+            'saved_path': result_path,
+            'file_size': file_size,
+            'file_size_human': f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / 1024 / 1024:.1f} MB",
+            'log_count': len(logs),
+            'device_id': fetch_result.get('device_id'),
+            'filters_applied': filters,
+            'truncated': fetch_result.get('truncated', False)
+        }
+        
+    except Exception as e:
+        logger.error(f"保存日志快照失败: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@server.tool()
+def logs_analyze(
+    logs: list = None,
+    device_id: str = None,
+    analysis_type: str = "summary",
+    level: str = None,
+    tag: str = None,
+    keyword: str = None,
+    lines: int = 1000,
+    custom_regex: str = None
+) -> dict:
+    """
+    对日志进行结构化分析（基于正则匹配，不依赖LLM）
+    
+    可以直接传入日志列表，或从设备获取日志后分析。
+    
+    Args:
+        logs: 日志行列表（如果提供则直接分析，否则从设备获取）
+        device_id: 设备ID（当 logs 为空时使用）
+        analysis_type: 分析类型
+            - summary: 摘要统计（级别分布、Top Tags、时间范围）
+            - errors: 错误分析（E/F级别日志分组、异常类型识别）
+            - performance: 性能分析（提取耗时数据、统计指标）
+            - crashes: 崩溃分析（Crash/ANR/Exception 识别）
+            - custom: 自定义正则匹配
+        level: 日志级别过滤 (D/I/W/E/F)
+        tag: Tag 过滤
+        keyword: 关键字过滤
+        lines: 获取日志行数（当从设备获取时）
+        custom_regex: 自定义正则表达式（仅 analysis_type=custom 时使用）
+    
+    Returns:
+        分析结果，包含 success、analysis_type、result 和 evidence_lines
+    """
+    try:
+        # 如果没有提供日志，则从设备获取
+        if not logs:
+            hdc = init_hdc()
+            
+            # 获取设备
+            if not device_id:
+                devices = hdc.list_devices()
+                if not devices:
+                    return {'success': False, 'error': '没有找到连接的设备'}
+                device_id = devices[0]
+            
+            # 获取日志
+            log_text = hdc.get_realtime_logs(device_id, lines=lines, tag=tag)
+            if not log_text:
+                return {
+                    'success': False,
+                    'error': '无法获取设备日志'
+                }
+            logs = log_text.split('\n')
+        
+        # 解析日志
+        entries = LogParser.parse_logs(logs)
+        
+        # 应用过滤
+        if level or tag or keyword:
+            entries = LogParser.filter_entries(
+                entries,
+                level=level,
+                tag=tag,
+                keyword=keyword
+            )
+        
+        # 执行分析
+        result = LogParser.analyze(entries, analysis_type, custom_regex)
+        
+        # 获取证据行（用于审计）
+        evidence_lines = []
+        if analysis_type == 'errors':
+            # 提取错误日志样本作为证据
+            error_entries = [e for e in entries if e.level in ('E', 'F')][:10]
+            evidence_lines = [e.raw_line for e in error_entries]
+        elif analysis_type == 'crashes':
+            # 提取崩溃相关日志作为证据
+            for e in entries[:100]:
+                if any(p.search(e.raw_line) for p in LogParser.ERROR_PATTERNS.values()):
+                    evidence_lines.append(e.raw_line)
+                    if len(evidence_lines) >= 10:
+                        break
+        
+        return {
+            'success': True,
+            'analysis_type': analysis_type,
+            'result': result,
+            'evidence_lines': evidence_lines,
+            'total_entries_analyzed': len(entries),
+            'filters_applied': {
+                'level': level,
+                'tag': tag,
+                'keyword': keyword
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"日志分析失败: {e}")
         return {'success': False, 'error': str(e)}
 
 

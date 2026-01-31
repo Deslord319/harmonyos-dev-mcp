@@ -9,7 +9,170 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from loguru import logger
 
-from ..config import Config
+from config import Config
+
+
+class HDCCapabilities:
+    """HDC 能力探测缓存类"""
+    
+    _cache: Dict[str, Any] = {}
+    _hdc_path: Optional[str] = None
+    
+    @classmethod
+    def set_hdc_path(cls, hdc_path: str):
+        """设置 hdc 路径"""
+        if cls._hdc_path != hdc_path:
+            cls._hdc_path = hdc_path
+            cls._cache = {}  # 路径变化时清空缓存
+    
+    @classmethod
+    def _run_command(cls, args: List[str], timeout: int = 10) -> Dict[str, Any]:
+        """执行命令（内部方法）"""
+        if not cls._hdc_path:
+            return {'success': False, 'error': 'hdc path not set'}
+        
+        cmd = [cls._hdc_path] + args
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                encoding='utf-8',
+                errors='replace'
+            )
+            return {
+                'success': True,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'returncode': result.returncode
+            }
+        except subprocess.TimeoutExpired:
+            return {'success': False, 'error': 'timeout'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @classmethod
+    def probe_version(cls) -> Dict[str, Any]:
+        """探测 hdc 版本"""
+        if 'version' in cls._cache:
+            return cls._cache['version']
+        
+        result = cls._run_command(['-v'])
+        if result['success']:
+            version_info = {
+                'available': True,
+                'version': (result['stdout'] + result['stderr']).strip(),
+                'path': cls._hdc_path
+            }
+        else:
+            version_info = {
+                'available': False,
+                'error': result.get('error', 'unknown'),
+                'path': cls._hdc_path
+            }
+        
+        cls._cache['version'] = version_info
+        return version_info
+    
+    @classmethod
+    def probe_hilog_support(cls) -> Dict[str, Any]:
+        """
+        探测 hdc shell hilog 支持的参数
+        
+        通过执行 hilog --help 检测支持的选项
+        """
+        if 'hilog' in cls._cache:
+            return cls._cache['hilog']
+        
+        capabilities = {
+            'supports_tail': False,      # -t <lines> 或 --tail
+            'supports_level': False,     # -L <level>
+            'supports_tag': False,       # -T <tag>
+            'supports_buffer': False,    # -b <buffer>
+            'supports_regex': False,     # -e <regex>
+            'supports_exit': False,      # -x 非持续模式
+            'supports_pid': False,       # -P <pid>
+            'raw_help': ''
+        }
+        
+        # 尝试获取 hilog 帮助信息
+        result = cls._run_command(['shell', 'hilog', '--help'])
+        
+        if result['success']:
+            help_text = result['stdout'] + result['stderr']
+            capabilities['raw_help'] = help_text
+            
+            # 解析帮助文本检测支持的参数
+            if '-t' in help_text or '--tail' in help_text:
+                capabilities['supports_tail'] = True
+            if '-L' in help_text:
+                capabilities['supports_level'] = True
+            if '-T' in help_text:
+                capabilities['supports_tag'] = True
+            if '-b' in help_text:
+                capabilities['supports_buffer'] = True
+            if '-e' in help_text:
+                capabilities['supports_regex'] = True
+            if '-x' in help_text:
+                capabilities['supports_exit'] = True
+            if '-P' in help_text:
+                capabilities['supports_pid'] = True
+        
+        cls._cache['hilog'] = capabilities
+        return capabilities
+    
+    @classmethod
+    def probe_supported_commands(cls) -> Dict[str, bool]:
+        """
+        探测 hdc 支持的子命令
+        """
+        if 'commands' in cls._cache:
+            return cls._cache['commands']
+        
+        commands_to_check = [
+            'list targets',
+            'shell',
+            'file send',
+            'file recv',
+            'install',
+            'uninstall',
+            'fport',
+        ]
+        
+        supported = {}
+        
+        # 获取 hdc 帮助信息
+        result = cls._run_command(['--help'])
+        if result['success']:
+            help_text = result['stdout'] + result['stderr']
+            
+            for cmd in commands_to_check:
+                # 简单检查命令是否在帮助文本中出现
+                cmd_parts = cmd.split()
+                cmd_name = cmd_parts[0]
+                supported[cmd] = cmd_name in help_text.lower()
+        else:
+            # 如果无法获取帮助，假设基本命令可用
+            for cmd in commands_to_check:
+                supported[cmd] = True
+        
+        cls._cache['commands'] = supported
+        return supported
+    
+    @classmethod
+    def get_all_capabilities(cls) -> Dict[str, Any]:
+        """获取所有能力信息"""
+        return {
+            'version': cls.probe_version(),
+            'hilog': cls.probe_hilog_support(),
+            'commands': cls.probe_supported_commands()
+        }
+    
+    @classmethod
+    def clear_cache(cls):
+        """清除缓存"""
+        cls._cache = {}
 
 
 class HdcWrapper:
@@ -25,6 +188,9 @@ class HdcWrapper:
         self.hdc_path = hdc_path or Config.HDC_PATH
         if not self.hdc_path:
             raise ValueError("hdc工具路径未配置")
+        
+        # 初始化能力探测
+        HDCCapabilities.set_hdc_path(self.hdc_path)
         
         logger.info(f"初始化HdcWrapper, hdc路径: {self.hdc_path}")
     

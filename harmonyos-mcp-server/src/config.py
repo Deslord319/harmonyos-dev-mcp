@@ -5,6 +5,7 @@
     DEVECO_STUDIO_PATH  - DevEco Studio 安装路径
     HARMONYOS_SDK_PATH  - HarmonyOS SDK 路径
     HDC_PATH            - hdc 工具完整路径
+    HILOGTOOL_PATH      - hilogtool 工具路径
     LOG_LEVEL           - 日志级别 (DEBUG, INFO, WARNING, ERROR)
 """
 import os
@@ -30,6 +31,9 @@ class Config:
 
     # hdc 工具完整路径
     HDC_PATH: Optional[str] = os.getenv('HDC_PATH')
+
+    # hilogtool 工具路径
+    HILOGTOOL_PATH: Optional[str] = os.getenv('HILOGTOOL_PATH')
 
     # hvigor 工具路径（自动检测）
     HVIGOR_PATH: Optional[str] = None
@@ -226,6 +230,47 @@ class Config:
         if cls.HVIGOR_PATH:
             logger.info(f"hvigor 路径: {cls.HVIGOR_PATH}")
 
+        # 5. 检测 hilogtool 路径
+        if not cls.HILOGTOOL_PATH:
+            # 首先尝试从 SDK 路径查找
+            if cls.HARMONYOS_SDK_PATH:
+                sdk = Path(cls.HARMONYOS_SDK_PATH)
+                system = platform.system()
+                hilogtool_name = "hilogtool.exe" if system == "Windows" else "hilogtool"
+                
+                # 可能的 hilogtool 位置
+                possible_paths = [
+                    sdk / "hms" / "toolchains" / hilogtool_name,
+                    sdk / "toolchains" / hilogtool_name,
+                    sdk.parent / "hms" / "toolchains" / hilogtool_name,
+                ]
+                
+                for path in possible_paths:
+                    if path.exists():
+                        cls.HILOGTOOL_PATH = str(path)
+                        logger.info(f"自动检测到 hilogtool: {path}")
+                        break
+            
+            # 如果没找到，尝试从 DevEco Studio 路径查找
+            if not cls.HILOGTOOL_PATH and cls.DEVECO_STUDIO_PATH:
+                deveco = Path(cls.DEVECO_STUDIO_PATH)
+                system = platform.system()
+                hilogtool_name = "hilogtool.exe" if system == "Windows" else "hilogtool"
+                
+                possible_paths = [
+                    deveco / "sdk" / "default" / "hms" / "toolchains" / hilogtool_name,
+                    deveco / "sdk" / "HarmonyOS" / "hms" / "toolchains" / hilogtool_name,
+                ]
+                
+                for path in possible_paths:
+                    if path.exists():
+                        cls.HILOGTOOL_PATH = str(path)
+                        logger.info(f"从 DevEco Studio 检测到 hilogtool: {path}")
+                        break
+        
+        if cls.HILOGTOOL_PATH:
+            logger.info(f"hilogtool 路径: {cls.HILOGTOOL_PATH}")
+
     @classmethod
     def validate(cls) -> bool:
         """验证配置是否有效"""
@@ -269,4 +314,76 @@ class Config:
 
 # 初始化配置
 Config.init()
+
+
+class LogSecurityConfig:
+    """日志安全配置类"""
+    
+    # 日志保存白名单路径（相对于项目目录）
+    ALLOWED_SAVE_PATHS: List[str] = [
+        "./hm_logs",
+        "./hilog_files",
+    ]
+    
+    # 最大日志行数限制
+    MAX_LOG_LINES: int = int(os.getenv('MAX_LOG_LINES', '50000'))
+    
+    # 最大输出大小（MB）
+    MAX_OUTPUT_SIZE_MB: int = int(os.getenv('MAX_OUTPUT_SIZE_MB', '100'))
+    
+    # 默认超时（秒）
+    DEFAULT_TIMEOUT: int = int(os.getenv('LOG_DEFAULT_TIMEOUT', '30'))
+    
+    # 最大超时（秒）
+    MAX_TIMEOUT: int = int(os.getenv('LOG_MAX_TIMEOUT', '300'))
+    
+    @classmethod
+    def validate_save_path(cls, path: str) -> tuple:
+        """
+        验证保存路径是否在白名单内
+        
+        Args:
+            path: 要验证的路径
+            
+        Returns:
+            (是否有效, 绝对路径或错误信息)
+        """
+        try:
+            abs_path = os.path.abspath(path)
+            
+            for allowed in cls.ALLOWED_SAVE_PATHS:
+                allowed_abs = os.path.abspath(allowed)
+                if abs_path.startswith(allowed_abs) or abs_path == allowed_abs:
+                    # 确保目录存在
+                    os.makedirs(os.path.dirname(abs_path) if os.path.splitext(abs_path)[1] else abs_path, exist_ok=True)
+                    return True, abs_path
+            
+            return False, f"路径不在白名单内。允许的路径: {cls.ALLOWED_SAVE_PATHS}"
+        except Exception as e:
+            return False, f"路径验证失败: {e}"
+    
+    @classmethod
+    def validate_timeout(cls, timeout: int) -> int:
+        """验证并限制超时值"""
+        if timeout is None:
+            return cls.DEFAULT_TIMEOUT
+        return min(max(timeout, 1), cls.MAX_TIMEOUT)
+    
+    @classmethod
+    def sanitize_filename(cls, filename: str) -> str:
+        """
+        清理文件名（移除危险字符）
+        
+        Args:
+            filename: 原始文件名
+            
+        Returns:
+            安全的文件名
+        """
+        # 移除路径分隔符和特殊字符
+        dangerous_chars = ['/', '\\', '..', ':', '*', '?', '"', '<', '>', '|']
+        safe_name = filename
+        for char in dangerous_chars:
+            safe_name = safe_name.replace(char, '_')
+        return safe_name
 
