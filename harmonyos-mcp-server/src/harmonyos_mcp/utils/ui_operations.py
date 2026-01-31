@@ -22,20 +22,23 @@ class UIOperations:
         self.hdc = hdc
         logger.info("UI操作工具初始化成功")
     
-    def _execute_uitest(self, device_id: str, command: str) -> Dict[str, Any]:
+    def _execute_uitest(self, device_id: str, command: str, timeout: int = None) -> Dict[str, Any]:
         """
         执行uitest命令
         
         Args:
             device_id: 设备ID
             command: uitest命令（不包含 uitest uiInput 前缀）
+            timeout: 超时时间(秒)，默认使用 UI_OPERATION_TIMEOUT
         
         Returns:
             执行结果
         """
+        from ..config import Config
+        timeout = timeout or Config.UI_OPERATION_TIMEOUT
         full_command = f"uitest uiInput {command}"
-        logger.debug(f"执行UI命令: {full_command}")
-        result = self.hdc.execute_shell(device_id, full_command)
+        logger.debug(f"执行UI命令: {full_command}, 超时: {timeout}s")
+        result = self.hdc.execute_shell(device_id, full_command, timeout=timeout)
         return result
     
     # ========================================================================

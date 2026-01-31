@@ -48,7 +48,9 @@ class Config:
     LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
 
     # 超时设置(秒)
-    COMMAND_TIMEOUT: int = int(os.getenv('COMMAND_TIMEOUT', '300'))
+    UI_OPERATION_TIMEOUT: int = int(os.getenv('UI_OPERATION_TIMEOUT', '5'))    # UI操作(点击/滑动等)
+    UI_TREE_TIMEOUT: int = int(os.getenv('UI_TREE_TIMEOUT', '10'))             # UI树获取
+    COMMAND_TIMEOUT: int = int(os.getenv('COMMAND_TIMEOUT', '30'))             # 通用命令
     BUILD_TIMEOUT: int = int(os.getenv('BUILD_TIMEOUT', '600'))
     INSTALL_TIMEOUT: int = int(os.getenv('INSTALL_TIMEOUT', '120'))
 

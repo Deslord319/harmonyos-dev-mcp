@@ -140,19 +140,20 @@ class HdcWrapper:
             logger.error(f"应用卸载失败: {result['stderr']}")
             return False
 
-    def execute_shell(self, device_id: str, command: str) -> Dict[str, Any]:
+    def execute_shell(self, device_id: str, command: str, timeout: int = None) -> Dict[str, Any]:
         """
         在设备上执行Shell命令
 
         Args:
             device_id: 设备ID
             command: Shell命令
+            timeout: 超时时间(秒)，默认使用 COMMAND_TIMEOUT
 
         Returns:
             命令执行结果
         """
-        logger.debug(f"在设备 {device_id} 上执行Shell命令: {command}")
-        result = self._execute_command(['-t', device_id, 'shell', command])
+        logger.debug(f"在设备 {device_id} 上执行Shell命令: {command}" + (f", 超时: {timeout}s" if timeout else ""))
+        result = self._execute_command(['-t', device_id, 'shell', command], timeout=timeout)
         return result
 
     def get_realtime_logs(self, device_id: str, lines: int = 100, tag: Optional[str] = None,
@@ -476,11 +477,14 @@ class HdcWrapper:
         Returns:
             包含UI组件树JSON的字典
         """
-        logger.info(f"获取UI组件树 (device: {device_id})")
+        from ..config import Config
+        timeout = Config.UI_TREE_TIMEOUT
+        
+        logger.info(f"获取UI组件树 (device: {device_id}, timeout: {timeout}s)")
         
         # 使用 uitest dumpLayout 命令获取UI树
         # 该命令会将UI树保存到设备上的JSON文件
-        dump_result = self.execute_shell(device_id, "uitest dumpLayout")
+        dump_result = self.execute_shell(device_id, "uitest dumpLayout", timeout=timeout)
         
         if not dump_result['success']:
             logger.error(f"uitest dumpLayout 失败: {dump_result['stderr']}")
@@ -505,7 +509,7 @@ class HdcWrapper:
         logger.info(f"UI树保存路径: {json_path}")
         
         # 读取JSON文件内容
-        cat_result = self.execute_shell(device_id, f"cat {json_path}")
+        cat_result = self.execute_shell(device_id, f"cat {json_path}", timeout=timeout)
         
         if not cat_result['success']:
             logger.error(f"读取UI树文件失败: {cat_result['stderr']}")
