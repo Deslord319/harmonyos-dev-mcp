@@ -754,18 +754,19 @@ class HdcWrapper:
             "tools_dir": abs_tools_dir,
         }
 
-    def clone_library(self, repo_url: str, local_path: str) -> Dict[str, Any]:
+    def clone_library(self, repo_url: str, local_path: str, version: str = None) -> Dict[str, Any]:
         """
-        拉取三方库代码仓库
+        拉取三方库代码仓库并切换到指定版本
 
         Args:
             repo_url: 仓库 URL (git/https)
             local_path: 本地存放路径
+            version: 可选，指定版本（tag/branch/commit），如 "v1.1.1w" 或 "OpenSSL_1_1_1w"
 
         Returns:
             拉取结果
         """
-        logger.info(f"开始拉取三方库: {repo_url} -> {local_path}")
+        logger.info(f"开始拉取三方库: {repo_url} -> {local_path} (版本: {version or 'default'})")
         
         # 确保本地目录存在
         parent_dir = os.path.dirname(os.path.abspath(local_path))
@@ -779,8 +780,14 @@ class HdcWrapper:
             }
 
         try:
+            # 如果指定了版本，使用 --branch 参数直接clone指定分支/tag
+            if version:
+                clone_cmd = ["git", "clone", "--depth", "1", "--branch", version, repo_url, local_path]
+            else:
+                clone_cmd = ["git", "clone", repo_url, local_path]
+            
             result = subprocess.run(
-                ["git", "clone", repo_url, local_path],
+                clone_cmd,
                 capture_output=True,
                 text=True,
                 timeout=300
@@ -792,6 +799,7 @@ class HdcWrapper:
                     "success": True,
                     "repo_url": repo_url,
                     "local_path": os.path.abspath(local_path),
+                    "version": version or "default",
                 }
             else:
                 error_msg = result.stderr.strip() or result.stdout.strip()

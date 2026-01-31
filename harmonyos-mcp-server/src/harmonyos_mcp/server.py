@@ -207,20 +207,25 @@ def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandline_too
 
 
 @server.tool()
-def clone_library(repo_url: str, local_path: str) -> dict:
+def clone_library(repo_url: str, local_path: str, version: str = None) -> dict:
     """
-    拉取三方库代码仓库
+    拉取三方库代码仓库并切换到指定版本
+    
+    支持直接指定版本号克隆，避免下载完整历史记录，大幅提升速度。
+    例如：openssl 1.1.1w 版本可以用 "OpenSSL_1_1_1w" 作为version参数
 
     Args:
         repo_url: 库的 git 仓库 URL (支持 https/git 协议)
         local_path: 本地保存路径
+        version: 可选，指定版本tag/branch（如 "OpenSSL_1_1_1w", "v1.1.1"）。
+                指定版本时使用浅克隆(--depth 1)，大幅减少下载时间
 
     Returns:
-        拉取结果
+        拉取结果，包含success状态、本地路径和克隆的版本信息
     """
     try:
         hdc = init_hdc()
-        result = hdc.clone_library(repo_url, local_path)
+        result = hdc.clone_library(repo_url, local_path, version)
         return result
     except Exception as e:
         logger.error(f"拉取三方库失败: {e}")
