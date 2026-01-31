@@ -762,9 +762,10 @@ class HdcWrapper:
             repo_url: 仓库 URL (git/https)
             local_path: 本地存放路径
             version: 可选，指定版本（tag/branch/commit），如 "v1.1.1w" 或 "OpenSSL_1_1_1w"
+                    如果tag/branch不存在，自动fallback到全量clone
 
         Returns:
-            拉取结果
+            拉取结果，包含success、本地路径、实际拉取的版本等信息
         """
         logger.info(f"开始拉取三方库: {repo_url} -> {local_path} (版本: {version or 'default'})")
         
@@ -780,12 +781,40 @@ class HdcWrapper:
             }
 
         try:
-            # 如果指定了版本，使用 --branch 参数直接clone指定分支/tag
+            # 如果指定了版本，先尝试用浅克隆
             if version:
+                logger.info(f"尝试使用浅克隆指定版本: {version}")
                 clone_cmd = ["git", "clone", "--depth", "1", "--branch", version, repo_url, local_path]
-            else:
-                clone_cmd = ["git", "clone", repo_url, local_path]
+                
+                try:
+                    result = subprocess.run(
+                        clone_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=60  # 浅克隆应该快速失败
+                    )
+                    
+                    if result.returncode == 0:
+                        logger.info(f"成功拉取三方库 (版本: {version}): {local_path}")
+                        return {
+                            "success": True,
+                            "repo_url": repo_url,
+                            "local_path": os.path.abspath(local_path),
+                            "version": version,
+                            "shallow_clone": True,
+                        }
+                    else:
+                        # 版本不存在或网络问题，尝试全量clone
+                        error_msg = result.stderr.strip() or result.stdout.strip()
+                        logger.warning(f"指定版本克隆失败: {error_msg}，尝试全量clone")
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"指定版本克隆超时，尝试全量clone")
+                except Exception as e:
+                    logger.warning(f"指定版本克隆异常: {e}，尝试全量clone")
             
+            # 全量clone（没有指定版本，或者指定版本克隆失败）
+            logger.info(f"执行全量clone: {repo_url}")
+            clone_cmd = ["git", "clone", repo_url, local_path]
             result = subprocess.run(
                 clone_cmd,
                 capture_output=True,
@@ -800,10 +829,12 @@ class HdcWrapper:
                     "repo_url": repo_url,
                     "local_path": os.path.abspath(local_path),
                     "version": version or "default",
+                    "shallow_clone": False,
+                    "note": "使用全量clone" if version else "默认clone",
                 }
             else:
                 error_msg = result.stderr.strip() or result.stdout.strip()
-                logger.error(f"拉取失败: {error_msg}")
+                logger.error(f"全量clone失败: {error_msg}")
                 return {
                     "success": False,
                     "error": error_msg,
@@ -811,9 +842,10 @@ class HdcWrapper:
         except subprocess.TimeoutExpired:
             return {
                 "success": False,
-                "error": "拉取超时 (300秒)",
+                "error": "git clone操作超时 (300秒)，请检查网络连接",
             }
         except Exception as e:
+            logger.error(f"克隆异常: {e}")
             return {
                 "success": False,
                 "error": str(e),
