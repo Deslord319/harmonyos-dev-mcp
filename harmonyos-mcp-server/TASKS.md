@@ -5,7 +5,7 @@
 | 阶段                               | 状态     | 进度       |
 | ---------------------------------- | -------- | ---------- |
 | **第一阶段：基础工具与可行性验证** | ✅ 已完成 | 8/8 (100%) |
-| **第二阶段：完善核心开发流程**     | 🔄 进行中 | 3/7 (43%)  |
+| **第二阶段：完善核心开发流程**     | 🔄 进行中 | 5/8 (63%)  |
 | **第三阶段：高级功能与优化**       | ⏳ 未开始 | 0/7 (0%)   |
 | **第四阶段：文档与社区推广**       | ⏳ 未开始 | 0/8 (0%)   |
 
@@ -18,7 +18,7 @@
 | 1.1 环境准备与项目初始化 | ✅    | Python、FastMCP、项目结构           |
 | 1.2 hdc工具封装          | ✅    | HdcWrapper 类                       |
 | 1.3 hvigor构建工具封装   | ✅    | HvigorWrapper 类                    |
-| 1.4 UI树获取方案         | ✅    | hidumper -inspector（屏幕绝对坐标） |
+| 1.4 UI树获取方案         | ✅    | uitest dumpLayout（屏幕绝对坐标）   |
 | 1.5 get_ui_tree MCP工具  | ✅    | 完成                                |
 | 1.6 基础MCP工具          | ✅    | 8个工具                             |
 | 1.7 AI IDE集成           | ✅    | Augment 集成成功                    |
@@ -26,15 +26,15 @@
 
 ---
 
-## 🔄 第二阶段：完善核心开发流程 (43%)
+## 🔄 第二阶段：完善核心开发流程 (63%)
 
 | 任务                 | 状态   | 说明                                                          |
 | -------------------- | ------ | ------------------------------------------------------------- |
 | 2.1 UI操作工具       | ✅      | click, long_press, swipe, input_text, press_key, find_element |
-| 2.2 应用生命周期管理 | ⏳      | clear_app_data, get_app_info                                  |
-| 2.3 日志收集与分析   | ✅      | bundle_name, tag, pid 过滤                                    |
+| 2.2 包管理工具       | ✅      | list_packages, get_package_abilities, get_main_ability        |
+| 2.3 日志收集与分析   | ✅      | logs_fetch, logs_save_snapshot, logs_analyze（多种过滤条件）  |
 | ~~2.4 签名管理工具~~ | ❌ 取消 | HarmonyOS签名类似Apple，需在线申请证书                        |
-| 2.5 设备管理增强     | ⏳      | connect, disconnect, get_info                                 |
+| 2.5 设备管理增强     | 🔄      | hilog_receive 已完成，connect/disconnect/get_info 待实现      |
 | 2.6 截图功能         | ⏳      | 全屏/控件截图                                                 |
 | 2.7 错误处理与重试   | ⏳      | 超时管理                                                      |
 | 2.8 集成测试与优化   | ⏳      |                                                               |
@@ -72,29 +72,47 @@
 
 ---
 
-## 📦 已实现的 MCP 工具 (14个)
+## 📦 已实现的 MCP 工具 (26个)
 
-### 设备管理
+### 设备管理 (2个)
 - `list_devices` - 列出连接的设备
-- `get_realtime_logs` - 获取实时日志（hilog 缓存，支持 bundle_name/tag/pid 过滤）
+- `hilog_receive` - 从设备获取 hilog 日志文件和 dict 解密文件
 
-### 构建部署
-- `build_app` - 构建应用
-- `install_app` - 安装 HAP 包
-- `run_app` - 运行应用
+### 三方库鸿蒙化编译 (6个)
+- `check_wsl` - 检查 WSL 环境（Windows 交叉编译需要）
+- `check_harmonyos_compiler_tools` - 检查 HarmonyOS 编译工具链
+- `clone_library` - 克隆三方库仓库（支持指定版本浅克隆）
+- `analyze_build_system` - 分析项目构建系统类型
+- `compile_library` - 使用鸿蒙工具链编译三方库
+- `verify_so_output` - 验证编译输出的 .so 文件
+
+### 构建部署 (4个)
+- `build_app` - 构建 HarmonyOS 应用
+- `install_app` - 安装 HAP 包到设备
+- `run_app` - 运行应用（支持自动检测主 Ability）
 - `uninstall_app` - 卸载应用
 
-### UI 感知
-- `list_windows` - 列出窗口
-- `get_ui_tree` - 获取 UI 组件树
-- `find_element` - 查找元素
+### 包管理 (3个)
+- `list_packages` - 列出设备已安装的应用包
+- `get_package_abilities` - 获取指定包的所有 Abilities
+- `get_main_ability` - 获取包的主入口 Ability
 
-### UI 操作
-- `click_element` - 点击元素
+### UI 感知 (3个)
+- `get_ui_tree` - 获取 UI 组件树
+- `list_windows` - 列出窗口
+- `find_element` - 在 UI 树中查找元素
+
+### UI 操作 (5个)
+- `click_element` - 点击元素（支持坐标/文本/类型定位）
 - `long_press_element` - 长按元素
-- `swipe` - 滑动操作
+- `swipe` - 滑动操作（支持坐标/方向）
 - `input_text` - 输入文本
-- `press_key` - 按键操作
+- `press_key` - 按键操作（Home/Back/Enter 等）
+
+### 日志分析 (3个)
+- `logs_fetch` - 获取日志（支持 level/tag/keyword/pid/time 过滤）
+- `logs_save_snapshot` - 保存日志快照到本地文件
+- `logs_analyze` - 结构化日志分析（summary/errors/crashes 等）
 
 ---
 
