@@ -34,7 +34,7 @@ class UIOperations:
         Returns:
             执行结果
         """
-        from ..config import Config
+        from harmonyos_mcp.config import Config
         timeout = timeout or Config.UI_OPERATION_TIMEOUT
         full_command = f"uitest uiInput {command}"
         logger.debug(f"执行UI命令: {full_command}, 超时: {timeout}s")

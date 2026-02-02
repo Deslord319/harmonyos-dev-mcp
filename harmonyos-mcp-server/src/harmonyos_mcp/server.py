@@ -208,45 +208,6 @@ def analyze_build_system(project_dir: str) -> dict:
 
 
 @server.tool()
-def compile_library(
-    project_dir: str,
-    build_system: str,
-    tools_dir: str = None,
-    output_dir: str = None,
-    extra_args: list = None
-) -> dict:
-    """
-    使用鸿蒙工具链编译三方库
-
-    Args:
-        project_dir: 项目目录路径
-        build_system: 构建系统类型 (cmake/makefile/autotools/gn)
-        tools_dir: HarmonyOS CommandLine Tools 目录路径（可选）
-        output_dir: 编译输出目录（可选）
-        extra_args: 额外的编译参数列表（可选）
-
-    Returns:
-        编译结果，包含成功状态、输出目录和生成的.so文件列表
-    """
-    try:
-        hdc = init_hdc()
-        result = hdc.compile_library(
-            project_dir=project_dir,
-            build_system=build_system,
-            tools_dir=tools_dir,
-            output_dir=output_dir,
-            extra_args=extra_args or []
-        )
-        return result
-    except Exception as e:
-        logger.error(f"编译三方库失败: {e}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-@server.tool()
 def verify_so_output(project_dir: str, output_dir: str = None) -> dict:
     """
     验证编译输出的 .so 文件
@@ -1522,6 +1483,120 @@ def logs_analyze(
 
 # 导出 mcp 实例供 FastMCP 使用
 mcp = server
+
+
+@server.tool()
+def read_build_files(project_dir: str) -> dict:
+    """
+    读取项目的构建系统文件，供远端AI分析
+    
+    读取CMakeLists.txt、configure、Makefile等构建文件的内容，
+    以及项目目录结构，返回给AI进行分析。
+    
+    Args:
+        project_dir: 项目目录路径
+    
+    Returns:
+        {
+            "success": bool,
+            "files": {文件名: 内容},
+            "structure": "目录结构",
+            "special_dirs": [特殊目录],
+            "environment": {环境信息}
+        }
+    """
+    try:
+        from .utils.compile_wrapper import get_build_file_reader, get_compile_environment
+        reader = get_build_file_reader()
+        env = get_compile_environment()
+        
+        result = reader.read_project_files(project_dir)
+        result['success'] = True
+        result['environment'] = env.get_environment_info()
+        
+        logger.info(f"读取构建文件: {len(result['files'])} 个文件")
+        return result
+    except Exception as e:
+        logger.error(f"读取构建文件失败: {e}", exc_info=True)
+        return {
+            'success': False,
+            'message': f"读取失败: {str(e)}",
+            'files': {},
+            'structure': '',
+            'special_dirs': []
+        }
+
+
+
+
+@server.tool()
+def write_compile_script(project_dir: str, script_content: str) -> dict:
+    """
+    将AI生成的编译脚本写入文件
+    
+    Args:
+        project_dir: 项目目录
+        script_content: 脚本内容（由AI生成的完整bash脚本）
+    
+    Returns:
+        {
+            "success": bool,
+            "script_path": str,
+            "message": str
+        }
+    """
+    try:
+        from .utils.compile_wrapper import get_script_writer
+        writer = get_script_writer()
+        result = writer.write_script(project_dir, script_content)
+        return result
+    except Exception as e:
+        logger.error(f"写入脚本失败: {e}", exc_info=True)
+        return {
+            'success': False,
+            'message': f"写入失败: {str(e)}"
+        }
+
+
+
+
+@server.tool()
+def execute_compile_script(script_path: str, timeout: int = 1800) -> dict:
+    """
+    执行编译脚本并返回输出
+    
+    Args:
+        script_path: 脚本文件路径
+        timeout: 超时时间（秒），默认30分钟
+    
+    Returns:
+        {
+            "success": bool,
+            "exit_code": int,
+            "stdout": str,
+            "stderr": str,
+            "duration": float
+        }
+    """
+    try:
+        from .utils.compile_wrapper import get_script_executor
+        executor = get_script_executor()
+        result = executor.execute(script_path, timeout=timeout)
+        return result
+    except Exception as e:
+        logger.error(f"执行脚本失败: {e}", exc_info=True)
+        return {
+            'success': False,
+            'exit_code': -1,
+            'stdout': '',
+            'stderr': str(e),
+            'duration': 0,
+            'message': f"执行失败: {str(e)}"
+        }
+
+
+
+
 
 
 def main():

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from loguru import logger
 
-from ..config import Config
+from harmonyos_mcp.config import Config
 
 
 class HdcWrapper:
@@ -507,7 +507,7 @@ class HdcWrapper:
         Returns:
             包含UI组件树JSON的字典
         """
-        from ..config import Config
+        from harmonyos_mcp.config import Config
         timeout = Config.UI_TREE_TIMEOUT
         
         logger.info(f"获取UI组件树 (device: {device_id}, timeout: {timeout}s)")
