@@ -322,6 +322,36 @@ class HdcWrapper:
         result = self._execute_command(['-t', device_id, 'shell', command], timeout=timeout)
         return result
 
+    def get_app_pid(self, device_id: str, package_name: str) -> Optional[int]:
+        """
+        获取应用的进程ID
+        
+        Args:
+            device_id: 设备ID
+            package_name: 应用包名 (如 com.example.myapplication)
+        
+        Returns:
+            进程ID，如果应用未运行则返回 None
+        """
+        logger.debug(f"获取应用 {package_name} 的进程ID")
+        
+        # 使用 pidof 命令获取进程ID
+        result = self.execute_shell(device_id, f'pidof {package_name}')
+        
+        if result['success'] and result['stdout'].strip():
+            try:
+                # pidof 可能返回多个 PID（多进程），取第一个
+                pid_str = result['stdout'].strip().split()[0]
+                pid = int(pid_str)
+                logger.info(f"应用 {package_name} 的进程ID: {pid}")
+                return pid
+            except (ValueError, IndexError):
+                logger.warning(f"无法解析进程ID: {result['stdout']}")
+                return None
+        else:
+            logger.debug(f"应用 {package_name} 未运行或未找到进程")
+            return None
+
     def get_realtime_logs(self, device_id: str, lines: int = 100, tag: Optional[str] = None,
                  bundle_name: Optional[str] = None, pid: Optional[int] = None) -> str:
         """

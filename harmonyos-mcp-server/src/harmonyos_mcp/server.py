@@ -1111,12 +1111,16 @@ def _logs_fetch_impl(
     tag: str = None,
     keyword: str = None,
     pid: int = None,
+    package_name: str = None,
     start_time: str = None,
     end_time: str = None,
     seconds: int = None
 ) -> dict:
     """
     日志获取的内部实现（供工具函数调用）
+    
+    Args:
+        package_name: 应用包名，如果指定则自动获取该应用的PID进行过滤
     """
     from datetime import datetime, timedelta
     
@@ -1130,12 +1134,26 @@ def _logs_fetch_impl(
                 return {'success': False, 'error': '没有找到连接的设备'}
             device_id = devices[0]
         
+        # 如果指定了包名，获取应用的PID
+        resolved_pid = pid
+        if package_name and not pid:
+            app_pid = hdc.get_app_pid(device_id, package_name)
+            if app_pid:
+                resolved_pid = app_pid
+                logger.info(f"通过包名 {package_name} 解析到 PID: {app_pid}")
+            else:
+                return {
+                    'success': False,
+                    'error': f'应用 {package_name} 未运行或未找到进程',
+                    'hint': '请确保应用已启动'
+                }
+        
         # 限制最大行数
         lines = min(lines, LogSecurityConfig.MAX_LOG_LINES)
         
         # 获取日志（获取更多行以便过滤后仍有足够数据）
         fetch_lines = min(lines * 5, LogSecurityConfig.MAX_LOG_LINES)
-        log_text = hdc.get_realtime_logs(device_id, lines=fetch_lines, tag=tag, pid=pid)
+        log_text = hdc.get_realtime_logs(device_id, lines=fetch_lines, tag=tag, pid=resolved_pid)
         
         if not log_text:
             return {
@@ -1225,6 +1243,7 @@ def logs_fetch(
     tag: str = None,
     keyword: str = None,
     pid: int = None,
+    package_name: str = None,
     start_time: str = None,
     end_time: str = None,
     seconds: int = None
@@ -1239,6 +1258,7 @@ def logs_fetch(
         tag: Tag 过滤（模糊匹配）
         keyword: 关键字过滤（在日志内容中搜索）
         pid: 进程ID过滤
+        package_name: 应用包名过滤（如 com.example.myapplication），自动获取应用PID
         start_time: 开始时间（格式：HH:MM:SS 或 YYYY-MM-DD HH:MM:SS）
         end_time: 结束时间（格式：HH:MM:SS 或 YYYY-MM-DD HH:MM:SS）
         seconds: 获取最近N秒内的日志（与start_time/end_time互斥）
@@ -1253,6 +1273,7 @@ def logs_fetch(
         tag=tag,
         keyword=keyword,
         pid=pid,
+        package_name=package_name,
         start_time=start_time,
         end_time=end_time,
         seconds=seconds
@@ -1267,6 +1288,7 @@ def logs_save_snapshot(
     level: str = None,
     tag: str = None,
     keyword: str = None,
+    package_name: str = None,
     seconds: int = None,
     start_time: str = None,
     end_time: str = None,
@@ -1282,6 +1304,7 @@ def logs_save_snapshot(
         level: 日志级别过滤
         tag: Tag 过滤
         keyword: 关键字过滤
+        package_name: 应用包名过滤（如 com.example.myapplication），自动获取应用PID
         seconds: 获取最近N秒内的日志
         start_time: 开始时间
         end_time: 结束时间
@@ -1301,6 +1324,7 @@ def logs_save_snapshot(
             level=level,
             tag=tag,
             keyword=keyword,
+            package_name=package_name,
             seconds=seconds,
             start_time=start_time,
             end_time=end_time
@@ -1393,6 +1417,7 @@ def logs_save_snapshot(
 def logs_analyze(
     logs: list = None,
     device_id: str = None,
+    package_name: str = None,
     analysis_type: str = "summary",
     level: str = None,
     tag: str = None,
@@ -1408,11 +1433,13 @@ def logs_analyze(
     Args:
         logs: 日志行列表（如果提供则直接分析，否则从设备获取）
         device_id: 设备ID（当 logs 为空时使用）
+        package_name: 应用包名过滤（如 com.example.myapplication）
         analysis_type: 分析类型
             - summary: 摘要统计（级别分布、Top Tags、时间范围）
             - errors: 错误分析（E/F级别日志分组、异常类型识别）
             - performance: 性能分析（提取耗时数据、统计指标）
             - crashes: 崩溃分析（Crash/ANR/Exception 识别）
+            - keywords: 关键词提取（提取错误码、组件名、异常名、报错短语）
             - custom: 自定义正则匹配
         level: 日志级别过滤 (D/I/W/E/F)
         tag: Tag 过滤
@@ -1426,23 +1453,19 @@ def logs_analyze(
     try:
         # 如果没有提供日志，则从设备获取
         if not logs:
-            hdc = init_hdc()
+            # 使用 _logs_fetch_impl 获取日志（支持 package_name）
+            fetch_result = _logs_fetch_impl(
+                device_id=device_id,
+                package_name=package_name,
+                lines=lines,
+                tag=tag
+            )
             
-            # 获取设备
-            if not device_id:
-                devices = hdc.list_devices()
-                if not devices:
-                    return {'success': False, 'error': '没有找到连接的设备'}
-                device_id = devices[0]
+            if not fetch_result['success']:
+                return fetch_result
             
-            # 获取日志
-            log_text = hdc.get_realtime_logs(device_id, lines=lines, tag=tag)
-            if not log_text:
-                return {
-                    'success': False,
-                    'error': '无法获取设备日志'
-                }
-            logs = log_text.split('\n')
+            logs = fetch_result.get('logs', [])
+            device_id = fetch_result.get('device_id')
         
         # 解析日志
         entries = LogParser.parse_logs(logs)
@@ -1472,6 +1495,10 @@ def logs_analyze(
                     evidence_lines.append(e.raw_line)
                     if len(evidence_lines) >= 10:
                         break
+        elif analysis_type == 'keywords':
+            # 提取错误/警告日志作为证据
+            error_entries = [e for e in entries if e.level in ('E', 'F', 'W')][:10]
+            evidence_lines = [e.raw_line for e in error_entries]
         
         return {
             'success': True,
@@ -1479,10 +1506,12 @@ def logs_analyze(
             'result': result,
             'evidence_lines': evidence_lines,
             'total_entries_analyzed': len(entries),
+            'device_id': device_id,
             'filters_applied': {
                 'level': level,
                 'tag': tag,
-                'keyword': keyword
+                'keyword': keyword,
+                'package_name': package_name
             }
         }
         

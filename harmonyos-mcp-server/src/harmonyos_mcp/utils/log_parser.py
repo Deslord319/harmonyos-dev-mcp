@@ -105,6 +105,20 @@ class LogParser:
         'timeout': re.compile(r'(?i)(timeout|timed?\s*out)', re.IGNORECASE),
     }
     
+    # 关键词提取模式
+    KEYWORD_PATTERNS = {
+        # 错误码提取: code: 401, error=123, errno:-1
+        'error_code': re.compile(r'(?:code|error|errno|status|ret|result)\s*[:=]\s*(-?\d+)', re.IGNORECASE),
+        # 系统组件: [window][loadContent], <ComponentName>
+        'component': re.compile(r'\[(\w+)\]\[(\w+)\]|\[([A-Z][a-zA-Z]+)\]|<([A-Z][a-zA-Z]+)>'),
+        # 异常类名: NullPointerException, IOException
+        'exception_name': re.compile(r'\b([A-Z][a-zA-Z]*(?:Exception|Error|Failure|Fault))\b'),
+        # 核心报错短语: Failed to xxx, Unable to xxx, Cannot xxx
+        'error_phrase': re.compile(r'((?:Failed|Unable|Cannot|Could not|Couldn\'t|Error|Fail)\s+to\s+[\w\s]+?)(?:\.|,|$|Cause)', re.IGNORECASE),
+        # 消息前缀: msg:, message:, reason:
+        'message_content': re.compile(r'(?:msg|message|reason|cause)\s*[:=]\s*([^,\n\.]+)', re.IGNORECASE),
+    }
+    
     # 性能相关模式
     PERF_PATTERNS = {
         'duration': re.compile(r'(?i)(cost|duration|elapsed|time|took|spent)\s*[:\s=]*\s*(\d+(?:\.\d+)?)\s*(ms|s|μs|us|ns)?'),
@@ -532,6 +546,236 @@ class LogParser:
         return steps
     
     @classmethod
+    def analyze_keywords(cls, entries: List[LogEntry]) -> Dict[str, Any]:
+        """
+        分析日志中的异常并提取可检索关键词
+        
+        从错误日志中提取：
+        - 核心报错文本（如 "Failed to load the content"）
+        - 错误码（如 code: 401）
+        - 系统组件名（如 [window][loadContent]）
+        - 异常类名（如 NullPointerException）
+        - 相关 Tag 信息
+        
+        Args:
+            entries: 日志条目列表
+            
+        Returns:
+            关键词提取结果，按异常分组
+        """
+        # 筛选 E/F/W 级别日志
+        error_entries = [e for e in entries if e.level in ('E', 'F', 'W')]
+        
+        if not error_entries:
+            return {
+                'total_errors': 0,
+                'error_groups': [],
+                'search_keywords': [],
+                'message': '未发现错误或警告日志'
+            }
+        
+        # 按 Tag 分组异常
+        error_groups = defaultdict(list)
+        for entry in error_entries:
+            tag = entry.tag or 'Unknown'
+            error_groups[tag].append(entry)
+        
+        # 分析每组异常
+        analyzed_groups = []
+        all_keywords = set()
+        
+        for tag, group_entries in error_groups.items():
+            group_analysis = cls._analyze_error_group(tag, group_entries)
+            analyzed_groups.append(group_analysis)
+            
+            # 收集关键词
+            all_keywords.update(group_analysis.get('keywords', []))
+        
+        # 按错误数量排序
+        analyzed_groups.sort(key=lambda x: x['count'], reverse=True)
+        
+        # 生成搜索关键词列表（去重并按重要性排序）
+        search_keywords = cls._rank_keywords(all_keywords, error_entries)
+        
+        return {
+            'total_errors': len(error_entries),
+            'error_groups': analyzed_groups,
+            'search_keywords': search_keywords,
+            'summary': {
+                'unique_tags': len(error_groups),
+                'error_count': sum(1 for e in error_entries if e.level == 'E'),
+                'fatal_count': sum(1 for e in error_entries if e.level == 'F'),
+                'warning_count': sum(1 for e in error_entries if e.level == 'W'),
+            }
+        }
+    
+    @classmethod
+    def _analyze_error_group(cls, tag: str, entries: List[LogEntry]) -> Dict[str, Any]:
+        """
+        分析单个 Tag 的错误组
+        
+        Args:
+            tag: 日志 Tag
+            entries: 该 Tag 下的日志条目
+            
+        Returns:
+            分组分析结果
+        """
+        keywords = set()
+        error_codes = []
+        components = []
+        exception_names = []
+        error_phrases = []
+        messages = []
+        
+        for entry in entries:
+            text = entry.message
+            raw = entry.raw_line
+            
+            # 提取错误码
+            for match in cls.KEYWORD_PATTERNS['error_code'].finditer(text):
+                code = match.group(1)
+                error_codes.append(code)
+                keywords.add(f"code:{code}")
+            
+            # 提取系统组件
+            for match in cls.KEYWORD_PATTERNS['component'].finditer(text):
+                groups = [g for g in match.groups() if g]
+                for comp in groups:
+                    components.append(comp)
+                    keywords.add(comp)
+            
+            # 提取异常类名
+            for match in cls.KEYWORD_PATTERNS['exception_name'].finditer(text):
+                exc_name = match.group(1)
+                exception_names.append(exc_name)
+                keywords.add(exc_name)
+            
+            # 提取核心报错短语
+            for match in cls.KEYWORD_PATTERNS['error_phrase'].finditer(text):
+                phrase = match.group(1).strip()
+                if len(phrase) > 5:  # 过滤太短的短语
+                    error_phrases.append(phrase)
+                    keywords.add(phrase)
+            
+            # 提取消息内容
+            for match in cls.KEYWORD_PATTERNS['message_content'].finditer(text):
+                msg = match.group(1).strip()
+                if len(msg) > 5:
+                    messages.append(msg)
+        
+        # 添加 Tag 本身作为关键词
+        tag_parts = tag.split('/')
+        for part in tag_parts:
+            if part and len(part) > 2:
+                keywords.add(part)
+        
+        # 统计频率
+        code_counter = Counter(error_codes)
+        component_counter = Counter(components)
+        exception_counter = Counter(exception_names)
+        phrase_counter = Counter(error_phrases)
+        
+        return {
+            'tag': tag,
+            'count': len(entries),
+            'levels': dict(Counter(e.level for e in entries)),
+            'keywords': list(keywords),
+            'error_codes': [
+                {'code': code, 'count': cnt}
+                for code, cnt in code_counter.most_common(5)
+            ],
+            'components': [
+                {'name': comp, 'count': cnt}
+                for comp, cnt in component_counter.most_common(5)
+            ],
+            'exception_names': [
+                {'name': exc, 'count': cnt}
+                for exc, cnt in exception_counter.most_common(5)
+            ],
+            'error_phrases': [
+                {'phrase': phrase, 'count': cnt}
+                for phrase, cnt in phrase_counter.most_common(5)
+            ],
+            'sample_messages': [e.message[:200] for e in entries[:3]],
+            'time_range': {
+                'first': entries[0].timestamp.isoformat() if entries[0].timestamp else None,
+                'last': entries[-1].timestamp.isoformat() if entries[-1].timestamp else None,
+            } if entries else None
+        }
+    
+    @classmethod
+    def _rank_keywords(cls, keywords: set, entries: List[LogEntry]) -> List[Dict[str, Any]]:
+        """
+        对关键词进行排序，返回最有价值的检索关键词
+        
+        Args:
+            keywords: 关键词集合
+            entries: 日志条目列表
+            
+        Returns:
+            排序后的关键词列表
+        """
+        keyword_scores = []
+        
+        for kw in keywords:
+            if not kw or len(kw) < 3:
+                continue
+            
+            # 计算出现频率
+            count = sum(1 for e in entries if kw.lower() in e.raw_line.lower())
+            
+            # 计算得分：基于长度、是否包含特定模式
+            score = count
+            
+            # 错误码权重高
+            if kw.startswith('code:'):
+                score *= 2
+            # 异常名权重高
+            elif kw.endswith('Exception') or kw.endswith('Error'):
+                score *= 1.8
+            # 组件名权重适中
+            elif kw[0].isupper() and kw.isalnum():
+                score *= 1.5
+            # 短语权重适中
+            elif ' ' in kw:
+                score *= 1.3
+            
+            keyword_scores.append({
+                'keyword': kw,
+                'count': count,
+                'score': round(score, 2),
+                'type': cls._classify_keyword(kw)
+            })
+        
+        # 按得分排序
+        keyword_scores.sort(key=lambda x: x['score'], reverse=True)
+        
+        return keyword_scores[:20]  # 返回前20个
+    
+    @classmethod
+    def _classify_keyword(cls, keyword: str) -> str:
+        """
+        分类关键词类型
+        
+        Args:
+            keyword: 关键词
+            
+        Returns:
+            关键词类型
+        """
+        if keyword.startswith('code:'):
+            return 'error_code'
+        elif keyword.endswith('Exception') or keyword.endswith('Error') or keyword.endswith('Failure'):
+            return 'exception_name'
+        elif keyword[0].isupper() and keyword.isalnum() and len(keyword) > 3:
+            return 'component'
+        elif ' ' in keyword:
+            return 'error_phrase'
+        else:
+            return 'tag'
+    
+    @classmethod
     def analyze(
         cls,
         entries: List[LogEntry],
@@ -543,7 +787,7 @@ class LogParser:
         
         Args:
             entries: 日志条目列表
-            analysis_type: 分析类型 (summary/errors/performance/crashes/custom)
+            analysis_type: 分析类型 (summary/errors/performance/crashes/keywords/custom)
             custom_regex: 自定义正则表达式（仅 custom 类型使用）
             
         Returns:
@@ -557,6 +801,8 @@ class LogParser:
             return cls.analyze_performance(entries)
         elif analysis_type == 'crashes':
             return cls.analyze_crashes(entries)
+        elif analysis_type == 'keywords':
+            return cls.analyze_keywords(entries)
         elif analysis_type == 'custom' and custom_regex:
             return cls._analyze_custom(entries, custom_regex)
         else:

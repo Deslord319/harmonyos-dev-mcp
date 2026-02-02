@@ -10,11 +10,61 @@
 
 | 类别 | 功能 |
 |------|------|
-| 🔌 **设备管理** | 列出设备、获取日志（支持过滤） |
+| 🔌 **设备管理** | 列出设备、环境健康检查 |
 | 🔨 **构建部署** | 编译、安装、运行、卸载应用 |
 | 🌳 **UI 感知** | 获取 UI 树、查找元素、列出窗口 |
 | 🎯 **UI 操作** | 点击、输入、滑动、长按、按键 |
+| 📋 **日志分析** | 抓取日志、按包名过滤、保存快照、结构化分析 |
 | 🤖 **AI 集成** | 支持 Augment、Cursor、Cline、LibreChat 等 |
+
+---
+
+## 🛠️ MCP 工具列表
+
+### 设备管理 (Device Management)
+
+| 工具名 | 描述 | 主要参数 |
+|--------|------|----------|
+| `list_devices` | 列出所有连接的 HarmonyOS 设备和模拟器 | - |
+| `health_check` | 检查 hdc 和 hilogtool 环境状态 | - |
+
+### 构建部署 (Build & Deploy)
+
+| 工具名 | 描述 | 主要参数 |
+|--------|------|----------|
+| `build_app` | 构建 HarmonyOS 应用 | `project_path`, `build_mode` |
+| `install_app` | 安装应用到设备 | `hap_path`, `device_id` |
+| `run_app` | 运行应用 | `bundle_name`, `device_id`, `ability_name` |
+| `uninstall_app` | 卸载应用 | `bundle_name`, `device_id` |
+
+### UI 感知 (UI Awareness)
+
+| 工具名 | 描述 | 主要参数 |
+|--------|------|----------|
+| `get_ui_tree` | 获取应用的 UI 组件树 | `device_id`, `bundle_name`, `window_id` |
+| `list_windows` | 列出设备上的所有窗口 | `device_id` |
+| `find_element` | 在 UI 树中查找元素 | `text`, `element_type`, `element_id` |
+
+### UI 操作 (UI Operations)
+
+| 工具名 | 描述 | 主要参数 |
+|--------|------|----------|
+| `click_element` | 点击屏幕上的元素 | `x`, `y`, `text`, `double_click` |
+| `long_press_element` | 长按屏幕上的元素 | `x`, `y`, `text` |
+| `swipe` | 滑动操作 | `from_x`, `from_y`, `to_x`, `to_y`, `direction` |
+| `input_text` | 在输入框中输入文本 | `x`, `y`, `text` |
+| `press_key` | 模拟按键操作 | `key` (Home/Back/Enter 等) |
+
+### 日志分析 (Log Analysis)
+
+| 工具名 | 描述 | 主要参数 |
+|--------|------|----------|
+| `logs_fetch` | 从设备获取日志（支持多种过滤条件） | `lines`, `level`, `tag`, `keyword`, `package_name`, `pid`, `seconds` |
+| `logs_save_snapshot` | 保存日志快照到本地文件 | `output_path`, `lines`, `package_name`, `include_analysis` |
+| `logs_analyze` | 对日志进行结构化分析 | `analysis_type` (summary/errors/performance/crashes) |
+| `logs_parse_hilog_files` | 解析本地的 hilog 加密日志文件 | `hilog_dir`, `dict_path` |
+
+---
 
 ## 📋 环境要求
 
@@ -101,6 +151,52 @@ mcpServers:
 ```
 
 如果返回设备列表，说明配置成功！
+
+---
+
+## 💡 使用示例
+
+### 日志抓取
+
+```
+# 获取最近 100 行日志
+获取设备日志
+
+# 按包名过滤日志
+抓取 com.example.myapplication 最新的日志
+
+# 按级别过滤（只看错误）
+获取最近的错误日志，级别 E
+
+# 保存日志快照
+保存 com.example.myapplication 的日志到本地
+```
+
+### 应用操作
+
+```
+# 构建并安装应用
+构建项目 D:\MyProject 并安装到设备
+
+# 运行应用
+启动 com.example.myapplication
+
+# 卸载应用
+卸载 com.example.myapplication
+```
+
+### UI 自动化
+
+```
+# 获取当前界面元素
+获取当前应用的 UI 树
+
+# 点击按钮
+点击文本为"登录"的按钮
+
+# 输入文本
+在搜索框输入"HarmonyOS"
+```
 
 ---
 
