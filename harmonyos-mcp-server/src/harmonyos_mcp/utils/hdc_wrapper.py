@@ -186,6 +186,172 @@ class HdcWrapper:
             logger.debug(f"应用 {package_name} 未运行或未找到进程")
             return None
 
+    def list_hilog_files(self, device_id: str, hilog_dir: str = "/data/log/hilog") -> Dict[str, Any]:
+        """
+        列出设备上 hilog 目录下的日志文件
+        
+        Args:
+            device_id: 设备ID
+            hilog_dir: hilog 目录路径，默认 /data/log/hilog
+        
+        Returns:
+            包含文件列表的字典，每个文件包含 name, size, timestamp 信息
+        """
+        logger.info(f"列出设备 {device_id} 的 hilog 文件: {hilog_dir}")
+        
+        # 使用 ls -la 获取文件详情
+        result = self.execute_shell(device_id, f'ls -la {hilog_dir}')
+        
+        if not result['success']:
+            return {
+                'success': False,
+                'error': result.get('stderr', '无法访问 hilog 目录'),
+                'files': [],
+                'raw_output': result.get('stdout', '')
+            }
+        
+        files = []
+        raw_lines = []
+        
+        # 解析 ls 输出，提取 hilog 文件信息
+        for line in result['stdout'].split('\n'):
+            line = line.strip()
+            if not line or line.startswith('total'):
+                continue
+            
+            raw_lines.append(line)
+            
+            # 跳过目录
+            if line.startswith('d'):
+                continue
+            
+            parts = line.split()
+            if len(parts) < 6:
+                continue
+            
+            # 文件名是最后一个字段
+            filename = parts[-1]
+            
+            # 只处理 hilog 文件
+            if not (filename.startswith('hilog') or 'hilog' in filename):
+                continue
+            
+            try:
+                # 尝试找到文件大小（通常是第一个纯数字字段，且值较大）
+                size = 0
+                for part in parts[1:-1]:
+                    if part.isdigit() and int(part) > 100:
+                        size = int(part)
+                        break
+                
+                # 尝试从文件名提取时间戳
+                # 支持格式: hilog.658.20260203-201355 或 hilog.658.20260203-201355.gz
+                timestamp = None
+                from datetime import datetime
+                
+                # 移除 .gz 后缀
+                name_without_gz = filename.rstrip('.gz')
+                
+                # 尝试多种时间戳提取方式
+                if '-' in name_without_gz:
+                    # 格式: hilog.658.20260203-201355
+                    time_part = name_without_gz.split('.')[-1]
+                    if len(time_part) >= 15 and time_part[0].isdigit():
+                        try:
+                            timestamp = datetime.strptime(time_part, '%Y%m%d-%H%M%S')
+                        except ValueError:
+                            # 尝试只解析日期部分
+                            try:
+                                date_part = time_part.split('-')[0]
+                                if len(date_part) == 8:
+                                    timestamp = datetime.strptime(date_part, '%Y%m%d')
+                            except ValueError:
+                                pass
+                
+                files.append({
+                    'name': filename,
+                    'path': f"{hilog_dir}/{filename}",
+                    'size': size,
+                    'timestamp': timestamp.isoformat() if timestamp else None,
+                    'timestamp_dt': timestamp
+                })
+                logger.debug(f"找到 hilog 文件: {filename}, 时间戳: {timestamp}")
+                
+            except (ValueError, IndexError) as e:
+                logger.warning(f"解析文件信息失败: {line}, 错误: {e}")
+                continue
+        
+        # 按时间戳排序（最新的在前）
+        files.sort(key=lambda x: x.get('timestamp') or '', reverse=True)
+        
+        return {
+            'success': True,
+            'files': files,
+            'count': len(files),
+            'directory': hilog_dir,
+            'raw_line_count': len(raw_lines)
+        }
+
+    def pull_hilog_files(
+        self, 
+        device_id: str, 
+        files: List[Dict], 
+        local_dir: str,
+        start_time: 'datetime' = None,
+        end_time: 'datetime' = None
+    ) -> Dict[str, Any]:
+        """
+        从设备拉取 hilog 文件到本地
+        
+        Args:
+            device_id: 设备ID
+            files: 文件列表（来自 list_hilog_files）
+            local_dir: 本地保存目录
+            start_time: 开始时间过滤
+            end_time: 结束时间过滤
+        
+        Returns:
+            拉取结果，包含成功拉取的文件列表
+        """
+        import os
+        from datetime import datetime
+        
+        os.makedirs(local_dir, exist_ok=True)
+        
+        pulled_files = []
+        failed_files = []
+        
+        for file_info in files:
+            # 时间范围过滤
+            file_ts = file_info.get('timestamp_dt')
+            if file_ts:
+                if start_time and file_ts < start_time:
+                    continue
+                if end_time and file_ts > end_time:
+                    continue
+            
+            remote_path = file_info['path']
+            local_path = os.path.join(local_dir, file_info['name'])
+            
+            logger.info(f"拉取 hilog 文件: {remote_path} -> {local_path}")
+            
+            if self.pull_file(device_id, remote_path, local_path):
+                pulled_files.append({
+                    'name': file_info['name'],
+                    'local_path': local_path,
+                    'size': file_info['size'],
+                    'timestamp': file_info.get('timestamp')
+                })
+            else:
+                failed_files.append(file_info['name'])
+        
+        return {
+            'success': len(pulled_files) > 0,
+            'pulled_files': pulled_files,
+            'failed_files': failed_files,
+            'local_dir': local_dir
+        }
+
     def get_realtime_logs(self, device_id: str, lines: int = 100, tag: Optional[str] = None,
                  bundle_name: Optional[str] = None, pid: Optional[int] = None) -> str:
         """
