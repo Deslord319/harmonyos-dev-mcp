@@ -11,6 +11,7 @@ from .config import Config
 from .config import LogSecurityConfig
 from .utils.logger import setup_logger
 from .utils.hdc_wrapper import HdcWrapper
+from .utils.compile_wrapper import CompileLibraryManager
 from .utils.hvigor_wrapper import HvigorWrapper
 from .utils.uitree_parser import UITreeParser
 from .utils.ui_operations import UIOperations
@@ -24,6 +25,7 @@ server = FastMCP("harmonyos-tools")
 
 # 全局变量
 hdc_wrapper = None
+compile_library_manager = None
 
 
 def init_hdc():
@@ -37,6 +39,19 @@ def init_hdc():
             logger.error(f"hdc包装器初始化失败: {e}")
             raise
     return hdc_wrapper
+
+
+def init_compile_library_manager():
+    """初始化编译库管理器"""
+    global compile_library_manager
+    if compile_library_manager is None:
+        try:
+            compile_library_manager = CompileLibraryManager()
+            logger.info("编译库管理器初始化成功")
+        except Exception as e:
+            logger.error(f"编译库管理器初始化失败: {e}")
+            raise
+    return compile_library_manager
 
 
 # ============================================================================
@@ -161,20 +176,19 @@ def clone_library(repo_url: str, local_path: str, version: str = None) -> dict:
     拉取三方库代码仓库并切换到指定版本
     
     支持直接指定版本号克隆，避免下载完整历史记录，大幅提升速度。
-    例如：openssl 1.1.1w 版本可以用 "OpenSSL_1_1_1w" 作为version参数
 
     Args:
         repo_url: 库的 git 仓库 URL (支持 https/git 协议)
         local_path: 本地保存路径
-        version: 可选，指定版本tag/branch（如 "OpenSSL_1_1_1w", "v1.1.1"）。
+        version: 可选，指定版本tag/branch（如 "v1.0.0", "main"）。
                 指定版本时使用浅克隆(--depth 1)，大幅减少下载时间
 
     Returns:
         拉取结果，包含success状态、本地路径和克隆的版本信息
     """
     try:
-        hdc = init_hdc()
-        result = hdc.clone_library(repo_url, local_path, version)
+        manager = init_compile_library_manager()
+        result = manager.clone_library(repo_url, local_path, version)
         return result
     except Exception as e:
         logger.error(f"拉取三方库失败: {e}")
@@ -196,8 +210,8 @@ def analyze_build_system(project_dir: str) -> dict:
         检测到的构建系统列表及其标记文件
     """
     try:
-        hdc = init_hdc()
-        result = hdc.analyze_build_system(project_dir)
+        manager = init_compile_library_manager()
+        result = manager.analyze_build_system(project_dir)
         return result
     except Exception as e:
         logger.error(f"构建系统分析失败: {e}")
@@ -220,8 +234,8 @@ def verify_so_output(project_dir: str, output_dir: str = None) -> dict:
         验证结果，包含文件检查、格式验证等信息
     """
     try:
-        hdc = init_hdc()
-        result = hdc.verify_so_output(
+        manager = init_compile_library_manager()
+        result = manager.verify_so_output(
             project_dir=project_dir,
             output_dir=output_dir
         )
