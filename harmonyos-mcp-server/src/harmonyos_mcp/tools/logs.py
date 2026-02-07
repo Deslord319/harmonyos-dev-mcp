@@ -69,6 +69,7 @@ def _logs_fetch_impl(
                 'device_id': device,
                 'logs': [],
                 'total_lines': 0,
+                'truncated': False,
                 'message': '未获取到日志'
             }
 
