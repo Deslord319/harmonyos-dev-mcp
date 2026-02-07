@@ -249,7 +249,9 @@ class UIOperations:
             操作结果
         """
         logger.info(f"输入文本: '{text}' at ({x}, {y})")
-        result = self._execute_uitest(device_id, f'inputText {x} {y} "{text}"')
+        # 使用转义双引号确保中文文本正确传递
+        escaped_text = text.replace('"', '\\"')
+        result = self._execute_uitest(device_id, f'inputText {x} {y} \\"{escaped_text}\\"')
         return {
             'success': result['success'],
             'action': 'inputText',
