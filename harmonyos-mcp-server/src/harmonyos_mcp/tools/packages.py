@@ -26,19 +26,30 @@ def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesRes
         list_packages(keyword="settings")  -> 搜索包含"settings"的包
         list_packages()  -> 列出所有已安装的包
     """
+    default_result = {'packages': [], 'count': 0}
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         hdc = get_hdc()
         result = hdc.list_packages(device, keyword)
         result['device_id'] = device
         
+        # 确保必需字段存在
+        if 'packages' not in result:
+            result['packages'] = []
+        if 'count' not in result:
+            result['count'] = len(result['packages'])
+        
         return result
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'LIST_PACKAGES_ERROR')
+        error_result = ToolBase.wrap_error(e, 'LIST_PACKAGES_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbilitiesResult:
@@ -55,9 +66,18 @@ def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbi
     Example:
         get_package_abilities("com.huawei.hmos.settings")
     """
+    default_result = {
+        'bundle_name': bundle_name,
+        'abilities': [],
+        'modules': [],
+        'main_ability': None,
+        'ability_count': 0
+    }
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         hdc = get_hdc()
@@ -69,16 +89,20 @@ def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbi
                 'success': True,
                 'device_id': device,
                 'bundle_name': bundle_name,
-                'abilities': result['abilities'],
-                'modules': result['modules'],
-                'main_ability': result['main_ability'],
-                'ability_count': len(result['abilities'])
+                'abilities': result.get('abilities', []),
+                'modules': result.get('modules', []),
+                'main_ability': result.get('main_ability'),
+                'ability_count': len(result.get('abilities', []))
             }
         else:
+            result.update(default_result)
+            result['device_id'] = device
             return result
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'GET_ABILITIES_ERROR')
+        error_result = ToolBase.wrap_error(e, 'GET_ABILITIES_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResult:

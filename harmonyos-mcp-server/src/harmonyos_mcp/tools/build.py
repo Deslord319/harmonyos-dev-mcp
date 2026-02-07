@@ -103,6 +103,7 @@ def install_app(hap_path: str, device_id: str = None) -> InstallResult:
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device['hap_path'] = hap_path
             return device
 
         hdc = get_hdc()
@@ -114,7 +115,9 @@ def install_app(hap_path: str, device_id: str = None) -> InstallResult:
             'hap_path': hap_path
         }
     except Exception as e:
-        return ToolBase.wrap_error(e, 'INSTALL_ERROR')
+        error_result = ToolBase.wrap_error(e, 'INSTALL_ERROR')
+        error_result['hap_path'] = hap_path
+        return error_result
 
 
 def run_app(
@@ -144,9 +147,21 @@ def run_app(
         # 指定Ability启动
         run_app(bundle_name="com.example.app", ability_name="MainAbility", module_name="entry")
     """
+    # 默认值，用于错误返回
+    default_result = {
+        'bundle_name': bundle_name,
+        'ability_name': ability_name or '',
+        'module_name': module_name or 'entry',
+        'auto_detected': False,
+        'command_success': False,
+        'window_found': False,
+        'window': None
+    }
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         hdc = get_hdc()
@@ -171,7 +186,9 @@ def run_app(
             'error': start_result.get('error')
         }
     except Exception as e:
-        return ToolBase.wrap_error(e, 'RUN_APP_ERROR')
+        error_result = ToolBase.wrap_error(e, 'RUN_APP_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def _resolve_ability(hdc, device_id: str, bundle_name: str,
@@ -228,6 +245,7 @@ def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device['bundle_name'] = bundle_name
             return device
 
         hdc = get_hdc()
@@ -239,4 +257,6 @@ def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
             'bundle_name': bundle_name
         }
     except Exception as e:
-        return ToolBase.wrap_error(e, 'UNINSTALL_ERROR')
+        error_result = ToolBase.wrap_error(e, 'UNINSTALL_ERROR')
+        error_result['bundle_name'] = bundle_name
+        return error_result

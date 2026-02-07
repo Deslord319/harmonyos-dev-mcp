@@ -15,6 +15,26 @@ from ..types import LogsFetchResult, LogsSaveResult, LogsAnalyzeResult, Analysis
 from .base import ToolBase
 
 
+def _empty_filters() -> dict:
+    """返回空的过滤配置"""
+    return {
+        'level': None,
+        'tag': None,
+        'keyword': None,
+        'pid': None,
+        'time_range': None,
+        'seconds': None
+    }
+
+
+def _empty_summary() -> dict:
+    """返回空的摘要"""
+    return {
+        'level_stats': {},
+        'time_range': None
+    }
+
+
 def _logs_fetch_impl(
     device_id: str = None,
     lines: int = 100,
@@ -33,12 +53,27 @@ def _logs_fetch_impl(
     Args:
         package_name: 应用包名，如果指定则自动获取该应用的PID进行过滤
     """
+    # 构建过滤配置（用于所有返回路径）
+    filters = {
+        'level': level,
+        'tag': tag,
+        'keyword': keyword,
+        'pid': pid,
+        'time_range': None,
+        'seconds': seconds
+    }
+    
     try:
         hdc = get_hdc()
 
         # 获取设备
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device['logs'] = []
+            device['total_lines'] = 0
+            device['truncated'] = False
+            device['filters_applied'] = filters
+            device['summary'] = _empty_summary()
             return device
 
         # 如果指定了包名，获取应用的PID
@@ -51,9 +86,15 @@ def _logs_fetch_impl(
             else:
                 return {
                     'success': False,
+                    'device_id': device,
                     'error': f'应用 {package_name} 未运行或未找到进程',
                     'hint': '请确保应用已启动',
-                    'error_code': 'APP_NOT_RUNNING'
+                    'error_code': 'APP_NOT_RUNNING',
+                    'logs': [],
+                    'total_lines': 0,
+                    'truncated': False,
+                    'filters_applied': filters,
+                    'summary': _empty_summary()
                 }
 
         # 限制最大行数
@@ -70,6 +111,8 @@ def _logs_fetch_impl(
                 'logs': [],
                 'total_lines': 0,
                 'truncated': False,
+                'filters_applied': filters,
+                'summary': _empty_summary(),
                 'message': '未获取到日志'
             }
 
@@ -79,6 +122,7 @@ def _logs_fetch_impl(
 
         # 构建时间范围
         time_range = _build_time_range(seconds, start_time, end_time)
+        filters['time_range'] = time_range
 
         # 应用过滤
         filtered_entries = LogParser.filter_entries(
@@ -104,14 +148,7 @@ def _logs_fetch_impl(
             'logs': [e.raw_line for e in filtered_entries],
             'total_lines': len(filtered_entries),
             'truncated': truncated,
-            'filters_applied': {
-                'level': level,
-                'tag': tag,
-                'keyword': keyword,
-                'pid': pid,
-                'time_range': time_range,
-                'seconds': seconds
-            },
+            'filters_applied': filters,
             'summary': {
                 'level_stats': summary.get('level_stats', {}),
                 'time_range': summary.get('time_range')
@@ -119,7 +156,13 @@ def _logs_fetch_impl(
         }
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'LOG_FETCH_ERROR')
+        error_result = ToolBase.wrap_error(e, 'LOG_FETCH_ERROR')
+        error_result['logs'] = []
+        error_result['total_lines'] = 0
+        error_result['truncated'] = False
+        error_result['filters_applied'] = filters
+        error_result['summary'] = _empty_summary()
+        return error_result
 
 
 def _build_time_range(seconds: int, start_time: str, end_time: str) -> Optional[dict]:
@@ -224,6 +267,15 @@ def logs_save_snapshot(
     Returns:
         保存结果，包含文件路径和统计信息
     """
+    # 默认值，用于错误返回
+    default_result = {
+        'saved_path': '',
+        'file_size': 0,
+        'file_size_human': '0 B',
+        'log_count': 0,
+        'truncated': False
+    }
+    
     try:
         # 先获取日志
         fetch_result = _logs_fetch_impl(
@@ -239,14 +291,17 @@ def logs_save_snapshot(
         )
 
         if not fetch_result['success']:
+            fetch_result.update(default_result)
             return fetch_result
 
         logs = fetch_result.get('logs', [])
         if not logs:
             return {
                 'success': False,
+                'device_id': fetch_result.get('device_id', ''),
                 'error': '没有日志可保存',
-                'error_code': 'NO_LOGS'
+                'error_code': 'NO_LOGS',
+                **default_result
             }
 
         # 确定输出路径
@@ -259,8 +314,10 @@ def logs_save_snapshot(
         if not valid:
             return {
                 'success': False,
+                'device_id': fetch_result.get('device_id', ''),
                 'error': result_path,
-                'error_code': 'PATH_NOT_ALLOWED'
+                'error_code': 'PATH_NOT_ALLOWED',
+                **default_result
             }
 
         # 确保目录存在
@@ -281,12 +338,13 @@ def logs_save_snapshot(
             'file_size_human': _format_file_size(file_size),
             'log_count': len(logs),
             'device_id': fetch_result.get('device_id'),
-            'filters_applied': fetch_result.get('filters_applied', {}),
             'truncated': fetch_result.get('truncated', False)
         }
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'LOG_SAVE_ERROR')
+        error_result = ToolBase.wrap_error(e, 'LOG_SAVE_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def _write_log_file(path: str, fetch_result: dict, logs: List[str], include_analysis: bool):
@@ -373,6 +431,23 @@ def logs_analyze(
     Returns:
         分析结果，包含 success、analysis_type、result 和 evidence_lines
     """
+    # 构建过滤配置
+    filters = {
+        'level': level,
+        'tag': tag,
+        'keyword': keyword,
+        'package_name': package_name
+    }
+    
+    # 默认值，用于错误返回
+    default_result = {
+        'analysis_type': analysis_type,
+        'result': {},
+        'evidence_lines': [],
+        'total_entries_analyzed': 0,
+        'filters_applied': filters
+    }
+    
     try:
         # 如果没有提供日志，则从设备获取
         if not logs:
@@ -384,6 +459,7 @@ def logs_analyze(
             )
 
             if not fetch_result['success']:
+                fetch_result.update(default_result)
                 return fetch_result
 
             logs = fetch_result.get('logs', [])
@@ -414,16 +490,13 @@ def logs_analyze(
             'evidence_lines': evidence_lines,
             'total_entries_analyzed': len(entries),
             'device_id': device_id,
-            'filters_applied': {
-                'level': level,
-                'tag': tag,
-                'keyword': keyword,
-                'package_name': package_name
-            }
+            'filters_applied': filters
         }
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'LOG_ANALYZE_ERROR')
+        error_result = ToolBase.wrap_error(e, 'LOG_ANALYZE_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def _extract_evidence_lines(entries: List[LogEntry], analysis_type: str) -> List[str]:

@@ -131,9 +131,16 @@ def get_ui_tree(
     Returns:
         UI组件树JSON结构
     """
+    default_result = {
+        'window_id': window_id or 0,
+        'ui_tree': {},
+        'node_count': 0
+    }
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         hdc = get_hdc()
@@ -148,8 +155,10 @@ def get_ui_tree(
                 if not target_window_id:
                     return {
                         'success': False,
+                        'device_id': device,
                         'error': f'未找到应用 {bundle_name} 的窗口',
-                        'error_code': 'WINDOW_NOT_FOUND'
+                        'error_code': 'WINDOW_NOT_FOUND',
+                        **default_result
                     }
             else:
                 # 获取窗口列表，使用第一个可见窗口
@@ -157,8 +166,10 @@ def get_ui_tree(
                 if not window_list['success'] or not window_list['windows']:
                     return {
                         'success': False,
+                        'device_id': device,
                         'error': '未找到任何窗口',
-                        'error_code': 'NO_WINDOWS'
+                        'error_code': 'NO_WINDOWS',
+                        **default_result
                     }
 
                 # 查找第一个可见窗口
@@ -177,8 +188,12 @@ def get_ui_tree(
         if not ui_tree_result['success']:
             return {
                 'success': False,
+                'device_id': device,
                 'error': ui_tree_result.get('error', '获取UI树失败'),
-                'error_code': 'UI_TREE_FETCH_ERROR'
+                'error_code': 'UI_TREE_FETCH_ERROR',
+                'window_id': target_window_id,
+                'ui_tree': {},
+                'node_count': 0
             }
 
         # 解析UI树
@@ -197,7 +212,9 @@ def get_ui_tree(
         }
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'GET_UI_TREE_ERROR')
+        error_result = ToolBase.wrap_error(e, 'GET_UI_TREE_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def list_windows(device_id: str = None) -> ListWindowsResult:
@@ -210,15 +227,26 @@ def list_windows(device_id: str = None) -> ListWindowsResult:
     Returns:
         窗口列表
     """
+    default_result = {'windows': [], 'count': 0}
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         hdc = get_hdc()
         result = hdc.get_window_list(device)
+        
+        # 确保必需字段存在
+        if 'windows' not in result:
+            result['windows'] = []
+        if 'count' not in result:
+            result['count'] = len(result['windows'])
 
         return result
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'LIST_WINDOWS_ERROR')
+        error_result = ToolBase.wrap_error(e, 'LIST_WINDOWS_ERROR')
+        error_result.update(default_result)
+        return error_result

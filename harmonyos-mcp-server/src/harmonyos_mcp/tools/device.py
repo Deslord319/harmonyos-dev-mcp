@@ -31,7 +31,10 @@ def list_devices() -> ListDevicesResult:
             'count': len(devices)
         }
     except Exception as e:
-        return ToolBase.wrap_error(e, 'DEVICE_LIST_ERROR')
+        error_result = ToolBase.wrap_error(e, 'DEVICE_LIST_ERROR')
+        error_result['devices'] = []
+        error_result['count'] = 0
+        return error_result
 
 
 def hilog_receive(device_id: str = None, local_dir: str = None) -> dict:
@@ -45,10 +48,16 @@ def hilog_receive(device_id: str = None, local_dir: str = None) -> dict:
     Returns:
         包含获取结果、文件列表和统计信息的字典
     """
+    default_result = {
+        'files': [],
+        'total_size': 0
+    }
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
-            return device  # 返回错误字典
+            device.update(default_result)
+            return device
         
         hdc = get_hdc()
         result = hdc.hilog_receive(device, local_dir)
@@ -56,6 +65,14 @@ def hilog_receive(device_id: str = None, local_dir: str = None) -> dict:
         # 添加设备ID到结果
         result['device_id'] = device
         
+        # 确保必需字段存在
+        if 'files' not in result:
+            result['files'] = []
+        if 'total_size' not in result:
+            result['total_size'] = 0
+        
         return result
     except Exception as e:
-        return ToolBase.wrap_error(e, 'HILOG_RECEIVE_ERROR')
+        error_result = ToolBase.wrap_error(e, 'HILOG_RECEIVE_ERROR')
+        error_result.update(default_result)
+        return error_result

@@ -35,9 +35,12 @@ def click_element(
     Returns:
         操作结果
     """
+    default_result = {'x': x or 0, 'y': y or 0}
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         ui_ops = get_ui_operations()
@@ -55,12 +58,14 @@ def click_element(
                 device, text=text, element_type=element_type, bundle_name=bundle_name
             )
             if not result['success']:
+                result.update(default_result)
                 return result
             if not result['elements']:
                 return {
                     'success': False,
                     'error': f'未找到匹配的元素: text={text}, type={element_type}',
-                    'error_code': 'ELEMENT_NOT_FOUND'
+                    'error_code': 'ELEMENT_NOT_FOUND',
+                    **default_result
                 }
 
             # 使用第一个匹配的元素
@@ -69,7 +74,8 @@ def click_element(
                 return {
                     'success': False,
                     'error': f'元素没有有效的坐标信息: {element}',
-                    'error_code': 'INVALID_ELEMENT_COORDS'
+                    'error_code': 'INVALID_ELEMENT_COORDS',
+                    **default_result
                 }
 
             if double_click:
@@ -80,11 +86,14 @@ def click_element(
         return {
             'success': False,
             'error': '必须提供坐标(x, y)或查找条件(text/element_type)',
-            'error_code': 'MISSING_PARAMS'
+            'error_code': 'MISSING_PARAMS',
+            **default_result
         }
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'CLICK_ERROR')
+        error_result = ToolBase.wrap_error(e, 'CLICK_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def long_press_element(
@@ -178,9 +187,18 @@ def swipe(
     Returns:
         操作结果
     """
+    default_result = {
+        'from_x': from_x or 0,
+        'from_y': from_y or 0,
+        'to_x': to_x or 0,
+        'to_y': to_y or 0,
+        'direction': direction
+    }
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         ui_ops = get_ui_operations()
@@ -196,11 +214,14 @@ def swipe(
         return {
             'success': False,
             'error': '必须提供滑动坐标(from_x, from_y, to_x, to_y)或方向(direction)',
-            'error_code': 'MISSING_PARAMS'
+            'error_code': 'MISSING_PARAMS',
+            **default_result
         }
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'SWIPE_ERROR')
+        error_result = ToolBase.wrap_error(e, 'SWIPE_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def input_text(
@@ -227,16 +248,24 @@ def input_text(
     Returns:
         操作结果
     """
+    default_result = {
+        'text': text or '',
+        'x': x or 0,
+        'y': y or 0
+    }
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         if not text:
             return {
                 'success': False,
                 'error': '必须提供要输入的文本(text)',
-                'error_code': 'MISSING_TEXT'
+                'error_code': 'MISSING_TEXT',
+                **default_result
             }
 
         ui_ops = get_ui_operations()
@@ -251,12 +280,14 @@ def input_text(
                 device, text=element_text, element_type=element_type, bundle_name=bundle_name
             )
             if not result['success']:
+                result.update(default_result)
                 return result
             if not result['elements']:
                 return {
                     'success': False,
                     'error': '未找到匹配的输入框',
-                    'error_code': 'ELEMENT_NOT_FOUND'
+                    'error_code': 'ELEMENT_NOT_FOUND',
+                    **default_result
                 }
 
             element = result['elements'][0]
@@ -264,7 +295,8 @@ def input_text(
                 return {
                     'success': False,
                     'error': '元素没有有效的坐标信息',
-                    'error_code': 'INVALID_ELEMENT_COORDS'
+                    'error_code': 'INVALID_ELEMENT_COORDS',
+                    **default_result
                 }
 
             return ui_ops.input_text(device, element['x'], element['y'], text)
@@ -272,11 +304,14 @@ def input_text(
         return {
             'success': False,
             'error': '必须提供坐标或查找条件',
-            'error_code': 'MISSING_PARAMS'
+            'error_code': 'MISSING_PARAMS',
+            **default_result
         }
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'INPUT_TEXT_ERROR')
+        error_result = ToolBase.wrap_error(e, 'INPUT_TEXT_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
@@ -290,23 +325,29 @@ def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
     Returns:
         操作结果
     """
+    default_result = {'key': key or ''}
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         if not key:
             return {
                 'success': False,
                 'error': '必须提供按键名称(key)',
-                'error_code': 'MISSING_KEY'
+                'error_code': 'MISSING_KEY',
+                **default_result
             }
 
         ui_ops = get_ui_operations()
         return ui_ops.press_key(device, key)
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'PRESS_KEY_ERROR')
+        error_result = ToolBase.wrap_error(e, 'PRESS_KEY_ERROR')
+        error_result.update(default_result)
+        return error_result
 
 
 def find_element(
@@ -329,26 +370,40 @@ def find_element(
     Returns:
         匹配的元素列表，包含坐标信息
     """
+    default_result = {'elements': [], 'count': 0}
+    
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            device.update(default_result)
             return device
 
         if not any([text, element_type, element_id]):
             return {
                 'success': False,
                 'error': '必须提供至少一个查找条件(text/element_type/element_id)',
-                'error_code': 'MISSING_SEARCH_CRITERIA'
+                'error_code': 'MISSING_SEARCH_CRITERIA',
+                **default_result
             }
 
         ui_ops = get_ui_operations()
-        return ui_ops.find_element(
+        result = ui_ops.find_element(
             device,
             text=text,
             element_type=element_type,
             element_id=element_id,
             bundle_name=bundle_name
         )
+        
+        # 确保必需字段存在
+        if 'elements' not in result:
+            result['elements'] = []
+        if 'count' not in result:
+            result['count'] = len(result['elements'])
+        
+        return result
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'FIND_ELEMENT_ERROR')
+        error_result = ToolBase.wrap_error(e, 'FIND_ELEMENT_ERROR')
+        error_result.update(default_result)
+        return error_result
