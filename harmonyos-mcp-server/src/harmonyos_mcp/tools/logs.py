@@ -291,6 +291,11 @@ def logs_save_snapshot(
         )
 
         if not fetch_result['success']:
+            # 移除 LogsFetchResult 特有的字段（LogsSaveResult 不需要）
+            fetch_result.pop('filters_applied', None)
+            fetch_result.pop('summary', None)
+            fetch_result.pop('logs', None)
+            fetch_result.pop('total_lines', None)
             fetch_result.update(default_result)
             return fetch_result
 
@@ -459,6 +464,12 @@ def logs_analyze(
             )
 
             if not fetch_result['success']:
+                # 移除 LogsFetchResult 特有的字段（LogsAnalyzeResult 不需要）
+                fetch_result.pop('logs', None)
+                fetch_result.pop('total_lines', None)
+                fetch_result.pop('truncated', None)
+                fetch_result.pop('summary', None)
+                # filters_applied 会被 default_result 覆盖
                 fetch_result.update(default_result)
                 return fetch_result
 
