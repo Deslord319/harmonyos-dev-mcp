@@ -99,13 +99,29 @@ def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResu
     try:
         ok, device = ToolBase.get_device_id(device_id)
         if not ok:
+            # 确保错误结果也包含必需字段
+            device['ability_name'] = ''
+            device['module_name'] = ''
+            device['bundle_name'] = bundle_name
             return device
 
         hdc = get_hdc()
         result = hdc.get_main_ability(device, bundle_name)
         result['device_id'] = device
         
+        # 确保必需字段存在
+        if 'ability_name' not in result:
+            result['ability_name'] = ''
+        if 'module_name' not in result:
+            result['module_name'] = ''
+        if 'bundle_name' not in result:
+            result['bundle_name'] = bundle_name
+        
         return result
 
     except Exception as e:
-        return ToolBase.wrap_error(e, 'GET_MAIN_ABILITY_ERROR')
+        error_result = ToolBase.wrap_error(e, 'GET_MAIN_ABILITY_ERROR')
+        error_result['ability_name'] = ''
+        error_result['module_name'] = ''
+        error_result['bundle_name'] = bundle_name
+        return error_result
