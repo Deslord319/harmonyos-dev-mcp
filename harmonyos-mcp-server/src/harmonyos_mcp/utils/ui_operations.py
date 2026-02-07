@@ -143,6 +143,7 @@ class UIOperations:
             'from_y': from_y,
             'to_x': to_x,
             'to_y': to_y,
+            'direction': None,
             'speed': speed,
             'message': '滑动成功' if result['success'] else f'滑动失败: {result.get("stderr", "")}'
         }
