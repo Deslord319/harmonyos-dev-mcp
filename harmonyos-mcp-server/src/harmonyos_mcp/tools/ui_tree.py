@@ -239,6 +239,7 @@ def list_windows(device_id: str = None) -> ListWindowsResult:
         result = hdc.get_window_list(device)
         
         # 确保必需字段存在
+        result['device_id'] = device
         if 'windows' not in result:
             result['windows'] = []
         if 'count' not in result:
