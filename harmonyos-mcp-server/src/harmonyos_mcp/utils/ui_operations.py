@@ -139,8 +139,10 @@ class UIOperations:
         return {
             'success': result['success'],
             'action': 'swipe',
-            'from': {'x': from_x, 'y': from_y},
-            'to': {'x': to_x, 'y': to_y},
+            'from_x': from_x,
+            'from_y': from_y,
+            'to_x': to_x,
+            'to_y': to_y,
             'speed': speed,
             'message': '滑动成功' if result['success'] else f'滑动失败: {result.get("stderr", "")}'
         }
@@ -220,6 +222,10 @@ class UIOperations:
             'success': result['success'],
             'action': 'swipe_direction',
             'direction': direction,
+            'from_x': 0,
+            'from_y': 0,
+            'to_x': 0,
+            'to_y': 0,
             'speed': speed,
             'message': f'{direction}滑动成功' if result['success'] else f'滑动失败: {result.get("stderr", "")}'
         }
