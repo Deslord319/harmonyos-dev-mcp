@@ -173,7 +173,7 @@ def run_app(
 
         start_result = hdc.start_app(device, bundle_name, final_ability, final_module)
 
-        return {
+        result = {
             'success': start_result['success'],
             'device_id': device,
             'bundle_name': bundle_name,
@@ -183,8 +183,10 @@ def run_app(
             'command_success': start_result.get('command_success', False),
             'window_found': start_result.get('window_found', False),
             'window': start_result.get('window'),
-            'error': start_result.get('error')
         }
+        if start_result.get('error'):
+            result['error'] = start_result['error']
+        return result
     except Exception as e:
         error_result = ToolBase.wrap_error(e, 'RUN_APP_ERROR')
         error_result.update(default_result)
