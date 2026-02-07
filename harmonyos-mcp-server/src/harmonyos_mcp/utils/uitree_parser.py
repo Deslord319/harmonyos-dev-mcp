@@ -7,6 +7,7 @@ UI组件树解析器
 """
 import re
 import json
+import sys
 from typing import Dict, List, Any, Optional
 from loguru import logger
 
@@ -32,17 +33,25 @@ class UITreeParser:
             logger.warning("UI组件树文本为空")
             return {'nodes': [], 'count': 0, 'window_info': {}}
 
-        # 尝试解析为JSON（uitest dumpLayout格式）
-        raw_tree_stripped = raw_tree.strip()
-        if raw_tree_stripped.startswith('{'):
-            try:
-                json_data = json.loads(raw_tree_stripped)
-                return self._parse_uitest_json(json_data)
-            except json.JSONDecodeError as e:
-                logger.warning(f"JSON解析失败，尝试文本解析: {e}")
+        # 临时提高递归限制以处理深层嵌套的 UI 树
+        old_limit = sys.getrecursionlimit()
+        sys.setrecursionlimit(max(old_limit, 10000))
+        
+        try:
+            # 尝试解析为JSON（uitest dumpLayout格式）
+            raw_tree_stripped = raw_tree.strip()
+            if raw_tree_stripped.startswith('{'):
+                try:
+                    json_data = json.loads(raw_tree_stripped)
+                    return self._parse_uitest_json(json_data)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON解析失败，尝试文本解析: {e}")
 
-        # 回退到文本解析（hidumper -inspector格式）
-        return self._parse_inspector_text(raw_tree)
+            # 回退到文本解析（hidumper -inspector格式）
+            return self._parse_inspector_text(raw_tree)
+        finally:
+            # 恢复原来的递归限制
+            sys.setrecursionlimit(old_limit)
 
     def _parse_uitest_json(self, json_data: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "harmonyos-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "HarmonyOS MCP Server - AI-assisted HarmonyOS development tools"
 readme = "README.md"
 license = "MIT"
@@ -44,6 +44,7 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "flake8>=6.0.0",
     "mypy>=1.5.0",
@@ -64,5 +65,51 @@ packages = ["src/harmonyos_mcp"]
 include = [
     "/src",
     "/README.md",
+    "/tests",
 ]
+
+# ============================================================================
+# pytest 配置
+# ============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+# ============================================================================
+# coverage 配置
+# ============================================================================
+[tool.coverage.run]
+source = ["src/harmonyos_mcp"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/server_backup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+# ============================================================================
+# mypy 配置
+# ============================================================================
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+# ============================================================================
+# black 配置
+# ============================================================================
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
 
