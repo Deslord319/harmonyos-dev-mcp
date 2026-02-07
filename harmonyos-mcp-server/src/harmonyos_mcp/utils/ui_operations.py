@@ -248,7 +248,7 @@ class UIOperations:
             操作结果
         """
         logger.info(f"输入文本: '{text}' at ({x}, {y})")
-        result = self._execute_uitest(device_id, f"inputText {x} {y} {text}")
+        result = self._execute_uitest(device_id, f'inputText {x} {y} "{text}"')
         return {
             'success': result['success'],
             'action': 'inputText',
