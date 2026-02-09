@@ -27,7 +27,7 @@ class HvigorWrapper:
             project_path: HarmonyOS项目路径
             deveco_path: DevEco Studio安装路径（可选，优先使用环境变量或自动检测）
         """
-        self.project_path = Path(project_path)
+        self.project_path = Path(project_path).resolve()
         if not self.project_path.exists():
             raise ValueError(f"项目路径不存在: {project_path}")
 
