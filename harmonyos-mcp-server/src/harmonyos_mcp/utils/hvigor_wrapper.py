@@ -62,6 +62,10 @@ class HvigorWrapper:
         logger.info(f"  Node.js: {self.node_exe}")
         logger.info(f"  hvigorw.js: {self.hvigorw_js}")
 
+        # SDK 根路径（sdk/ 目录，包含 default/sdk-pkg.json）
+        # HarmonyOS 项目不读取 local.properties，而是通过 DEVECO_SDK_HOME 环境变量定位 SDK
+        self.sdk_root = self.deveco_path / "sdk"
+
     def _find_deveco_studio(self, custom_path: Optional[str] = None) -> Optional[Path]:
         """
         查找 DevEco Studio 安装路径
@@ -97,7 +101,12 @@ class HvigorWrapper:
         return None
 
     def _ensure_local_properties(self):
-        """确保local.properties配置正确"""
+        """确保local.properties配置正确（仅用于OpenHarmony项目）
+        
+        注意: HarmonyOS项目（runtimeOS=HarmonyOS）不读取local.properties，
+        而是通过DEVECO_SDK_HOME环境变量定位SDK。该方法已由_execute_command中
+        设置DEVECO_SDK_HOME替代，保留供可能需要的OpenHarmony项目使用。
+        """
         local_props = self.project_path / "local.properties"
         # SDK路径应该指向default目录，hvigor会在子目录中查找SDK组件
         sdk_dir = self.deveco_path / "sdk" / "default"
@@ -148,8 +157,14 @@ class HvigorWrapper:
 
         logger.debug(f"执行构建命令: {' '.join(cmd)}")
 
-        # 不设置任何SDK相关的环境变量，让DevEco Studio使用默认配置
+        # 设置正确的 DEVECO_SDK_HOME 环境变量
+        # hvigor 的 HarmonyOS SDK 解析流程:
+        #   1. HarmonyOS 项目不读取 local.properties（property-get.js._readFile 返回空）
+        #   2. 通过 DEVECO_SDK_HOME 环境变量定位 SDK 根目录
+        #   3. SDK scanner 在该目录下搜索 <子目录>/sdk-pkg.json 来发现 SDK 版本
+        #   4. 因此 DEVECO_SDK_HOME 应指向 sdk/ 目录（其下有 default/sdk-pkg.json）
         env = os.environ.copy()
+        env['DEVECO_SDK_HOME'] = str(self.sdk_root)
 
         try:
             # 使用 DEVNULL 丢弃输出，完全避免管道和文件描述符问题
