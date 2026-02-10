@@ -71,6 +71,7 @@ class _Container:
         from .utils.compile_wrapper import CompileLibraryManager
         from .utils.ui_operations import UIOperations
         from .utils.hvigor_wrapper import HvigorWrapper
+        from .utils.hilogtool_wrapper import HilogtoolWrapper
         
         if service_type == HdcWrapper:
             instance = HdcWrapper()
@@ -87,6 +88,11 @@ class _Container:
             hdc = self.get(HdcWrapper)
             instance = UIOperations(hdc)
             logger.info("UIOperations 初始化成功")
+            return instance
+            
+        elif service_type == HilogtoolWrapper:
+            instance = HilogtoolWrapper()
+            logger.info("HilogtoolWrapper 初始化成功")
             return instance
             
         else:
@@ -178,3 +184,9 @@ def get_ui_operations():
     """获取 UIOperations 实例"""
     from .utils.ui_operations import UIOperations
     return Container.get(UIOperations)
+
+
+def get_hilogtool():
+    """获取 HilogtoolWrapper 实例"""
+    from .utils.hilogtool_wrapper import HilogtoolWrapper
+    return Container.get(HilogtoolWrapper)

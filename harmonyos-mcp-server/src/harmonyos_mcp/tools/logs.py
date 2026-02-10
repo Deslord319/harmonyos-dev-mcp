@@ -4,11 +4,12 @@
 提供日志获取、保存快照、结构化分析等功能。
 """
 import os
+import zipfile
 from datetime import datetime, timedelta
 from typing import Optional, List
 from loguru import logger
 
-from ..container import get_hdc
+from ..container import get_hdc, get_hilogtool
 from ..config import LogSecurityConfig
 from ..utils.log_parser import LogParser, LogEntry
 from ..types import LogsFetchResult, LogsSaveResult, LogsAnalyzeResult, AnalysisType
@@ -18,21 +19,350 @@ from .registry import mcp_tool
 
 def _empty_filters() -> dict:
     """返回空的过滤配置"""
-    return {
-        'level': None,
-        'tag': None,
-        'keyword': None,
-        'pid': None,
-        'time_range': None,
-        'seconds': None
-    }
+    return {}
 
 
 def _empty_summary() -> dict:
     """返回空的摘要"""
     return {
-        'level_stats': {},
-        'time_range': None
+        'level_stats': {}
+    }
+
+
+def _clean_dict(d: dict) -> dict:
+    """移除字典中值为 None 的键，避免 MCP schema 校验失败"""
+    return {k: v for k, v in d.items() if v is not None}
+
+
+def _needs_historical_logs(start_time: str, seconds: int) -> bool:
+    """
+    判断是否需要从历史落盘文件读取日志
+    
+    规则: 如果请求时间范围超过10分钟之前，则需要历史文件
+    """
+    if seconds and seconds > 600:
+        return True
+    
+    if start_time:
+        today = datetime.now().strftime('%Y-%m-%d')
+        st = start_time
+        if len(st) <= 8:  # HH:MM:SS
+            st = f"{today} {st}"
+        try:
+            start_dt = datetime.fromisoformat(st)
+            cutoff = datetime.now() - timedelta(minutes=10)
+            return start_dt < cutoff
+        except ValueError:
+            pass
+    
+    return False
+
+
+def _pull_dict_files(hdc, device: str, local_dir: str) -> Optional[str]:
+    """
+    从设备拉取 hilog dict 解密文件（带权限绕过）
+    
+    策略: 先 cp 到 /data/local/tmp 再 pull（绕过 /data/log/hilog 权限限制）
+    
+    Returns:
+        解压后的 dict 目录路径，失败返回 None
+    """
+    # 1. 列出 dict 文件
+    list_result = hdc.execute_shell(device, "ls /data/log/hilog/hilog_dict.*.zip 2>/dev/null")
+    if not list_result['success'] or not list_result['stdout'].strip():
+        logger.info("未找到 hilog dict 文件")
+        return None
+    
+    dict_files = [f.strip() for f in list_result['stdout'].split('\n') if f.strip() and 'hilog_dict' in f]
+    if not dict_files:
+        return None
+    
+    # 2. 复制到设备临时目录后拉取
+    tmp_dir = "/data/local/tmp/hilog_dict_tmp"
+    hdc.execute_shell(device, f"mkdir -p {tmp_dir}")
+    
+    pulled_dicts = []
+    try:
+        for dict_file in dict_files:
+            filename = dict_file.split('/')[-1]
+            tmp_path = f"{tmp_dir}/{filename}"
+            
+            cp_result = hdc.execute_shell(device, f"cp {dict_file} {tmp_path}")
+            if not cp_result['success']:
+                logger.warning(f"cp dict 文件失败: {dict_file}")
+                continue
+            
+            local_path = os.path.join(local_dir, filename)
+            if hdc.pull_file(device, tmp_path, local_path):
+                pulled_dicts.append(local_path)
+    finally:
+        # 清理设备临时目录
+        hdc.execute_shell(device, f"rm -rf {tmp_dir}")
+    
+    if not pulled_dicts:
+        return None
+    
+    # 3. 解压最新的 dict zip 文件
+    dict_extract_dir = os.path.join(local_dir, "dict_extracted")
+    os.makedirs(dict_extract_dir, exist_ok=True)
+    
+    try:
+        with zipfile.ZipFile(pulled_dicts[0], 'r') as zip_ref:
+            zip_ref.extractall(dict_extract_dir)
+        logger.info(f"dict 文件解压到: {dict_extract_dir}")
+        return dict_extract_dir
+    except Exception as e:
+        logger.error(f"dict 文件解压失败: {e}")
+        return None
+
+
+def _fetch_from_historical_files(
+    device: str,
+    lines: int,
+    level: str,
+    tag: str,
+    keyword: str,
+    start_time: str,
+    end_time: str,
+    package_name: str
+) -> dict:
+    """
+    从设备历史 hilog 落盘文件中获取日志
+    
+    流程: list_hilog_files → pull_hilog_files → hilogtool 解密 → 解析过滤
+    """
+    hdc = get_hdc()
+    hilogtool = get_hilogtool()
+    
+    # 1. 检查 hilogtool 是否可用
+    if not hilogtool.is_available():
+        return {
+            'success': False,
+            'error': 'hilogtool 不可用，无法读取历史日志文件',
+            'hint': '请设置 HILOGTOOL_PATH 环境变量指向 hilogtool.exe 路径',
+            'error_code': 'HILOGTOOL_NOT_AVAILABLE',
+            'logs': [],
+            'total_lines': 0,
+            'truncated': False,
+            'source': 'persist_file',
+            'dict_used': False,
+            'files_count': 0,
+            'summary': _empty_summary()
+        }
+    
+    # 2. 列出设备上的 hilog 文件
+    list_result = hdc.list_hilog_files(device)
+    if not list_result['success'] or not list_result.get('files'):
+        return {
+            'success': False,
+            'device_id': device,
+            'error': '未找到历史日志文件',
+            'error_code': 'NO_HISTORICAL_FILES',
+            'logs': [],
+            'total_lines': 0,
+            'truncated': False,
+            'source': 'persist_file',
+            'dict_used': False,
+            'files_count': 0,
+            'summary': _empty_summary()
+        }
+    
+    # 3. 解析时间范围为 datetime
+    start_dt = None
+    end_dt = None
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    if start_time:
+        st = start_time
+        if len(st) <= 8:
+            st = f"{today} {st}"
+        try:
+            start_dt = datetime.fromisoformat(st)
+        except ValueError:
+            pass
+    
+    if end_time:
+        et = end_time
+        if len(et) <= 8:
+            et = f"{today} {et}"
+        try:
+            end_dt = datetime.fromisoformat(et)
+        except ValueError:
+            pass
+    
+    # 4. 创建本地目录
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    local_dir = os.path.abspath(f"./hilog_files/fetch_{timestamp}")
+    os.makedirs(local_dir, exist_ok=True)
+    
+    # 5. 先按时间范围过滤文件列表，再按与目标时间的距离排序，最后限制数量
+    #    hilog 文件的 timestamp 是文件创建/轮转时间，文件内容可能覆盖此前一段时间的日志
+    #    因此向前扩展 1 小时容差，确保不会遗漏包含目标时间段日志的文件
+    #    排除 hilog_diag.*（诊断文件）和 hilog_dict.*（解密字典），它们不是日志文件
+    all_files = [
+        f for f in list_result['files']
+        if not f['name'].startswith('hilog_diag.')
+        and not f['name'].startswith('hilog_dict.')
+        and not f['name'].startswith('hilog_kmsg.')
+    ]
+    if start_dt or end_dt:
+        matched_files = []
+        buffer = timedelta(hours=1)
+        for f in all_files:
+            fts = f.get('timestamp_dt')
+            if not fts:
+                matched_files.append(f)  # 无法判断时间的文件也保留
+                continue
+            # 文件时间戳在 [start - 1h, end + 1h] 范围内视为可能包含目标日志
+            if start_dt and fts < (start_dt - buffer):
+                continue
+            if end_dt and fts > (end_dt + buffer):
+                continue
+            matched_files.append(f)
+        # 按与目标时间范围中心点的距离排序，取最近的5个文件
+        # 确保优先拉取最可能包含目标时间段日志的文件
+        # 无时间戳的文件排到末尾（使用 timedelta.max 作为距离）
+        target_center = start_dt
+        if start_dt and end_dt:
+            target_center = start_dt + (end_dt - start_dt) / 2
+        elif end_dt:
+            target_center = end_dt
+        max_distance = timedelta(days=36500)  # 无时间戳文件排末尾
+        matched_files.sort(key=lambda f: abs(f['timestamp_dt'] - target_center) if f.get('timestamp_dt') else max_distance)
+        files_to_pull = matched_files[:5]
+    else:
+        files_to_pull = all_files[:5]
+    
+    if not files_to_pull:
+        return {
+            'success': False,
+            'device_id': device,
+            'error': f'未找到时间范围 {start_time} ~ {end_time} 内的历史日志文件',
+            'error_code': 'NO_MATCHING_FILES',
+            'logs': [],
+            'total_lines': 0,
+            'truncated': False,
+            'source': 'persist_file',
+            'dict_used': False,
+            'files_count': 0,
+            'summary': _empty_summary()
+        }
+    
+    logger.info(f"匹配到 {len(files_to_pull)} 个历史日志文件: {[f['name'] for f in files_to_pull]}")
+    
+    # 6. 拉取文件（不再传时间过滤，因为已在上面过滤）
+    pull_result = hdc.pull_hilog_files(
+        device,
+        files_to_pull,
+        local_dir
+    )
+    
+    if not pull_result['success'] or not pull_result.get('pulled_files'):
+        return {
+            'success': False,
+            'device_id': device,
+            'error': f'拉取历史日志文件失败 (匹配 {len(files_to_pull)} 个文件)',
+            'error_code': 'PULL_FILES_FAILED',
+            'logs': [],
+            'total_lines': 0,
+            'truncated': False,
+            'source': 'persist_file',
+            'dict_used': False,
+            'files_count': 0,
+            'summary': _empty_summary()
+        }
+    
+    # 7. 拉取 dict 解密文件
+    dict_path = _pull_dict_files(hdc, device, local_dir)
+    
+    # 8. 逐个文件解密并合并日志
+    all_logs = []
+    dict_used = False
+    max_lines = min(lines * 5, LogSecurityConfig.MAX_LOG_LINES)
+    
+    for file_info in pull_result['pulled_files']:
+        local_path = file_info['local_path']
+        logger.info(f"解析历史日志文件: {local_path}")
+        
+        parse_result = hilogtool.parse_and_read(
+            local_path,
+            dict_path=dict_path,
+            max_lines=max_lines - len(all_logs)
+        )
+        
+        if parse_result['success']:
+            logs = parse_result.get('logs', [])
+            
+            # 检查是否有 OpenUuidFile fail 错误
+            for line in logs[:10]:
+                if 'OpenUuidFile fail' in line:
+                    logger.warning("hilogtool 输出包含 OpenUuidFile fail 错误，dict 文件可能无效")
+                    break
+            
+            all_logs.extend(logs)
+            if parse_result.get('dict_used'):
+                dict_used = True
+        else:
+            logger.warning(f"解析文件失败: {local_path}, 错误: {parse_result.get('error')}")
+        
+        if len(all_logs) >= max_lines:
+            break
+    
+    if not all_logs:
+        return {
+            'success': False,
+            'device_id': device,
+            'error': '历史日志文件解析后无内容',
+            'error_code': 'PARSE_EMPTY',
+            'logs': [],
+            'total_lines': 0,
+            'truncated': False,
+            'source': 'persist_file',
+            'dict_used': dict_used,
+            'files_count': len(pull_result['pulled_files']),
+            'summary': _empty_summary()
+        }
+    
+    # 8. 解析为结构化日志条目
+    entries = LogParser.parse_logs(all_logs)
+    
+    # 9. 构建时间范围并应用过滤
+    time_range = _build_time_range(None, start_time, end_time)
+    
+    filtered_entries = LogParser.filter_entries(
+        entries,
+        level=level,
+        tag=tag,
+        keyword=keyword,
+        time_range=time_range
+    )
+    
+    # package_name 作为关键字过滤（不依赖 PID）
+    if package_name:
+        pkg_lower = package_name.lower()
+        filtered_entries = [e for e in filtered_entries if pkg_lower in e.raw_line.lower()]
+    
+    # 10. 限制返回行数
+    lines = min(lines, LogSecurityConfig.MAX_LOG_LINES)
+    truncated = len(filtered_entries) > lines
+    filtered_entries = filtered_entries[:lines]
+    
+    # 11. 获取统计
+    summary = LogParser.analyze_summary(filtered_entries)
+    
+    return {
+        'success': True,
+        'device_id': device,
+        'logs': [e.raw_line for e in filtered_entries],
+        'total_lines': len(filtered_entries),
+        'truncated': truncated,
+        'source': 'persist_file',
+        'dict_used': dict_used,
+        'files_count': len(pull_result['pulled_files']),
+        'summary': _clean_dict({
+            'level_stats': summary.get('level_stats', {}),
+            'time_range': summary.get('time_range')
+        })
     }
 
 
@@ -54,15 +384,18 @@ def _logs_fetch_impl(
     Args:
         package_name: 应用包名，如果指定则自动获取该应用的PID进行过滤
     """
+    # 归一化 level 参数：支持 'Error'→'E', 'Warning'→'W' 等写法
+    level = LogParser.normalize_level(level) or level
+
     # 构建过滤配置（用于所有返回路径）
-    filters = {
+    filters = _clean_dict({
         'level': level,
         'tag': tag,
         'keyword': keyword,
         'pid': pid,
         'time_range': None,
         'seconds': seconds
-    }
+    })
     
     try:
         hdc = get_hdc()
@@ -75,7 +408,28 @@ def _logs_fetch_impl(
             device['truncated'] = False
             device['filters_applied'] = filters
             device['summary'] = _empty_summary()
+            device['source'] = 'realtime_buffer'
+            device['dict_used'] = False
+            device['files_count'] = 0
             return device
+
+        # === 历史日志回退: 当请求时间超过10分钟前，从落盘文件获取 ===
+        if _needs_historical_logs(start_time, seconds):
+            logger.info("检测到历史时间范围，切换到历史文件读取模式")
+            result = _fetch_from_historical_files(
+                device=device,
+                lines=lines,
+                level=level,
+                tag=tag,
+                keyword=keyword,
+                start_time=start_time,
+                end_time=end_time,
+                package_name=package_name
+            )
+            result['filters_applied'] = _clean_dict(filters)
+            return result
+
+        # === 实时缓冲区路径 ===
 
         # 如果指定了包名，获取应用的PID
         resolved_pid = pid
@@ -95,7 +449,10 @@ def _logs_fetch_impl(
                     'total_lines': 0,
                     'truncated': False,
                     'filters_applied': filters,
-                    'summary': _empty_summary()
+                    'summary': _empty_summary(),
+                    'source': 'realtime_buffer',
+                    'dict_used': False,
+                    'files_count': 0
                 }
 
         # 限制最大行数
@@ -114,6 +471,9 @@ def _logs_fetch_impl(
                 'truncated': False,
                 'filters_applied': filters,
                 'summary': _empty_summary(),
+                'source': 'realtime_buffer',
+                'dict_used': False,
+                'files_count': 0,
                 'message': '未获取到日志'
             }
 
@@ -149,11 +509,14 @@ def _logs_fetch_impl(
             'logs': [e.raw_line for e in filtered_entries],
             'total_lines': len(filtered_entries),
             'truncated': truncated,
-            'filters_applied': filters,
-            'summary': {
+            'source': 'realtime_buffer',
+            'dict_used': False,
+            'files_count': 0,
+            'filters_applied': _clean_dict(filters),
+            'summary': _clean_dict({
                 'level_stats': summary.get('level_stats', {}),
                 'time_range': summary.get('time_range')
-            }
+            })
         }
 
     except Exception as e:
@@ -163,6 +526,9 @@ def _logs_fetch_impl(
         error_result['truncated'] = False
         error_result['filters_applied'] = filters
         error_result['summary'] = _empty_summary()
+        error_result['source'] = 'realtime_buffer'
+        error_result['dict_used'] = False
+        error_result['files_count'] = 0
         return error_result
 
 
@@ -406,6 +772,8 @@ def _format_file_size(size: int) -> str:
 @mcp_tool(category="logs")
 def logs_analyze(
     logs: list = None,
+    input_file: str = None,
+    input_files: list = None,
     device_id: str = None,
     package_name: str = None,
     analysis_type: str = "summary",
@@ -418,11 +786,13 @@ def logs_analyze(
     """
     对日志进行结构化分析（基于正则匹配，不依赖LLM）
 
-    可以直接传入日志列表，或从设备获取日志后分析。
+    可以直接传入日志列表、指定本地日志文件路径，或从设备获取日志后分析。
 
     Args:
-        logs: 日志行列表（如果提供则直接分析，否则从设备获取）
-        device_id: 设备ID（当 logs 为空时使用）
+        logs: 日志行列表（如果提供则直接分析）
+        input_file: 本地日志文件路径（单文件）
+        input_files: 本地日志文件路径列表（多文件，内容会合并分析）
+        device_id: 设备ID（当 logs 和文件均未提供时，从设备获取）
         package_name: 应用包名过滤（如 com.example.myapplication）
         analysis_type: 分析类型
             - summary: 摘要统计（级别分布、Top Tags、时间范围）
@@ -441,12 +811,12 @@ def logs_analyze(
         分析结果，包含 success、analysis_type、result 和 evidence_lines
     """
     # 构建过滤配置
-    filters = {
+    filters = _clean_dict({
         'level': level,
         'tag': tag,
         'keyword': keyword,
         'package_name': package_name
-    }
+    })
     
     # 默认值，用于错误返回
     default_result = {
@@ -458,6 +828,37 @@ def logs_analyze(
     }
     
     try:
+        # 从文件读取日志（input_file / input_files）
+        if not logs and (input_file or input_files):
+            file_paths = []
+            if input_files:
+                file_paths.extend(input_files)
+            if input_file and input_file not in file_paths:
+                file_paths.append(input_file)
+
+            all_lines = []
+            for fpath in file_paths:
+                if not os.path.isfile(fpath):
+                    error_result = {
+                        'success': False,
+                        'error': f'文件不存在: {fpath}',
+                        'error_code': 'FILE_NOT_FOUND'
+                    }
+                    error_result.update(default_result)
+                    return error_result
+                try:
+                    with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+                        all_lines.extend(f.read().splitlines())
+                except OSError as e:
+                    error_result = {
+                        'success': False,
+                        'error': f'读取文件失败: {fpath}: {e}',
+                        'error_code': 'FILE_READ_ERROR'
+                    }
+                    error_result.update(default_result)
+                    return error_result
+            logs = all_lines
+
         # 如果没有提供日志，则从设备获取
         if not logs:
             fetch_result = _logs_fetch_impl(
@@ -504,7 +905,7 @@ def logs_analyze(
             'result': result,
             'evidence_lines': evidence_lines,
             'total_entries_analyzed': len(entries),
-            'device_id': device_id,
+            'device_id': device_id or '',
             'filters_applied': filters
         }
 

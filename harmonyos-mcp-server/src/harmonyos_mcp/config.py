@@ -37,6 +37,9 @@ class Config:
     # hvigor 工具路径（自动检测）
     HVIGOR_PATH: Optional[str] = None
 
+    # hilogtool 工具路径（用于解析历史 hilog 文件）
+    HILOGTOOL_PATH: Optional[str] = os.getenv('HILOGTOOL_PATH')
+
     # Node.js 路径（自动检测）
     NODE_PATH: Optional[str] = None
 
@@ -229,12 +232,37 @@ class Config:
             if hvigor_path.exists():
                 cls.HVIGOR_PATH = str(hvigor_path)
 
+        # 5. 检测 hilogtool 路径
+        if not cls.HILOGTOOL_PATH:
+            system = platform.system()
+            hilogtool_name = "hilogtool.exe" if system == "Windows" else "hilogtool"
+
+            search_bases = []
+            if cls.HARMONYOS_SDK_PATH:
+                sdk = Path(cls.HARMONYOS_SDK_PATH)
+                search_bases.extend([
+                    sdk / "hms" / "toolchains",
+                    sdk / "toolchains",
+                    sdk / "openharmony" / "toolchains",
+                ])
+            if cls.DEVECO_STUDIO_PATH:
+                deveco = Path(cls.DEVECO_STUDIO_PATH)
+                search_bases.append(deveco / "sdk" / "default" / "hms" / "toolchains")
+
+            for base in search_bases:
+                candidate = base / hilogtool_name
+                if candidate.exists():
+                    cls.HILOGTOOL_PATH = str(candidate)
+                    break
+
         if cls.HDC_PATH:
             logger.info(f"hdc 路径: {cls.HDC_PATH}")
         if cls.NODE_PATH:
             logger.info(f"Node.js 路径: {cls.NODE_PATH}")
         if cls.HVIGOR_PATH:
             logger.info(f"hvigor 路径: {cls.HVIGOR_PATH}")
+        if cls.HILOGTOOL_PATH:
+            logger.info(f"hilogtool 路径: {cls.HILOGTOOL_PATH}")
 
     @classmethod
     def validate(cls) -> bool:
@@ -271,6 +299,7 @@ class Config:
             "HDC_PATH": cls.HDC_PATH,
             "NODE_PATH": cls.NODE_PATH,
             "HVIGOR_PATH": cls.HVIGOR_PATH,
+            "HILOGTOOL_PATH": cls.HILOGTOOL_PATH,
             "DEFAULT_DEVICE_ID": cls.DEFAULT_DEVICE_ID,
             "LOG_LEVEL": cls.LOG_LEVEL,
             "platform": platform.system(),

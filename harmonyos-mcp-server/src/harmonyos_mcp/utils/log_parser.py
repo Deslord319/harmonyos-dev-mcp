@@ -96,6 +96,15 @@ class LogParser:
         ),
     ]
     
+    # 级别名称到单字符的映射（支持各种常见写法）
+    LEVEL_NAME_MAP = {
+        'D': 'D', 'DEBUG': 'D',
+        'I': 'I', 'INFO': 'I',
+        'W': 'W', 'WARN': 'W', 'WARNING': 'W',
+        'E': 'E', 'ERROR': 'E',
+        'F': 'F', 'FATAL': 'F',
+    }
+
     # 错误/异常模式
     ERROR_PATTERNS = {
         'exception': re.compile(r'(?i)(exception|error|fail|crash)', re.IGNORECASE),
@@ -125,6 +134,24 @@ class LogParser:
         'latency': re.compile(r'(?i)latency\s*[:\s=]*\s*(\d+(?:\.\d+)?)\s*(ms|s)?'),
     }
     
+    @classmethod
+    def normalize_level(cls, level: Optional[str]) -> Optional[str]:
+        """
+        将各种级别写法归一化为单字符 (D/I/W/E/F)
+        
+        支持: 'Error'→'E', 'Warning'→'W', 'Info'→'I', 'Debug'→'D', 'Fatal'→'F'
+        以及单字符本身 'E'→'E' 等
+        
+        Args:
+            level: 原始级别字符串
+            
+        Returns:
+            归一化后的单字符级别，无法识别时返回 None
+        """
+        if not level:
+            return None
+        return cls.LEVEL_NAME_MAP.get(level.strip().upper())
+
     @classmethod
     def parse_line(cls, line: str, year: int = None) -> LogEntry:
         """
@@ -240,10 +267,11 @@ class LogParser:
         """
         filtered = entries
         
-        # 级别过滤
+        # 级别过滤（先归一化，支持 'Error'→'E' 等写法）
         if level:
+            normalized = cls.normalize_level(level)
             level_priority = {'D': 0, 'I': 1, 'W': 2, 'E': 3, 'F': 4}
-            min_priority = level_priority.get(level.upper(), 0)
+            min_priority = level_priority.get(normalized, 0) if normalized else 0
             filtered = [
                 e for e in filtered
                 if e.level and level_priority.get(e.level.upper(), 0) >= min_priority

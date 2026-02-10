@@ -240,6 +240,9 @@ class LogsFetchResult(DeviceResult):
     truncated: bool
     filters_applied: LogsFilterConfig
     summary: LogsSummary
+    source: str          # "realtime_buffer" | "persist_file"
+    dict_used: bool      # 历史文件是否使用 dict 解密
+    files_count: int     # 历史文件拉取数量
 
 
 class LogsSaveResult(DeviceResult):
