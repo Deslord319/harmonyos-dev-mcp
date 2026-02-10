@@ -8,7 +8,6 @@ from loguru import logger
 
 from ..container import get_hdc
 from ..exceptions import DeviceNotFoundError
-from ..types import BaseResult
 
 
 class ToolBase:

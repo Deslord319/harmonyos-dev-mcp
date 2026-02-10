@@ -3,7 +3,7 @@
 
 管理服务实例的生命周期，支持单例模式和测试时的 mock 注入。
 """
-from typing import TypeVar, Type, Dict, Optional, Any
+from typing import TypeVar, Type, Dict, Optional, Any, Callable
 from loguru import logger
 
 T = TypeVar('T')
@@ -30,7 +30,7 @@ class Container:
     """
     
     _instances: Dict[Type, Any] = {}
-    _factories: Dict[Type, callable] = {}
+    _factories: Dict[Type, Callable] = {}
     
     @classmethod
     def get(cls, service_type: Type[T]) -> T:
@@ -103,7 +103,7 @@ class Container:
         cls._instances[service_type] = instance
     
     @classmethod
-    def register_factory(cls, service_type: Type[T], factory: callable) -> None:
+    def register_factory(cls, service_type: Type[T], factory: Callable) -> None:
         """
         注册服务工厂函数
         

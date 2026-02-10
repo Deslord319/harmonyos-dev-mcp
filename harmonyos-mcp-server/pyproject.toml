@@ -86,7 +86,6 @@ source = ["src/harmonyos_mcp"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
-    "*/server_backup.py",
 ]
 
 [tool.coverage.report]
