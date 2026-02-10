@@ -13,6 +13,7 @@ HarmonyOS编译辅助工具 - 文件读取、脚本写入、脚本执行
 import os
 import shutil
 import subprocess
+import functools
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from loguru import logger
@@ -34,7 +35,6 @@ class CompileEnvironment:
         
         # 尝试自动检测
         possible_paths = [
-            '/home/aoqiduan/projects/harmonyOS-mcp/command-line-tools/sdk/default',
             str(Path.home() / 'harmonyos' / 'sdk' / 'default'),
         ]
         
@@ -980,36 +980,21 @@ class CompileLibraryManager:
         }
 
 
-# 全局实例
-_environment = None
-_file_reader = None
-_script_writer = None
-_script_executor = None
-
-
+@functools.lru_cache(maxsize=1)
 def get_compile_environment():
-    global _environment
-    if _environment is None:
-        _environment = CompileEnvironment()
-    return _environment
+    return CompileEnvironment()
 
 
+@functools.lru_cache(maxsize=1)
 def get_build_file_reader():
-    global _file_reader
-    if _file_reader is None:
-        _file_reader = BuildFileReader()
-    return _file_reader
+    return BuildFileReader()
 
 
+@functools.lru_cache(maxsize=1)
 def get_script_writer():
-    global _script_writer
-    if _script_writer is None:
-        _script_writer = ScriptWriter()
-    return _script_writer
+    return ScriptWriter()
 
 
+@functools.lru_cache(maxsize=1)
 def get_script_executor():
-    global _script_executor
-    if _script_executor is None:
-        _script_executor = ScriptExecutor()
-    return _script_executor
+    return ScriptExecutor()

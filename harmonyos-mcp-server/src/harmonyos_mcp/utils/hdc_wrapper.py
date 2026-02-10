@@ -123,8 +123,8 @@ class HdcWrapper:
             try:
                 process.kill()
                 await process.wait()
-            except Exception:
-                pass
+            except Exception as kill_err:
+                logger.warning(f"终止超时进程失败: {kill_err}")
             return {
                 'returncode': -1,
                 'stdout': '',

@@ -34,6 +34,34 @@ def _clean_dict(d: dict) -> dict:
     return {k: v for k, v in d.items() if v is not None}
 
 
+def _expand_short_time(t: str) -> str:
+    """
+    将 HH:MM:SS 短格式时间扩展为完整的 YYYY-MM-DD HH:MM:SS。
+    
+    处理跨午夜场景：如果扩展后的时间在未来超过1小时，
+    说明用户意图是昨天的时间，自动回退一天。
+    
+    Args:
+        t: 时间字符串，可能是 HH:MM:SS 或 YYYY-MM-DD HH:MM:SS
+        
+    Returns:
+        完整的时间字符串
+    """
+    if len(t) > 8:
+        return t
+    today = datetime.now()
+    candidate = f"{today.strftime('%Y-%m-%d')} {t}"
+    try:
+        dt = datetime.fromisoformat(candidate)
+        # 如果结果超过现在1小时以上，说明跨午夜了，回退到昨天
+        if dt > today + timedelta(hours=1):
+            yesterday = today - timedelta(days=1)
+            candidate = f"{yesterday.strftime('%Y-%m-%d')} {t}"
+    except ValueError:
+        pass
+    return candidate
+
+
 def _needs_historical_logs(start_time: str, seconds: int) -> bool:
     """
     判断是否需要从历史落盘文件读取日志
@@ -44,10 +72,7 @@ def _needs_historical_logs(start_time: str, seconds: int) -> bool:
         return True
     
     if start_time:
-        today = datetime.now().strftime('%Y-%m-%d')
-        st = start_time
-        if len(st) <= 8:  # HH:MM:SS
-            st = f"{today} {st}"
+        st = _expand_short_time(start_time)
         try:
             start_dt = datetime.fromisoformat(st)
             cutoff = datetime.now() - timedelta(minutes=10)
@@ -170,21 +195,16 @@ def _fetch_from_historical_files(
     # 3. 解析时间范围为 datetime
     start_dt = None
     end_dt = None
-    today = datetime.now().strftime('%Y-%m-%d')
     
     if start_time:
-        st = start_time
-        if len(st) <= 8:
-            st = f"{today} {st}"
+        st = _expand_short_time(start_time)
         try:
             start_dt = datetime.fromisoformat(st)
         except ValueError:
             pass
     
     if end_time:
-        et = end_time
-        if len(et) <= 8:
-            et = f"{today} {et}"
+        et = _expand_short_time(end_time)
         try:
             end_dt = datetime.fromisoformat(et)
         except ValueError:
@@ -542,17 +562,12 @@ def _build_time_range(seconds: int, start_time: str, end_time: str) -> Optional[
         }
     elif start_time or end_time:
         time_range = {}
-        today = datetime.now().strftime('%Y-%m-%d')
 
         if start_time:
-            if len(start_time) <= 8:  # HH:MM:SS
-                start_time = f"{today} {start_time}"
-            time_range['start'] = start_time
+            time_range['start'] = _expand_short_time(start_time)
 
         if end_time:
-            if len(end_time) <= 8:
-                end_time = f"{today} {end_time}"
-            time_range['end'] = end_time
+            time_range['end'] = _expand_short_time(end_time)
 
         return time_range
     return None

@@ -13,6 +13,8 @@ from .registry import mcp_tool
 
 
 @mcp_tool(category="packages")
+@ToolBase.handle_tool_error('LIST_PACKAGES_ERROR', packages=[], count=0)
+@ToolBase.with_device(packages=[], count=0)
 def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesResult:
     """
     列出设备上已安装的应用包
@@ -28,33 +30,22 @@ def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesRes
         list_packages(keyword="settings")  -> 搜索包含"settings"的包
         list_packages()  -> 列出所有已安装的包
     """
-    default_result = {'packages': [], 'count': 0}
+    hdc = get_hdc()
+    result = hdc.list_packages(device_id, keyword)
+    result['device_id'] = device_id
     
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
-
-        hdc = get_hdc()
-        result = hdc.list_packages(device, keyword)
-        result['device_id'] = device
-        
-        # 确保必需字段存在
-        if 'packages' not in result:
-            result['packages'] = []
-        if 'count' not in result:
-            result['count'] = len(result['packages'])
-        
-        return result
-
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'LIST_PACKAGES_ERROR')
-        error_result.update(default_result)
-        return error_result
+    # 确保必需字段存在
+    if 'packages' not in result:
+        result['packages'] = []
+    if 'count' not in result:
+        result['count'] = len(result['packages'])
+    
+    return result
 
 
 @mcp_tool(category="packages")
+@ToolBase.handle_tool_error('GET_ABILITIES_ERROR', bundle_name='', abilities=[], modules=[], main_ability=None, ability_count=0)
+@ToolBase.with_device(bundle_name='', abilities=[], modules=[], main_ability=None, ability_count=0)
 def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbilitiesResult:
     """
     获取指定包的所有Abilities
@@ -69,46 +60,32 @@ def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbi
     Example:
         get_package_abilities("com.huawei.hmos.settings")
     """
-    default_result = {
-        'bundle_name': bundle_name,
-        'abilities': [],
-        'modules': [],
-        'main_ability': None,
-        'ability_count': 0
-    }
-    
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
+    hdc = get_hdc()
+    result = hdc.get_package_info(device_id, bundle_name)
 
-        hdc = get_hdc()
-        result = hdc.get_package_info(device, bundle_name)
-
-        if result['success']:
-            # 只返回关键信息，不返回raw_output
-            return {
-                'success': True,
-                'device_id': device,
-                'bundle_name': bundle_name,
-                'abilities': result.get('abilities', []),
-                'modules': result.get('modules', []),
-                'main_ability': result.get('main_ability'),
-                'ability_count': len(result.get('abilities', []))
-            }
-        else:
-            result.update(default_result)
-            result['device_id'] = device
-            return result
-
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'GET_ABILITIES_ERROR')
-        error_result.update(default_result)
-        return error_result
+    if result['success']:
+        return {
+            'success': True,
+            'device_id': device_id,
+            'bundle_name': bundle_name,
+            'abilities': result.get('abilities', []),
+            'modules': result.get('modules', []),
+            'main_ability': result.get('main_ability'),
+            'ability_count': len(result.get('abilities', []))
+        }
+    else:
+        result['bundle_name'] = bundle_name
+        result['device_id'] = device_id
+        result.setdefault('abilities', [])
+        result.setdefault('modules', [])
+        result.setdefault('main_ability', None)
+        result.setdefault('ability_count', 0)
+        return result
 
 
 @mcp_tool(category="packages")
+@ToolBase.handle_tool_error('GET_MAIN_ABILITY_ERROR', ability_name='', module_name='', bundle_name='')
+@ToolBase.with_device(ability_name='', module_name='', bundle_name='')
 def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResult:
     """
     获取指定包的主入口Ability
@@ -124,32 +101,13 @@ def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResu
         get_main_ability("com.huawei.hmos.settings")
         -> {"ability_name": "MainAbility", "module_name": "entry"}
     """
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            # 确保错误结果也包含必需字段
-            device['ability_name'] = ''
-            device['module_name'] = ''
-            device['bundle_name'] = bundle_name
-            return device
-
-        hdc = get_hdc()
-        result = hdc.get_main_ability(device, bundle_name)
-        result['device_id'] = device
-        
-        # 确保必需字段存在
-        if 'ability_name' not in result:
-            result['ability_name'] = ''
-        if 'module_name' not in result:
-            result['module_name'] = ''
-        if 'bundle_name' not in result:
-            result['bundle_name'] = bundle_name
-        
-        return result
-
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'GET_MAIN_ABILITY_ERROR')
-        error_result['ability_name'] = ''
-        error_result['module_name'] = ''
-        error_result['bundle_name'] = bundle_name
-        return error_result
+    hdc = get_hdc()
+    result = hdc.get_main_ability(device_id, bundle_name)
+    result['device_id'] = device_id
+    
+    # 确保必需字段存在
+    result.setdefault('ability_name', '')
+    result.setdefault('module_name', '')
+    result.setdefault('bundle_name', bundle_name)
+    
+    return result

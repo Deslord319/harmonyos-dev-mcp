@@ -89,6 +89,8 @@ def _extract_build_error(project_path: str) -> Optional[str]:
 
 
 @mcp_tool(category="build")
+@ToolBase.handle_tool_error('INSTALL_ERROR', hap_path='')
+@ToolBase.with_device(hap_path='')
 def install_app(hap_path: str, device_id: str = None) -> InstallResult:
     """
     安装应用到设备
@@ -103,27 +105,19 @@ def install_app(hap_path: str, device_id: str = None) -> InstallResult:
         - device_id: 设备ID
         - hap_path: HAP包路径
     """
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device['hap_path'] = hap_path
-            return device
+    hdc = get_hdc()
+    success = hdc.install_app(device_id, hap_path)
 
-        hdc = get_hdc()
-        success = hdc.install_app(device, hap_path)
-
-        return {
-            'success': success,
-            'device_id': device,
-            'hap_path': hap_path
-        }
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'INSTALL_ERROR')
-        error_result['hap_path'] = hap_path
-        return error_result
+    return {
+        'success': success,
+        'device_id': device_id,
+        'hap_path': hap_path
+    }
 
 
 @mcp_tool(category="build")
+@ToolBase.handle_tool_error('RUN_APP_ERROR', bundle_name='', ability_name='', module_name='entry', auto_detected=False, command_success=False, window_found=False, window=None)
+@ToolBase.with_device(bundle_name='', ability_name='', module_name='entry', auto_detected=False, command_success=False, window_found=False, window=None)
 def run_app(
     bundle_name: str,
     device_id: str = None,
@@ -151,50 +145,29 @@ def run_app(
         # 指定Ability启动
         run_app(bundle_name="com.example.app", ability_name="MainAbility", module_name="entry")
     """
-    # 默认值，用于错误返回
-    default_result = {
+    hdc = get_hdc()
+
+    # 解析 Ability 信息
+    final_ability, final_module, auto_detected = _resolve_ability(
+        hdc, device_id, bundle_name, ability_name, module_name, auto_detect
+    )
+
+    start_result = hdc.start_app(device_id, bundle_name, final_ability, final_module)
+
+    result = {
+        'success': start_result['success'],
+        'device_id': device_id,
         'bundle_name': bundle_name,
-        'ability_name': ability_name or '',
-        'module_name': module_name or 'entry',
-        'auto_detected': False,
-        'command_success': False,
-        'window_found': False,
-        'window': None
+        'ability_name': final_ability or '',
+        'module_name': final_module or 'entry',
+        'auto_detected': auto_detected,
+        'command_success': start_result.get('command_success', False),
+        'window_found': start_result.get('window_found', False),
+        'window': start_result.get('window'),
     }
-    
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
-
-        hdc = get_hdc()
-
-        # 解析 Ability 信息
-        final_ability, final_module, auto_detected = _resolve_ability(
-            hdc, device, bundle_name, ability_name, module_name, auto_detect
-        )
-
-        start_result = hdc.start_app(device, bundle_name, final_ability, final_module)
-
-        result = {
-            'success': start_result['success'],
-            'device_id': device,
-            'bundle_name': bundle_name,
-            'ability_name': final_ability or '',
-            'module_name': final_module or 'entry',
-            'auto_detected': auto_detected,
-            'command_success': start_result.get('command_success', False),
-            'window_found': start_result.get('window_found', False),
-            'window': start_result.get('window'),
-        }
-        if start_result.get('error'):
-            result['error'] = start_result['error']
-        return result
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'RUN_APP_ERROR')
-        error_result.update(default_result)
-        return error_result
+    if start_result.get('error'):
+        result['error'] = start_result['error']
+    return result
 
 
 def _resolve_ability(hdc, device_id: str, bundle_name: str,
@@ -238,6 +211,8 @@ def _resolve_ability(hdc, device_id: str, bundle_name: str,
 
 
 @mcp_tool(category="build")
+@ToolBase.handle_tool_error('UNINSTALL_ERROR', bundle_name='')
+@ToolBase.with_device(bundle_name='')
 def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
     """
     卸载应用
@@ -249,21 +224,11 @@ def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
     Returns:
         卸载结果
     """
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device['bundle_name'] = bundle_name
-            return device
+    hdc = get_hdc()
+    success = hdc.uninstall_app(device_id, bundle_name)
 
-        hdc = get_hdc()
-        success = hdc.uninstall_app(device, bundle_name)
-
-        return {
-            'success': success,
-            'device_id': device,
-            'bundle_name': bundle_name
-        }
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'UNINSTALL_ERROR')
-        error_result['bundle_name'] = bundle_name
-        return error_result
+    return {
+        'success': success,
+        'device_id': device_id,
+        'bundle_name': bundle_name
+    }

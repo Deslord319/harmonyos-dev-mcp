@@ -281,11 +281,11 @@ class Config:
 
         # 打印警告
         for warning in warnings:
-            print(f"⚠️  {warning}")
+            logger.warning(warning)
 
         # 打印错误
         for error in errors:
-            print(f"❌  {error}")
+            logger.error(error)
 
         # 只要能找到 hdc 就允许启动
         return cls.HDC_PATH is not None
@@ -333,6 +333,8 @@ class LogSecurityConfig:
         """
         验证保存路径是否在白名单内
         
+        使用 realpath 解析符号链接，防止通过 symlink 绕过白名单。
+        
         Args:
             path: 要验证的路径
             
@@ -340,14 +342,15 @@ class LogSecurityConfig:
             (是否有效, 绝对路径或错误信息)
         """
         try:
-            abs_path = os.path.abspath(path)
+            # realpath 同时解析符号链接和相对路径，比 abspath 更安全
+            real_path = os.path.realpath(path)
             
             for allowed in cls.ALLOWED_SAVE_PATHS:
-                allowed_abs = os.path.abspath(allowed)
-                if abs_path.startswith(allowed_abs) or abs_path == allowed_abs:
+                allowed_real = os.path.realpath(allowed)
+                if real_path.startswith(allowed_real + os.sep) or real_path == allowed_real:
                     # 确保目录存在
-                    os.makedirs(os.path.dirname(abs_path) if os.path.splitext(abs_path)[1] else abs_path, exist_ok=True)
-                    return True, abs_path
+                    os.makedirs(os.path.dirname(real_path) if os.path.splitext(real_path)[1] else real_path, exist_ok=True)
+                    return True, real_path
             
             return False, f"路径不在白名单内。允许的路径: {cls.ALLOWED_SAVE_PATHS}"
         except Exception as e:

@@ -13,6 +13,8 @@ from .registry import mcp_tool
 
 
 @mcp_tool(category="ui")
+@ToolBase.handle_tool_error('CLICK_ERROR', x=0, y=0)
+@ToolBase.with_device(x=0, y=0)
 def click_element(
     device_id: str = None,
     x: int = None,
@@ -37,69 +39,69 @@ def click_element(
     Returns:
         操作结果
     """
-    default_result = {'x': x or 0, 'y': y or 0}
-    
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
-
-        ui_ops = get_ui_operations()
-
-        # 如果提供了坐标，直接点击
-        if x is not None and y is not None:
-            if double_click:
-                return ui_ops.double_click(device, x, y)
-            else:
-                return ui_ops.click(device, x, y)
-
-        # 如果提供了text或element_type，先查找元素
-        if text or element_type:
-            result = ui_ops.find_element(
-                device, text=text, element_type=element_type, bundle_name=bundle_name
-            )
-            if not result['success']:
-                result.update(default_result)
-                return result
-            if not result['elements']:
-                return {
-                    'success': False,
-                    'error': f'未找到匹配的元素: text={text}, type={element_type}',
-                    'error_code': 'ELEMENT_NOT_FOUND',
-                    **default_result
-                }
-
-            # 使用第一个匹配的元素
-            element = result['elements'][0]
-            if 'x' not in element or 'y' not in element:
-                return {
-                    'success': False,
-                    'error': f'元素没有有效的坐标信息: {element}',
-                    'error_code': 'INVALID_ELEMENT_COORDS',
-                    **default_result
-                }
-
-            if double_click:
-                return ui_ops.double_click(device, element['x'], element['y'])
-            else:
-                return ui_ops.click(device, element['x'], element['y'])
-
+    # 参数冲突检测：坐标和查找条件不能同时提供
+    has_coords = x is not None and y is not None
+    has_search = text or element_type
+    if has_coords and has_search:
         return {
             'success': False,
-            'error': '必须提供坐标(x, y)或查找条件(text/element_type)',
-            'error_code': 'MISSING_PARAMS',
-            **default_result
+            'error': '不能同时提供坐标(x, y)和查找条件(text/element_type)，请二选一',
+            'error_code': 'PARAM_CONFLICT',
+            'x': x, 'y': y
         }
 
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'CLICK_ERROR')
-        error_result.update(default_result)
-        return error_result
+    default_result = {'x': x or 0, 'y': y or 0}
+    ui_ops = get_ui_operations()
+
+    # 如果提供了坐标，直接点击
+    if has_coords:
+        if double_click:
+            return ui_ops.double_click(device_id, x, y)
+        else:
+            return ui_ops.click(device_id, x, y)
+
+    # 如果提供了text或element_type，先查找元素
+    if has_search:
+        result = ui_ops.find_element(
+            device_id, text=text, element_type=element_type, bundle_name=bundle_name
+        )
+        if not result['success']:
+            result.update(default_result)
+            return result
+        if not result['elements']:
+            return {
+                'success': False,
+                'error': f'未找到匹配的元素: text={text}, type={element_type}',
+                'error_code': 'ELEMENT_NOT_FOUND',
+                **default_result
+            }
+
+        # 使用第一个匹配的元素
+        element = result['elements'][0]
+        if 'x' not in element or 'y' not in element:
+            return {
+                'success': False,
+                'error': f'元素没有有效的坐标信息: {element}',
+                'error_code': 'INVALID_ELEMENT_COORDS',
+                **default_result
+            }
+
+        if double_click:
+            return ui_ops.double_click(device_id, element['x'], element['y'])
+        else:
+            return ui_ops.click(device_id, element['x'], element['y'])
+
+    return {
+        'success': False,
+        'error': '必须提供坐标(x, y)或查找条件(text/element_type)',
+        'error_code': 'MISSING_PARAMS',
+        **default_result
+    }
 
 
 @mcp_tool(category="ui")
 @ToolBase.handle_tool_error('LONG_PRESS_ERROR')
+@ToolBase.with_device()
 def long_press_element(
     device_id: str = None,
     x: int = None,
@@ -122,20 +124,16 @@ def long_press_element(
     Returns:
         操作结果
     """
-    ok, device = ToolBase.get_device_id(device_id)
-    if not ok:
-        return device
-
     ui_ops = get_ui_operations()
 
     # 如果提供了坐标，直接长按
     if x is not None and y is not None:
-        return ui_ops.long_click(device, x, y)
+        return ui_ops.long_click(device_id, x, y)
 
     # 查找元素
     if text or element_type:
         result = ui_ops.find_element(
-            device, text=text, element_type=element_type, bundle_name=bundle_name
+            device_id, text=text, element_type=element_type, bundle_name=bundle_name
         )
         if not result['success']:
             return result
@@ -154,7 +152,7 @@ def long_press_element(
                 'error_code': 'INVALID_ELEMENT_COORDS'
             }
 
-        return ui_ops.long_click(device, element['x'], element['y'])
+        return ui_ops.long_click(device_id, element['x'], element['y'])
 
     return {
         'success': False,
@@ -164,6 +162,8 @@ def long_press_element(
 
 
 @mcp_tool(category="ui")
+@ToolBase.handle_tool_error('SWIPE_ERROR', from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
+@ToolBase.with_device(from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
 def swipe(
     device_id: str = None,
     from_x: int = None,
@@ -195,37 +195,28 @@ def swipe(
         'to_y': to_y or 0,
         'direction': direction
     }
-    
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
 
-        ui_ops = get_ui_operations()
+    ui_ops = get_ui_operations()
 
-        # 如果提供了方向，使用方向滑动
-        if direction:
-            return ui_ops.swipe_direction(device, direction, speed)
+    # 如果提供了方向，使用方向滑动
+    if direction:
+        return ui_ops.swipe_direction(device_id, direction, speed)
 
-        # 如果提供了坐标，使用坐标滑动
-        if all(v is not None for v in [from_x, from_y, to_x, to_y]):
-            return ui_ops.swipe(device, from_x, from_y, to_x, to_y, speed)
+    # 如果提供了坐标，使用坐标滑动
+    if all(v is not None for v in [from_x, from_y, to_x, to_y]):
+        return ui_ops.swipe(device_id, from_x, from_y, to_x, to_y, speed)
 
-        return {
-            'success': False,
-            'error': '必须提供滑动坐标(from_x, from_y, to_x, to_y)或方向(direction)',
-            'error_code': 'MISSING_PARAMS',
-            **default_result
-        }
-
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'SWIPE_ERROR')
-        error_result.update(default_result)
-        return error_result
+    return {
+        'success': False,
+        'error': '必须提供滑动坐标(from_x, from_y, to_x, to_y)或方向(direction)',
+        'error_code': 'MISSING_PARAMS',
+        **default_result
+    }
 
 
 @mcp_tool(category="ui")
+@ToolBase.handle_tool_error('INPUT_TEXT_ERROR', text='', x=0, y=0)
+@ToolBase.with_device(text='', x=0, y=0)
 def input_text(
     device_id: str = None,
     x: int = None,
@@ -255,68 +246,59 @@ def input_text(
         'x': x or 0,
         'y': y or 0
     }
-    
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
 
-        if not text:
-            return {
-                'success': False,
-                'error': '必须提供要输入的文本(text)',
-                'error_code': 'MISSING_TEXT',
-                **default_result
-            }
-
-        ui_ops = get_ui_operations()
-
-        # 如果提供了坐标，直接输入
-        if x is not None and y is not None:
-            return ui_ops.input_text(device, x, y, text)
-
-        # 查找元素
-        if element_text or element_type:
-            result = ui_ops.find_element(
-                device, text=element_text, element_type=element_type, bundle_name=bundle_name
-            )
-            if not result['success']:
-                result.update(default_result)
-                return result
-            if not result['elements']:
-                return {
-                    'success': False,
-                    'error': '未找到匹配的输入框',
-                    'error_code': 'ELEMENT_NOT_FOUND',
-                    **default_result
-                }
-
-            element = result['elements'][0]
-            if 'x' not in element or 'y' not in element:
-                return {
-                    'success': False,
-                    'error': '元素没有有效的坐标信息',
-                    'error_code': 'INVALID_ELEMENT_COORDS',
-                    **default_result
-                }
-
-            return ui_ops.input_text(device, element['x'], element['y'], text)
-
+    if not text:
         return {
             'success': False,
-            'error': '必须提供坐标或查找条件',
-            'error_code': 'MISSING_PARAMS',
+            'error': '必须提供要输入的文本(text)',
+            'error_code': 'MISSING_TEXT',
             **default_result
         }
 
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'INPUT_TEXT_ERROR')
-        error_result.update(default_result)
-        return error_result
+    ui_ops = get_ui_operations()
+
+    # 如果提供了坐标，直接输入
+    if x is not None and y is not None:
+        return ui_ops.input_text(device_id, x, y, text)
+
+    # 查找元素
+    if element_text or element_type:
+        result = ui_ops.find_element(
+            device_id, text=element_text, element_type=element_type, bundle_name=bundle_name
+        )
+        if not result['success']:
+            result.update(default_result)
+            return result
+        if not result['elements']:
+            return {
+                'success': False,
+                'error': '未找到匹配的输入框',
+                'error_code': 'ELEMENT_NOT_FOUND',
+                **default_result
+            }
+
+        element = result['elements'][0]
+        if 'x' not in element or 'y' not in element:
+            return {
+                'success': False,
+                'error': '元素没有有效的坐标信息',
+                'error_code': 'INVALID_ELEMENT_COORDS',
+                **default_result
+            }
+
+        return ui_ops.input_text(device_id, element['x'], element['y'], text)
+
+    return {
+        'success': False,
+        'error': '必须提供坐标或查找条件',
+        'error_code': 'MISSING_PARAMS',
+        **default_result
+    }
 
 
 @mcp_tool(category="ui")
+@ToolBase.handle_tool_error('PRESS_KEY_ERROR', key='')
+@ToolBase.with_device(key='')
 def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
     """
     模拟按键操作
@@ -328,32 +310,21 @@ def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
     Returns:
         操作结果
     """
-    default_result = {'key': key or ''}
-    
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
+    if not key:
+        return {
+            'success': False,
+            'error': '必须提供按键名称(key)',
+            'error_code': 'MISSING_KEY',
+            'key': ''
+        }
 
-        if not key:
-            return {
-                'success': False,
-                'error': '必须提供按键名称(key)',
-                'error_code': 'MISSING_KEY',
-                **default_result
-            }
-
-        ui_ops = get_ui_operations()
-        return ui_ops.press_key(device, key)
-
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'PRESS_KEY_ERROR')
-        error_result.update(default_result)
-        return error_result
+    ui_ops = get_ui_operations()
+    return ui_ops.press_key(device_id, key)
 
 
 @mcp_tool(category="ui")
+@ToolBase.handle_tool_error('FIND_ELEMENT_ERROR', elements=[], count=0)
+@ToolBase.with_device(elements=[], count=0)
 def find_element(
     device_id: str = None,
     text: str = None,
@@ -374,40 +345,27 @@ def find_element(
     Returns:
         匹配的元素列表，包含坐标信息
     """
-    default_result = {'elements': [], 'count': 0}
+    if not any([text, element_type, element_id]):
+        return {
+            'success': False,
+            'error': '必须提供至少一个查找条件(text/element_type/element_id)',
+            'error_code': 'MISSING_SEARCH_CRITERIA',
+            'elements': [], 'count': 0
+        }
+
+    ui_ops = get_ui_operations()
+    result = ui_ops.find_element(
+        device_id,
+        text=text,
+        element_type=element_type,
+        element_id=element_id,
+        bundle_name=bundle_name
+    )
     
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
-
-        if not any([text, element_type, element_id]):
-            return {
-                'success': False,
-                'error': '必须提供至少一个查找条件(text/element_type/element_id)',
-                'error_code': 'MISSING_SEARCH_CRITERIA',
-                **default_result
-            }
-
-        ui_ops = get_ui_operations()
-        result = ui_ops.find_element(
-            device,
-            text=text,
-            element_type=element_type,
-            element_id=element_id,
-            bundle_name=bundle_name
-        )
-        
-        # 确保必需字段存在
-        if 'elements' not in result:
-            result['elements'] = []
-        if 'count' not in result:
-            result['count'] = len(result['elements'])
-        
-        return result
-
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'FIND_ELEMENT_ERROR')
-        error_result.update(default_result)
-        return error_result
+    # 确保必需字段存在
+    if 'elements' not in result:
+        result['elements'] = []
+    if 'count' not in result:
+        result['count'] = len(result['elements'])
+    
+    return result

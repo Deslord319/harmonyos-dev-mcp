@@ -117,6 +117,8 @@ def _iterative_deep_copy(obj):
 
 
 @mcp_tool(category="ui_tree")
+@ToolBase.handle_tool_error('GET_UI_TREE_ERROR', window_id=0, ui_tree={}, node_count=0)
+@ToolBase.with_device(window_id=0, ui_tree={}, node_count=0)
 def get_ui_tree(
     device_id: str = None,
     bundle_name: str = None,
@@ -133,93 +135,78 @@ def get_ui_tree(
     Returns:
         UI组件树JSON结构
     """
-    default_result = {
-        'window_id': window_id or 0,
-        'ui_tree': {},
-        'node_count': 0
-    }
-    
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
+    hdc = get_hdc()
 
-        hdc = get_hdc()
+    # 确定窗口ID
+    target_window_id = window_id
 
-        # 确定窗口ID
-        target_window_id = window_id
+    if not target_window_id:
+        if bundle_name:
+            # 根据包名查找窗口
+            target_window_id = hdc.find_window_by_bundle(device_id, bundle_name)
+            if not target_window_id:
+                return {
+                    'success': False,
+                    'device_id': device_id,
+                    'error': f'未找到应用 {bundle_name} 的窗口',
+                    'error_code': 'WINDOW_NOT_FOUND',
+                    'window_id': 0, 'ui_tree': {}, 'node_count': 0
+                }
+        else:
+            # 获取窗口列表，使用第一个可见窗口
+            window_list = hdc.get_window_list(device_id)
+            if not window_list['success'] or not window_list['windows']:
+                return {
+                    'success': False,
+                    'device_id': device_id,
+                    'error': '未找到任何窗口',
+                    'error_code': 'NO_WINDOWS',
+                    'window_id': 0, 'ui_tree': {}, 'node_count': 0
+                }
 
-        if not target_window_id:
-            if bundle_name:
-                # 根据包名查找窗口
-                target_window_id = hdc.find_window_by_bundle(device, bundle_name)
-                if not target_window_id:
-                    return {
-                        'success': False,
-                        'device_id': device,
-                        'error': f'未找到应用 {bundle_name} 的窗口',
-                        'error_code': 'WINDOW_NOT_FOUND',
-                        **default_result
-                    }
-            else:
-                # 获取窗口列表，使用第一个可见窗口
-                window_list = hdc.get_window_list(device)
-                if not window_list['success'] or not window_list['windows']:
-                    return {
-                        'success': False,
-                        'device_id': device,
-                        'error': '未找到任何窗口',
-                        'error_code': 'NO_WINDOWS',
-                        **default_result
-                    }
+            # 查找第一个可见窗口
+            for window in window_list['windows']:
+                if window['is_visible']:
+                    target_window_id = window['window_id']
+                    break
 
-                # 查找第一个可见窗口
-                for window in window_list['windows']:
-                    if window['is_visible']:
-                        target_window_id = window['window_id']
-                        break
+            if not target_window_id:
+                # 如果没有可见窗口，使用第一个窗口
+                target_window_id = window_list['windows'][0]['window_id']
 
-                if not target_window_id:
-                    # 如果没有可见窗口，使用第一个窗口
-                    target_window_id = window_list['windows'][0]['window_id']
+    # 获取UI树原始数据
+    ui_tree_result = hdc.get_ui_tree_raw(device_id, target_window_id)
 
-        # 获取UI树原始数据
-        ui_tree_result = hdc.get_ui_tree_raw(device, target_window_id)
-
-        if not ui_tree_result['success']:
-            return {
-                'success': False,
-                'device_id': device,
-                'error': ui_tree_result.get('error', '获取UI树失败'),
-                'error_code': 'UI_TREE_FETCH_ERROR',
-                'window_id': target_window_id,
-                'ui_tree': {},
-                'node_count': 0
-            }
-
-        # 解析UI树
-        parser = UITreeParser()
-        parsed_tree = parser.parse(ui_tree_result['ui_tree'])
-
-        # 确保结果可以安全序列化为 JSON（防止循环引用错误）
-        safe_tree = _ensure_json_serializable(parsed_tree)
-
+    if not ui_tree_result['success']:
         return {
-            'success': True,
-            'device_id': device,
+            'success': False,
+            'device_id': device_id,
+            'error': ui_tree_result.get('error', '获取UI树失败'),
+            'error_code': 'UI_TREE_FETCH_ERROR',
             'window_id': target_window_id,
-            'ui_tree': safe_tree,
-            'node_count': safe_tree.get('count', 0) if isinstance(safe_tree, dict) else 0
+            'ui_tree': {},
+            'node_count': 0
         }
 
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'GET_UI_TREE_ERROR')
-        error_result.update(default_result)
-        return error_result
+    # 解析UI树
+    parser = UITreeParser()
+    parsed_tree = parser.parse(ui_tree_result['ui_tree'])
+
+    # 确保结果可以安全序列化为 JSON（防止循环引用错误）
+    safe_tree = _ensure_json_serializable(parsed_tree)
+
+    return {
+        'success': True,
+        'device_id': device_id,
+        'window_id': target_window_id,
+        'ui_tree': safe_tree,
+        'node_count': safe_tree.get('count', 0) if isinstance(safe_tree, dict) else 0
+    }
 
 
 @mcp_tool(category="ui_tree")
+@ToolBase.handle_tool_error('LIST_WINDOWS_ERROR', windows=[], count=0)
+@ToolBase.with_device(windows=[], count=0)
 def list_windows(device_id: str = None) -> ListWindowsResult:
     """
     列出设备上的所有窗口
@@ -230,27 +217,14 @@ def list_windows(device_id: str = None) -> ListWindowsResult:
     Returns:
         窗口列表
     """
-    default_result = {'windows': [], 'count': 0}
+    hdc = get_hdc()
+    result = hdc.get_window_list(device_id)
     
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            device.update(default_result)
-            return device
+    # 确保必需字段存在
+    result['device_id'] = device_id
+    if 'windows' not in result:
+        result['windows'] = []
+    if 'count' not in result:
+        result['count'] = len(result['windows'])
 
-        hdc = get_hdc()
-        result = hdc.get_window_list(device)
-        
-        # 确保必需字段存在
-        result['device_id'] = device
-        if 'windows' not in result:
-            result['windows'] = []
-        if 'count' not in result:
-            result['count'] = len(result['windows'])
-
-        return result
-
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'LIST_WINDOWS_ERROR')
-        error_result.update(default_result)
-        return error_result
+    return result

@@ -173,3 +173,40 @@ class ToolBase:
                     return error_result
             return wrapper
         return decorator
+
+    @staticmethod
+    def with_device(**error_fields):
+        """
+        设备解析装饰器
+        
+        自动解析函数的 device_id 参数：
+        - 如果已指定 device_id，直接使用
+        - 如果为 None，自动获取第一个设备
+        - 解析失败时返回标准错误字典（合并 error_fields）
+        
+        解析成功后，device_id 参数的值被替换为实际设备ID字符串。
+        
+        Args:
+            **error_fields: 设备解析失败时补充到错误结果的默认字段
+            
+        Example:
+            @mcp_tool(category="packages")
+            @ToolBase.handle_tool_error('LIST_PACKAGES_ERROR', packages=[], count=0)
+            @ToolBase.with_device(packages=[], count=0)
+            def list_packages(device_id: str = None, keyword: str = None):
+                hdc = get_hdc()
+                return hdc.list_packages(device_id, keyword)
+        """
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                device_id = kwargs.get('device_id')
+                ok, device = ToolBase.get_device_id(device_id)
+                if not ok:
+                    for k, v in error_fields.items():
+                        device.setdefault(k, v)
+                    return device
+                kwargs['device_id'] = device
+                return func(*args, **kwargs)
+            return wrapper
+        return decorator
