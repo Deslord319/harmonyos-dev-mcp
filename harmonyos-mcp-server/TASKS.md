@@ -72,50 +72,6 @@
 
 ---
 
-## 📦 已实现的 MCP 工具 (26个)
-
-### 设备管理 (2个)
-- `list_devices` - 列出连接的设备
-- `hilog_receive` - 从设备获取 hilog 日志文件和 dict 解密文件
-
-### 三方库鸿蒙化编译 (6个)
-- `check_wsl` - 检查 WSL 环境（Windows 交叉编译需要）
-- `check_harmonyos_compiler_tools` - 检查 HarmonyOS 编译工具链
-- `clone_library` - 克隆三方库仓库（支持指定版本浅克隆）
-- `analyze_build_system` - 分析项目构建系统类型
-- `compile_library` - 使用鸿蒙工具链编译三方库
-- `verify_so_output` - 验证编译输出的 .so 文件
-
-### 构建部署 (4个)
-- `build_app` - 构建 HarmonyOS 应用
-- `install_app` - 安装 HAP 包到设备
-- `run_app` - 运行应用（支持自动检测主 Ability）
-- `uninstall_app` - 卸载应用
-
-### 包管理 (3个)
-- `list_packages` - 列出设备已安装的应用包
-- `get_package_abilities` - 获取指定包的所有 Abilities
-- `get_main_ability` - 获取包的主入口 Ability
-
-### UI 感知 (3个)
-- `get_ui_tree` - 获取 UI 组件树
-- `list_windows` - 列出窗口
-- `find_element` - 在 UI 树中查找元素
-
-### UI 操作 (5个)
-- `click_element` - 点击元素（支持坐标/文本/类型定位）
-- `long_press_element` - 长按元素
-- `swipe` - 滑动操作（支持坐标/方向）
-- `input_text` - 输入文本
-- `press_key` - 按键操作（Home/Back/Enter 等）
-
-### 日志分析 (3个)
-- `logs_fetch` - 获取日志（支持 level/tag/keyword/pid/time 过滤）
-- `logs_save_snapshot` - 保存日志快照到本地文件
-- `logs_analyze` - 结构化日志分析（summary/errors/crashes 等）
-
----
-
 ## 🚫 已取消的功能
 
 | 功能            | 取消原因                                                                                |
