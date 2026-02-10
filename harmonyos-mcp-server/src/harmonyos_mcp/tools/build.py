@@ -12,8 +12,10 @@ from ..container import get_hdc
 from ..utils.hvigor_wrapper import HvigorWrapper
 from ..types import BuildResult, InstallResult, RunAppResult, UninstallResult
 from .base import ToolBase
+from .registry import mcp_tool
 
 
+@mcp_tool(category="build")
 def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
     """
     构建HarmonyOS应用
@@ -86,6 +88,7 @@ def _extract_build_error(project_path: str) -> Optional[str]:
         return None
 
 
+@mcp_tool(category="build")
 def install_app(hap_path: str, device_id: str = None) -> InstallResult:
     """
     安装应用到设备
@@ -120,6 +123,7 @@ def install_app(hap_path: str, device_id: str = None) -> InstallResult:
         return error_result
 
 
+@mcp_tool(category="build")
 def run_app(
     bundle_name: str,
     device_id: str = None,
@@ -233,6 +237,7 @@ def _resolve_ability(hdc, device_id: str, bundle_name: str,
     )
 
 
+@mcp_tool(category="build")
 def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
     """
     卸载应用

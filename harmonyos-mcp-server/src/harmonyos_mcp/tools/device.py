@@ -9,8 +9,10 @@ from loguru import logger
 from ..container import get_hdc
 from ..types import ListDevicesResult, HilogReceiveResult
 from .base import ToolBase
+from .registry import mcp_tool
 
 
+@mcp_tool(category="device")
 def list_devices() -> ListDevicesResult:
     """
     列出所有连接的HarmonyOS设备和模拟器
@@ -37,6 +39,7 @@ def list_devices() -> ListDevicesResult:
         return error_result
 
 
+@mcp_tool(category="device")
 def hilog_receive(device_id: str = None, local_dir: str = None) -> dict:
     """
     从HarmonyOS设备的 /data/log/hilog 目录中获取所有 hilog 日志文件和 dict 解密文件

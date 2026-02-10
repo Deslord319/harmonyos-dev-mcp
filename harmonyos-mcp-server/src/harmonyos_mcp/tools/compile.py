@@ -13,8 +13,10 @@ from ..types import (
     ExecuteScriptResult, VerifyOutputResult
 )
 from .base import ToolBase
+from .registry import mcp_tool
 
 
+@mcp_tool(category="compile")
 def check_wsl() -> WslCheckResult:
     """
     检查当前系统是否可用 WSL 环境（用于 Windows 下的交叉编译）
@@ -30,6 +32,7 @@ def check_wsl() -> WslCheckResult:
         return ToolBase.wrap_error(e, 'WSL_CHECK_ERROR')
 
 
+@mcp_tool(category="compile")
 def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandline_tools") -> CompilerToolsResult:
     """
     检查 HarmonyOS Command Line Tools 是否已安装
@@ -48,6 +51,7 @@ def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandline_too
         return ToolBase.wrap_error(e, 'COMPILER_TOOLS_CHECK_ERROR')
 
 
+@mcp_tool(category="compile")
 def clone_library(repo_url: str, local_path: str, version: str = None) -> CloneLibraryResult:
     """
     拉取三方库代码仓库并切换到指定版本
@@ -71,6 +75,7 @@ def clone_library(repo_url: str, local_path: str, version: str = None) -> CloneL
         return ToolBase.wrap_error(e, 'CLONE_LIBRARY_ERROR')
 
 
+@mcp_tool(category="compile")
 def analyze_build_system(project_dir: str) -> AnalyzeBuildResult:
     """
     分析三方库项目的构建系统类型
@@ -89,6 +94,7 @@ def analyze_build_system(project_dir: str) -> AnalyzeBuildResult:
         return ToolBase.wrap_error(e, 'ANALYZE_BUILD_ERROR')
 
 
+@mcp_tool(category="compile")
 def read_build_files(project_dir: str) -> ReadBuildFilesResult:
     """
     读取项目的构建系统文件，供远端AI分析
@@ -123,6 +129,7 @@ def read_build_files(project_dir: str) -> ReadBuildFilesResult:
         return ToolBase.wrap_error(e, 'READ_BUILD_FILES_ERROR')
 
 
+@mcp_tool(category="compile")
 def write_compile_script(project_dir: str, script_content: str) -> WriteScriptResult:
     """
     将AI生成的编译脚本写入文件
@@ -147,6 +154,7 @@ def write_compile_script(project_dir: str, script_content: str) -> WriteScriptRe
         return ToolBase.wrap_error(e, 'WRITE_SCRIPT_ERROR')
 
 
+@mcp_tool(category="compile")
 def execute_compile_script(script_path: str, timeout: int = 1800) -> ExecuteScriptResult:
     """
     执行编译脚本并返回输出
@@ -178,6 +186,7 @@ def execute_compile_script(script_path: str, timeout: int = 1800) -> ExecuteScri
         return result
 
 
+@mcp_tool(category="compile")
 def verify_so_output(project_dir: str, output_dir: str = None) -> VerifyOutputResult:
     """
     验证编译输出的 .so 文件

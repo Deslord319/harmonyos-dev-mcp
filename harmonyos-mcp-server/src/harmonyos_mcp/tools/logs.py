@@ -13,6 +13,7 @@ from ..config import LogSecurityConfig
 from ..utils.log_parser import LogParser, LogEntry
 from ..types import LogsFetchResult, LogsSaveResult, LogsAnalyzeResult, AnalysisType
 from .base import ToolBase
+from .registry import mcp_tool
 
 
 def _empty_filters() -> dict:
@@ -191,6 +192,7 @@ def _build_time_range(seconds: int, start_time: str, end_time: str) -> Optional[
     return None
 
 
+@mcp_tool(category="logs")
 def logs_fetch(
     device_id: str = None,
     lines: int = 100,
@@ -235,6 +237,7 @@ def logs_fetch(
     )
 
 
+@mcp_tool(category="logs")
 def logs_save_snapshot(
     device_id: str = None,
     output_path: str = None,
@@ -400,6 +403,7 @@ def _format_file_size(size: int) -> str:
         return f"{size / 1024 / 1024:.1f} MB"
 
 
+@mcp_tool(category="logs")
 def logs_analyze(
     logs: list = None,
     device_id: str = None,

@@ -9,8 +9,10 @@ from loguru import logger
 from ..container import get_hdc
 from ..types import ListPackagesResult, PackageAbilitiesResult, MainAbilityResult
 from .base import ToolBase
+from .registry import mcp_tool
 
 
+@mcp_tool(category="packages")
 def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesResult:
     """
     列出设备上已安装的应用包
@@ -52,6 +54,7 @@ def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesRes
         return error_result
 
 
+@mcp_tool(category="packages")
 def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbilitiesResult:
     """
     获取指定包的所有Abilities
@@ -105,6 +108,7 @@ def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbi
         return error_result
 
 
+@mcp_tool(category="packages")
 def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResult:
     """
     获取指定包的主入口Ability

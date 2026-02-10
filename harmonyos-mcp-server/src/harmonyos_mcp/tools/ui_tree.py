@@ -11,6 +11,7 @@ from ..container import get_hdc
 from ..utils.uitree_parser import UITreeParser
 from ..types import UITreeResult, ListWindowsResult
 from .base import ToolBase
+from .registry import mcp_tool
 
 
 def _ensure_json_serializable(obj, max_depth: int = 50, current_depth: int = 0):
@@ -115,6 +116,7 @@ def _iterative_deep_copy(obj):
     return root
 
 
+@mcp_tool(category="ui_tree")
 def get_ui_tree(
     device_id: str = None,
     bundle_name: str = None,
@@ -217,6 +219,7 @@ def get_ui_tree(
         return error_result
 
 
+@mcp_tool(category="ui_tree")
 def list_windows(device_id: str = None) -> ListWindowsResult:
     """
     列出设备上的所有窗口

@@ -2,7 +2,7 @@
 HarmonyOS MCP Server 主入口
 
 重构后的精简版本，将业务逻辑拆分到 tools/ 模块中。
-原始版本备份: server_backup.py
+使用 tools/registry.py 的自动注册机制替代手动逐一注册。
 """
 import sys
 from fastmcp import FastMCP
@@ -20,69 +20,26 @@ server = FastMCP("harmonyos-tools")
 
 def _register_tools():
     """
-    注册所有工具
-    
-    从各功能模块导入工具函数并注册到 MCP 服务器。
+    自动注册所有工具
+
+    工作原理：
+    1. 导入各工具模块，触发模块中 @mcp_tool 装饰器的执行
+    2. 装饰器将函数注册到 tools/registry.py 的全局注册表
+    3. 遍历注册表，将所有工具注册到 FastMCP 服务器
     """
-    from .tools import device, build, packages, ui, ui_tree, logs, compile
+    # 导入工具模块（触发 @mcp_tool 装饰器注册）
+    from .tools import device, build, packages, ui, ui_tree, logs, compile  # noqa: F401
+    from .tools.registry import get_registered_tools, get_tool_summary
 
-    # ========================================================================
-    # 设备管理工具
-    # ========================================================================
-    server.tool()(device.list_devices)
-    server.tool()(device.hilog_receive)
+    # 从注册表自动注册到 FastMCP
+    for entry in get_registered_tools():
+        server.tool()(entry.func)
 
-    # ========================================================================
-    # 构建部署工具
-    # ========================================================================
-    server.tool()(build.build_app)
-    server.tool()(build.install_app)
-    server.tool()(build.run_app)
-    server.tool()(build.uninstall_app)
-
-    # ========================================================================
-    # 包管理工具
-    # ========================================================================
-    server.tool()(packages.list_packages)
-    server.tool()(packages.get_package_abilities)
-    server.tool()(packages.get_main_ability)
-
-    # ========================================================================
-    # UI 树工具
-    # ========================================================================
-    server.tool()(ui_tree.get_ui_tree)
-    server.tool()(ui_tree.list_windows)
-
-    # ========================================================================
-    # UI 操作工具
-    # ========================================================================
-    server.tool()(ui.click_element)
-    server.tool()(ui.long_press_element)
-    server.tool()(ui.swipe)
-    server.tool()(ui.input_text)
-    server.tool()(ui.press_key)
-    server.tool()(ui.find_element)
-
-    # ========================================================================
-    # 日志分析工具
-    # ========================================================================
-    server.tool()(logs.logs_fetch)
-    server.tool()(logs.logs_save_snapshot)
-    server.tool()(logs.logs_analyze)
-
-    # ========================================================================
-    # 三方库编译工具
-    # ========================================================================
-    server.tool()(compile.check_wsl)
-    server.tool()(compile.check_harmonyos_compiler_tools)
-    server.tool()(compile.clone_library)
-    server.tool()(compile.analyze_build_system)
-    server.tool()(compile.read_build_files)
-    server.tool()(compile.write_compile_script)
-    server.tool()(compile.execute_compile_script)
-    server.tool()(compile.verify_so_output)
-
-    logger.info("已注册 28 个 MCP 工具")
+    summary = get_tool_summary()
+    logger.info(
+        f"已注册 {summary['total']} 个 MCP 工具, "
+        f"分类: {summary['categories']}"
+    )
 
 
 # 注册工具

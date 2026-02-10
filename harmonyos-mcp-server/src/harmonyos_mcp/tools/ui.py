@@ -9,8 +9,10 @@ from loguru import logger
 from ..container import get_hdc, get_ui_operations
 from ..types import ClickResult, SwipeResult, InputTextResult, PressKeyResult, FindElementResult
 from .base import ToolBase
+from .registry import mcp_tool
 
 
+@mcp_tool(category="ui")
 def click_element(
     device_id: str = None,
     x: int = None,
@@ -96,6 +98,7 @@ def click_element(
         return error_result
 
 
+@mcp_tool(category="ui")
 def long_press_element(
     device_id: str = None,
     x: int = None,
@@ -163,6 +166,7 @@ def long_press_element(
         return ToolBase.wrap_error(e, 'LONG_PRESS_ERROR')
 
 
+@mcp_tool(category="ui")
 def swipe(
     device_id: str = None,
     from_x: int = None,
@@ -224,6 +228,7 @@ def swipe(
         return error_result
 
 
+@mcp_tool(category="ui")
 def input_text(
     device_id: str = None,
     x: int = None,
@@ -314,6 +319,7 @@ def input_text(
         return error_result
 
 
+@mcp_tool(category="ui")
 def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
     """
     模拟按键操作
@@ -350,6 +356,7 @@ def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
         return error_result
 
 
+@mcp_tool(category="ui")
 def find_element(
     device_id: str = None,
     text: str = None,

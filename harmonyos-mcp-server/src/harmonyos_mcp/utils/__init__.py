@@ -8,6 +8,11 @@ from .ui_operations import UIOperations
 from .uitree_parser import UITreeParser
 from .logger import setup_logger
 from .log_parser import LogParser, LogEntry
+from .retry import retry, is_transient_hdc_failure
 
-__all__ = ["HdcWrapper", "HvigorWrapper", "UIOperations", "UITreeParser", "setup_logger", "LogParser", "LogEntry"]
+__all__ = [
+    "HdcWrapper", "HvigorWrapper", "UIOperations", "UITreeParser",
+    "setup_logger", "LogParser", "LogEntry",
+    "retry", "is_transient_hdc_failure",
+]
 
