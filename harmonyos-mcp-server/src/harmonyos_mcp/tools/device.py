@@ -13,6 +13,7 @@ from .registry import mcp_tool
 
 
 @mcp_tool(category="device")
+@ToolBase.handle_tool_error('DEVICE_LIST_ERROR', devices=[], count=0)
 def list_devices() -> ListDevicesResult:
     """
     列出所有连接的HarmonyOS设备和模拟器
@@ -23,20 +24,14 @@ def list_devices() -> ListDevicesResult:
         - devices: 设备ID列表
         - count: 设备数量
     """
-    try:
-        hdc = get_hdc()
-        devices = hdc.list_devices()
-        
-        return {
-            'success': True,
-            'devices': devices,
-            'count': len(devices)
-        }
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'DEVICE_LIST_ERROR')
-        error_result['devices'] = []
-        error_result['count'] = 0
-        return error_result
+    hdc = get_hdc()
+    devices = hdc.list_devices()
+    
+    return {
+        'success': True,
+        'devices': devices,
+        'count': len(devices)
+    }
 
 
 @mcp_tool(category="device")

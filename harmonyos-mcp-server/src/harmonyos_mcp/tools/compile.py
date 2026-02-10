@@ -17,6 +17,7 @@ from .registry import mcp_tool
 
 
 @mcp_tool(category="compile")
+@ToolBase.handle_tool_error('WSL_CHECK_ERROR')
 def check_wsl() -> WslCheckResult:
     """
     检查当前系统是否可用 WSL 环境（用于 Windows 下的交叉编译）
@@ -24,15 +25,12 @@ def check_wsl() -> WslCheckResult:
     Returns:
         WSL 检查结果
     """
-    try:
-        hdc = get_hdc()
-        result = hdc.check_wsl_available()
-        return result
-    except Exception as e:
-        return ToolBase.wrap_error(e, 'WSL_CHECK_ERROR')
+    hdc = get_hdc()
+    return hdc.check_wsl_available()
 
 
 @mcp_tool(category="compile")
+@ToolBase.handle_tool_error('COMPILER_TOOLS_CHECK_ERROR')
 def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandline_tools") -> CompilerToolsResult:
     """
     检查 HarmonyOS Command Line Tools 是否已安装
@@ -43,15 +41,12 @@ def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandline_too
     Returns:
         工具检查结果
     """
-    try:
-        hdc = get_hdc()
-        result = hdc.check_harmonyos_compiler_tools(tools_dir)
-        return result
-    except Exception as e:
-        return ToolBase.wrap_error(e, 'COMPILER_TOOLS_CHECK_ERROR')
+    hdc = get_hdc()
+    return hdc.check_harmonyos_compiler_tools(tools_dir)
 
 
 @mcp_tool(category="compile")
+@ToolBase.handle_tool_error('CLONE_LIBRARY_ERROR')
 def clone_library(repo_url: str, local_path: str, version: str = None) -> CloneLibraryResult:
     """
     拉取三方库代码仓库并切换到指定版本
@@ -67,15 +62,12 @@ def clone_library(repo_url: str, local_path: str, version: str = None) -> CloneL
     Returns:
         拉取结果，包含success状态、本地路径和克隆的版本信息
     """
-    try:
-        manager = get_compile_manager()
-        result = manager.clone_library(repo_url, local_path, version)
-        return result
-    except Exception as e:
-        return ToolBase.wrap_error(e, 'CLONE_LIBRARY_ERROR')
+    manager = get_compile_manager()
+    return manager.clone_library(repo_url, local_path, version)
 
 
 @mcp_tool(category="compile")
+@ToolBase.handle_tool_error('ANALYZE_BUILD_ERROR')
 def analyze_build_system(project_dir: str) -> AnalyzeBuildResult:
     """
     分析三方库项目的构建系统类型
@@ -86,15 +78,12 @@ def analyze_build_system(project_dir: str) -> AnalyzeBuildResult:
     Returns:
         检测到的构建系统列表及其标记文件
     """
-    try:
-        manager = get_compile_manager()
-        result = manager.analyze_build_system(project_dir)
-        return result
-    except Exception as e:
-        return ToolBase.wrap_error(e, 'ANALYZE_BUILD_ERROR')
+    manager = get_compile_manager()
+    return manager.analyze_build_system(project_dir)
 
 
 @mcp_tool(category="compile")
+@ToolBase.handle_tool_error('READ_BUILD_FILES_ERROR')
 def read_build_files(project_dir: str) -> ReadBuildFilesResult:
     """
     读取项目的构建系统文件，供远端AI分析
@@ -114,22 +103,20 @@ def read_build_files(project_dir: str) -> ReadBuildFilesResult:
             "environment": {环境信息}
         }
     """
-    try:
-        from ..utils.compile_wrapper import get_build_file_reader, get_compile_environment
-        reader = get_build_file_reader()
-        env = get_compile_environment()
+    from ..utils.compile_wrapper import get_build_file_reader, get_compile_environment
+    reader = get_build_file_reader()
+    env = get_compile_environment()
 
-        result = reader.read_project_files(project_dir)
-        result['success'] = True
-        result['environment'] = env.get_environment_info()
+    result = reader.read_project_files(project_dir)
+    result['success'] = True
+    result['environment'] = env.get_environment_info()
 
-        logger.info(f"读取构建文件: {len(result['files'])} 个文件")
-        return result
-    except Exception as e:
-        return ToolBase.wrap_error(e, 'READ_BUILD_FILES_ERROR')
+    logger.info(f"读取构建文件: {len(result['files'])} 个文件")
+    return result
 
 
 @mcp_tool(category="compile")
+@ToolBase.handle_tool_error('WRITE_SCRIPT_ERROR')
 def write_compile_script(project_dir: str, script_content: str) -> WriteScriptResult:
     """
     将AI生成的编译脚本写入文件
@@ -145,16 +132,13 @@ def write_compile_script(project_dir: str, script_content: str) -> WriteScriptRe
             "message": str
         }
     """
-    try:
-        from ..utils.compile_wrapper import get_script_writer
-        writer = get_script_writer()
-        result = writer.write_script(project_dir, script_content)
-        return result
-    except Exception as e:
-        return ToolBase.wrap_error(e, 'WRITE_SCRIPT_ERROR')
+    from ..utils.compile_wrapper import get_script_writer
+    writer = get_script_writer()
+    return writer.write_script(project_dir, script_content)
 
 
 @mcp_tool(category="compile")
+@ToolBase.handle_tool_error('EXECUTE_SCRIPT_ERROR', exit_code=-1, stdout='', stderr='', duration=0)
 def execute_compile_script(script_path: str, timeout: int = 1800) -> ExecuteScriptResult:
     """
     执行编译脚本并返回输出
@@ -172,21 +156,13 @@ def execute_compile_script(script_path: str, timeout: int = 1800) -> ExecuteScri
             "duration": float
         }
     """
-    try:
-        from ..utils.compile_wrapper import get_script_executor
-        executor = get_script_executor()
-        result = executor.execute(script_path, timeout=timeout)
-        return result
-    except Exception as e:
-        result = ToolBase.wrap_error(e, 'EXECUTE_SCRIPT_ERROR')
-        result['exit_code'] = -1
-        result['stdout'] = ''
-        result['stderr'] = str(e)
-        result['duration'] = 0
-        return result
+    from ..utils.compile_wrapper import get_script_executor
+    executor = get_script_executor()
+    return executor.execute(script_path, timeout=timeout)
 
 
 @mcp_tool(category="compile")
+@ToolBase.handle_tool_error('VERIFY_SO_ERROR')
 def verify_so_output(project_dir: str, output_dir: str = None) -> VerifyOutputResult:
     """
     验证编译输出的 .so 文件
@@ -198,12 +174,8 @@ def verify_so_output(project_dir: str, output_dir: str = None) -> VerifyOutputRe
     Returns:
         验证结果，包含文件检查、格式验证等信息
     """
-    try:
-        manager = get_compile_manager()
-        result = manager.verify_so_output(
-            project_dir=project_dir,
-            output_dir=output_dir
-        )
-        return result
-    except Exception as e:
-        return ToolBase.wrap_error(e, 'VERIFY_SO_ERROR')
+    manager = get_compile_manager()
+    return manager.verify_so_output(
+        project_dir=project_dir,
+        output_dir=output_dir
+    )

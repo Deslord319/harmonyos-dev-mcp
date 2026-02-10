@@ -14,6 +14,9 @@ from .utils.logger import setup_logger
 # 设置日志
 setup_logger()
 
+# 初始化配置（懒加载，首次调用时检测工具路径）
+Config.ensure_init()
+
 # 创建MCP服务器
 server = FastMCP("harmonyos-tools")
 

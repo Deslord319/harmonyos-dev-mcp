@@ -1,6 +1,7 @@
 """
 hdc命令行工具封装
 """
+import asyncio
 import subprocess
 import time
 import re
@@ -23,6 +24,7 @@ class HdcWrapper:
         Args:
             hdc_path: hdc工具路径,如果为None则使用配置中的路径
         """
+        Config.ensure_init()
         self.hdc_path = hdc_path or Config.HDC_PATH
         if not self.hdc_path:
             raise ValueError("hdc工具路径未配置")
@@ -72,6 +74,65 @@ class HdcWrapper:
             }
         except Exception as e:
             logger.error(f"命令执行失败: {e}")
+            return {
+                'returncode': -1,
+                'stdout': '',
+                'stderr': str(e),
+                'success': False
+            }
+    
+    async def _execute_command_async(self, args: List[str], timeout: int = None) -> Dict[str, Any]:
+        """
+        异步执行hdc命令（使用 asyncio.create_subprocess_exec）
+        
+        与 _execute_command 语义一致，但不阻塞事件循环。
+        适用于在 async 上下文中调用，例如 FastMCP 异步工具函数。
+        
+        Args:
+            args: 命令参数列表
+            timeout: 超时时间(秒)
+        
+        Returns:
+            包含returncode, stdout, stderr的字典
+        """
+        cmd = [self.hdc_path] + args
+        timeout = timeout or Config.COMMAND_TIMEOUT
+        
+        logger.debug(f"异步执行命令: {' '.join(cmd)}")
+        
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                process.communicate(),
+                timeout=timeout
+            )
+            
+            return {
+                'returncode': process.returncode,
+                'stdout': stdout_bytes.decode('utf-8', errors='ignore').strip(),
+                'stderr': stderr_bytes.decode('utf-8', errors='ignore').strip(),
+                'success': process.returncode == 0
+            }
+        except asyncio.TimeoutError:
+            logger.error(f"异步命令执行超时: {' '.join(cmd)}")
+            try:
+                process.kill()
+                await process.wait()
+            except Exception:
+                pass
+            return {
+                'returncode': -1,
+                'stdout': '',
+                'stderr': f'命令执行超时({timeout}秒)',
+                'success': False
+            }
+        except Exception as e:
+            logger.error(f"异步命令执行失败: {e}")
             return {
                 'returncode': -1,
                 'stdout': '',

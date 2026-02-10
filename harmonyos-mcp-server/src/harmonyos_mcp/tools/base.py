@@ -3,6 +3,7 @@
 
 提供所有工具函数的公共方法，消除重复代码。
 """
+import functools
 from typing import Optional, Tuple, Union
 from loguru import logger
 
@@ -140,3 +141,35 @@ class ToolBase:
             minutes = int(seconds // 60)
             secs = seconds % 60
             return f"{minutes}m {secs:.1f}s"
+
+    @staticmethod
+    def handle_tool_error(error_code: str, **default_fields):
+        """
+        工具函数错误处理装饰器
+        
+        消除 try/except 样板代码。对于只需要简单异常包装的工具函数，
+        可以用此装饰器替代手写 try/except。
+        
+        Args:
+            error_code: 错误码（如 'WSL_CHECK_ERROR'）
+            **default_fields: 错误时补充的默认字段
+            
+        Example:
+            @mcp_tool(category="compile")
+            @ToolBase.handle_tool_error('CLONE_ERROR')
+            def clone_library(repo_url: str) -> dict:
+                manager = get_compile_manager()
+                return manager.clone_library(repo_url)
+        """
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    error_result = ToolBase.wrap_error(e, error_code)
+                    for k, v in default_fields.items():
+                        error_result.setdefault(k, v)
+                    return error_result
+            return wrapper
+        return decorator

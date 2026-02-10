@@ -2,6 +2,7 @@
 依赖注入容器
 
 管理服务实例的生命周期，支持单例模式和测试时的 mock 注入。
+使用实例级状态，避免类级别可变属性的 Python 反模式。
 """
 from typing import TypeVar, Type, Dict, Optional, Any, Callable
 from loguru import logger
@@ -9,7 +10,7 @@ from loguru import logger
 T = TypeVar('T')
 
 
-class Container:
+class _Container:
     """
     依赖注入容器
     
@@ -17,23 +18,25 @@ class Container:
     - 懒加载实例化
     - 测试时的 mock 注入
     - 服务依赖解析
+    - 多容器实例（未来多设备支持）
     
     Usage:
-        # 获取服务实例
-        hdc = Container.get(HdcWrapper)
+        # 通过模块级便捷函数获取服务
+        hdc = get_hdc()
         
-        # 测试时注入 mock
+        # 测试时注入 mock（通过默认容器）
+        from harmonyos_mcp.container import Container
         Container.register(HdcWrapper, mock_hdc)
         
         # 重置容器（测试清理）
         Container.reset()
     """
     
-    _instances: Dict[Type, Any] = {}
-    _factories: Dict[Type, Callable] = {}
+    def __init__(self):
+        self._instances: Dict[Type, Any] = {}
+        self._factories: Dict[Type, Callable] = {}
     
-    @classmethod
-    def get(cls, service_type: Type[T]) -> T:
+    def get(self, service_type: Type[T]) -> T:
         """
         获取服务实例（单例模式）
         
@@ -43,12 +46,11 @@ class Container:
         Returns:
             服务实例
         """
-        if service_type not in cls._instances:
-            cls._instances[service_type] = cls._create(service_type)
-        return cls._instances[service_type]
+        if service_type not in self._instances:
+            self._instances[service_type] = self._create(service_type)
+        return self._instances[service_type]
     
-    @classmethod
-    def _create(cls, service_type: Type[T]) -> T:
+    def _create(self, service_type: Type[T]) -> T:
         """
         创建服务实例
         
@@ -61,8 +63,8 @@ class Container:
         logger.debug(f"创建服务实例: {service_type.__name__}")
         
         # 检查是否有自定义工厂
-        if service_type in cls._factories:
-            return cls._factories[service_type]()
+        if service_type in self._factories:
+            return self._factories[service_type]()
         
         # 延迟导入避免循环依赖
         from .utils.hdc_wrapper import HdcWrapper
@@ -82,7 +84,7 @@ class Container:
             
         elif service_type == UIOperations:
             # UIOperations 依赖 HdcWrapper
-            hdc = cls.get(HdcWrapper)
+            hdc = self.get(HdcWrapper)
             instance = UIOperations(hdc)
             logger.info("UIOperations 初始化成功")
             return instance
@@ -90,8 +92,7 @@ class Container:
         else:
             raise ValueError(f"未知的服务类型: {service_type.__name__}")
     
-    @classmethod
-    def register(cls, service_type: Type[T], instance: T) -> None:
+    def register(self, service_type: Type[T], instance: T) -> None:
         """
         手动注册实例（用于测试 mock）
         
@@ -100,10 +101,9 @@ class Container:
             instance: 服务实例
         """
         logger.debug(f"手动注册服务实例: {service_type.__name__}")
-        cls._instances[service_type] = instance
+        self._instances[service_type] = instance
     
-    @classmethod
-    def register_factory(cls, service_type: Type[T], factory: Callable) -> None:
+    def register_factory(self, service_type: Type[T], factory: Callable) -> None:
         """
         注册服务工厂函数
         
@@ -111,21 +111,19 @@ class Container:
             service_type: 服务类型
             factory: 工厂函数，无参数，返回服务实例
         """
-        cls._factories[service_type] = factory
+        self._factories[service_type] = factory
     
-    @classmethod
-    def reset(cls) -> None:
+    def reset(self) -> None:
         """
         重置容器（用于测试清理）
         
         清除所有已创建的实例和注册的工厂。
         """
         logger.debug("重置依赖注入容器")
-        cls._instances.clear()
-        cls._factories.clear()
+        self._instances.clear()
+        self._factories.clear()
     
-    @classmethod
-    def has(cls, service_type: Type) -> bool:
+    def has(self, service_type: Type) -> bool:
         """
         检查是否已有实例
         
@@ -135,19 +133,29 @@ class Container:
         Returns:
             是否存在实例
         """
-        return service_type in cls._instances
+        return service_type in self._instances
     
-    @classmethod
-    def remove(cls, service_type: Type) -> None:
+    def remove(self, service_type: Type) -> None:
         """
         移除指定服务实例
         
         Args:
             service_type: 服务类型
         """
-        if service_type in cls._instances:
-            del cls._instances[service_type]
+        if service_type in self._instances:
+            del self._instances[service_type]
             logger.debug(f"移除服务实例: {service_type.__name__}")
+
+
+# ============================================================================
+# 模块级默认容器（单例）
+# ============================================================================
+
+Container = _Container()
+"""默认的全局容器实例，所有便捷函数和测试 mock 注入都通过此实例操作。
+
+如需创建独立容器（如测试隔离），可使用 _Container() 构造新实例。
+"""
 
 
 # ============================================================================

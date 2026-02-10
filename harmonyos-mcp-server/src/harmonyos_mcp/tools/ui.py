@@ -99,6 +99,7 @@ def click_element(
 
 
 @mcp_tool(category="ui")
+@ToolBase.handle_tool_error('LONG_PRESS_ERROR')
 def long_press_element(
     device_id: str = None,
     x: int = None,
@@ -121,49 +122,45 @@ def long_press_element(
     Returns:
         操作结果
     """
-    try:
-        ok, device = ToolBase.get_device_id(device_id)
-        if not ok:
-            return device
+    ok, device = ToolBase.get_device_id(device_id)
+    if not ok:
+        return device
 
-        ui_ops = get_ui_operations()
+    ui_ops = get_ui_operations()
 
-        # 如果提供了坐标，直接长按
-        if x is not None and y is not None:
-            return ui_ops.long_click(device, x, y)
+    # 如果提供了坐标，直接长按
+    if x is not None and y is not None:
+        return ui_ops.long_click(device, x, y)
 
-        # 查找元素
-        if text or element_type:
-            result = ui_ops.find_element(
-                device, text=text, element_type=element_type, bundle_name=bundle_name
-            )
-            if not result['success']:
-                return result
-            if not result['elements']:
-                return {
-                    'success': False,
-                    'error': '未找到匹配的元素',
-                    'error_code': 'ELEMENT_NOT_FOUND'
-                }
+    # 查找元素
+    if text or element_type:
+        result = ui_ops.find_element(
+            device, text=text, element_type=element_type, bundle_name=bundle_name
+        )
+        if not result['success']:
+            return result
+        if not result['elements']:
+            return {
+                'success': False,
+                'error': '未找到匹配的元素',
+                'error_code': 'ELEMENT_NOT_FOUND'
+            }
 
-            element = result['elements'][0]
-            if 'x' not in element or 'y' not in element:
-                return {
-                    'success': False,
-                    'error': '元素没有有效的坐标信息',
-                    'error_code': 'INVALID_ELEMENT_COORDS'
-                }
+        element = result['elements'][0]
+        if 'x' not in element or 'y' not in element:
+            return {
+                'success': False,
+                'error': '元素没有有效的坐标信息',
+                'error_code': 'INVALID_ELEMENT_COORDS'
+            }
 
-            return ui_ops.long_click(device, element['x'], element['y'])
+        return ui_ops.long_click(device, element['x'], element['y'])
 
-        return {
-            'success': False,
-            'error': '必须提供坐标或查找条件',
-            'error_code': 'MISSING_PARAMS'
-        }
-
-    except Exception as e:
-        return ToolBase.wrap_error(e, 'LONG_PRESS_ERROR')
+    return {
+        'success': False,
+        'error': '必须提供坐标或查找条件',
+        'error_code': 'MISSING_PARAMS'
+    }
 
 
 @mcp_tool(category="ui")

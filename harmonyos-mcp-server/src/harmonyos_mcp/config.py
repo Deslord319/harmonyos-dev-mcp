@@ -18,6 +18,9 @@ from loguru import logger
 class Config:
     """MCP Server配置类"""
 
+    # 初始化标记
+    _initialized: bool = False
+
     # ========================================================================
     # 环境变量配置（优先级最高）
     # ========================================================================
@@ -154,8 +157,15 @@ class Config:
         return None
 
     @classmethod
+    def ensure_init(cls):
+        """确保配置已初始化（懒加载入口）"""
+        if not cls._initialized:
+            cls.init()
+
+    @classmethod
     def init(cls):
         """初始化配置（自动检测工具路径）"""
+        cls._initialized = True
 
         # 1. 检测 DevEco Studio 路径
         # 优先级: DEVECO_STUDIO_PATH 环境变量 > "DevEco Studio" 环境变量 > 自动检测
@@ -266,9 +276,6 @@ class Config:
             "platform": platform.system(),
         }
 
-
-# 初始化配置
-Config.init()
 
 
 class LogSecurityConfig:
