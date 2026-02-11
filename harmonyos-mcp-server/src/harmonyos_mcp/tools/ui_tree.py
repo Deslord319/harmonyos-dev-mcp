@@ -224,6 +224,13 @@ def list_windows(device_id: str = None) -> ListWindowsResult:
     result['device_id'] = device_id
     if 'windows' not in result:
         result['windows'] = []
+    
+    # 规范化窗口数据，使其符合 WindowInfo schema
+    for w in result['windows']:
+        w.setdefault('bundle_name', '')
+        w.setdefault('is_visible', False)
+        w.setdefault('bounds', {'left': 0, 'top': 0, 'right': 0, 'bottom': 0})
+    
     if 'count' not in result:
         result['count'] = len(result['windows'])
 
