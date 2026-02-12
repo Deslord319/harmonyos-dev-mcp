@@ -2,8 +2,11 @@
 重试装饰器模块
 
 提供带指数退避的重试机制，支持异常捕获和返回值检测两种重试策略。
+支持 async/sync 双模式。
 """
+import asyncio
 import functools
+import inspect
 import time
 from typing import Tuple, Type, Callable, Optional
 
@@ -19,7 +22,7 @@ def retry(
     should_retry: Optional[Callable] = None,
 ):
     """
-    带指数退避的重试装饰器
+    带指数退避的重试装饰器（支持 async/sync）
 
     支持两种重试触发方式：
     1. 异常捕获：捕获指定类型的异常后重试
@@ -43,69 +46,134 @@ def retry(
         @retry(should_retry=lambda r: not r.get('success'))
         def execute_cmd():
             ...
+
+        # 异步函数重试
+        @retry(exceptions=(ConnectionError,))
+        async def async_fetch():
+            ...
     """
     def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            from ..config import Config
+        if inspect.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                from ..config import Config
 
-            _max_retries = max_retries if max_retries is not None else Config.MAX_RETRIES
-            _delay = delay if delay is not None else Config.RETRY_DELAY
+                _max_retries = max_retries if max_retries is not None else Config.MAX_RETRIES
+                _delay = delay if delay is not None else Config.RETRY_DELAY
 
-            last_exception = None
-            last_result = None
-            current_delay = _delay
+                last_exception = None
+                last_result = None
+                current_delay = _delay
 
-            for attempt in range(_max_retries + 1):
-                try:
-                    result = func(*args, **kwargs)
+                for attempt in range(_max_retries + 1):
+                    try:
+                        result = await func(*args, **kwargs)
 
-                    # 返回值检测重试
-                    if should_retry and attempt < _max_retries and should_retry(result):
-                        last_result = result
-                        logger.warning(
-                            f"[Retry] {func.__name__} 第{attempt + 1}/{_max_retries + 1}次尝试"
-                            f"返回需重试的结果, {current_delay:.1f}s 后重试"
-                        )
-                        time.sleep(current_delay)
-                        current_delay = min(current_delay * backoff, max_delay)
-                        continue
+                        # 返回值检测重试
+                        if should_retry and attempt < _max_retries and should_retry(result):
+                            last_result = result
+                            logger.warning(
+                                f"[Retry] {func.__name__} 第{attempt + 1}/{_max_retries + 1}次尝试"
+                                f"返回需重试的结果, {current_delay:.1f}s 后重试"
+                            )
+                            await asyncio.sleep(current_delay)
+                            current_delay = min(current_delay * backoff, max_delay)
+                            continue
 
-                    # 成功（首次或重试后成功）
-                    if attempt > 0:
-                        logger.info(
-                            f"[Retry] {func.__name__} 在第{attempt + 1}次尝试后成功"
-                        )
-                    return result
+                        if attempt > 0:
+                            logger.info(
+                                f"[Retry] {func.__name__} 在第{attempt + 1}次尝试后成功"
+                            )
+                        return result
 
-                except exceptions as e:
-                    last_exception = e
-                    if attempt < _max_retries:
-                        logger.warning(
-                            f"[Retry] {func.__name__} 第{attempt + 1}/{_max_retries + 1}次尝试"
-                            f"失败: {e}, {current_delay:.1f}s 后重试"
-                        )
-                        time.sleep(current_delay)
-                        current_delay = min(current_delay * backoff, max_delay)
-                    else:
-                        logger.error(
-                            f"[Retry] {func.__name__} 在{_max_retries + 1}次尝试后仍失败: {e}"
-                        )
-                        raise
+                    except exceptions as e:
+                        last_exception = e
+                        if attempt < _max_retries:
+                            logger.warning(
+                                f"[Retry] {func.__name__} 第{attempt + 1}/{_max_retries + 1}次尝试"
+                                f"失败: {e}, {current_delay:.1f}s 后重试"
+                            )
+                            await asyncio.sleep(current_delay)
+                            current_delay = min(current_delay * backoff, max_delay)
+                        else:
+                            logger.error(
+                                f"[Retry] {func.__name__} 在{_max_retries + 1}次尝试后仍失败: {e}"
+                            )
+                            raise
 
-            # should_retry 耗尽重试次数后返回最后的结果
-            if last_result is not None:
-                logger.error(
-                    f"[Retry] {func.__name__} 在{_max_retries + 1}次尝试后"
-                    f"仍返回需重试的结果"
-                )
-                return last_result
+                if last_result is not None:
+                    logger.error(
+                        f"[Retry] {func.__name__} 在{_max_retries + 1}次尝试后"
+                        f"仍返回需重试的结果"
+                    )
+                    return last_result
 
-            # 不应到达此处，但作为安全兜底
-            if last_exception:
-                raise last_exception
+                if last_exception:
+                    raise last_exception
 
-        return wrapper
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                from ..config import Config
+
+                _max_retries = max_retries if max_retries is not None else Config.MAX_RETRIES
+                _delay = delay if delay is not None else Config.RETRY_DELAY
+
+                last_exception = None
+                last_result = None
+                current_delay = _delay
+
+                for attempt in range(_max_retries + 1):
+                    try:
+                        result = func(*args, **kwargs)
+
+                        # 返回值检测重试
+                        if should_retry and attempt < _max_retries and should_retry(result):
+                            last_result = result
+                            logger.warning(
+                                f"[Retry] {func.__name__} 第{attempt + 1}/{_max_retries + 1}次尝试"
+                                f"返回需重试的结果, {current_delay:.1f}s 后重试"
+                            )
+                            time.sleep(current_delay)
+                            current_delay = min(current_delay * backoff, max_delay)
+                            continue
+
+                        # 成功（首次或重试后成功）
+                        if attempt > 0:
+                            logger.info(
+                                f"[Retry] {func.__name__} 在第{attempt + 1}次尝试后成功"
+                            )
+                        return result
+
+                    except exceptions as e:
+                        last_exception = e
+                        if attempt < _max_retries:
+                            logger.warning(
+                                f"[Retry] {func.__name__} 第{attempt + 1}/{_max_retries + 1}次尝试"
+                                f"失败: {e}, {current_delay:.1f}s 后重试"
+                            )
+                            time.sleep(current_delay)
+                            current_delay = min(current_delay * backoff, max_delay)
+                        else:
+                            logger.error(
+                                f"[Retry] {func.__name__} 在{_max_retries + 1}次尝试后仍失败: {e}"
+                            )
+                            raise
+
+                # should_retry 耗尽重试次数后返回最后的结果
+                if last_result is not None:
+                    logger.error(
+                        f"[Retry] {func.__name__} 在{_max_retries + 1}次尝试后"
+                        f"仍返回需重试的结果"
+                    )
+                    return last_result
+
+                # 不应到达此处，但作为安全兜底
+                if last_exception:
+                    raise last_exception
+
+            return wrapper
     return decorator
 
 

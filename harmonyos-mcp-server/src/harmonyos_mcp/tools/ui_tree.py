@@ -3,6 +3,7 @@ UI 树工具
 
 提供 UI 组件树获取和窗口列表查询功能。
 """
+import asyncio
 import json
 from typing import Optional
 from loguru import logger
@@ -119,7 +120,7 @@ def _iterative_deep_copy(obj):
 @mcp_tool(category="ui_tree")
 @ToolBase.handle_tool_error('GET_UI_TREE_ERROR', window_id=0, ui_tree={}, node_count=0)
 @ToolBase.with_device(window_id=0, ui_tree={}, node_count=0)
-def get_ui_tree(
+async def get_ui_tree(
     device_id: str = None,
     bundle_name: str = None,
     window_id: int = None
@@ -143,7 +144,7 @@ def get_ui_tree(
     if not target_window_id:
         if bundle_name:
             # 根据包名查找窗口
-            target_window_id = hdc.find_window_by_bundle(device_id, bundle_name)
+            target_window_id = await asyncio.to_thread(hdc.find_window_by_bundle, device_id, bundle_name)
             if not target_window_id:
                 return {
                     'success': False,
@@ -154,7 +155,7 @@ def get_ui_tree(
                 }
         else:
             # 获取窗口列表，使用第一个可见窗口
-            window_list = hdc.get_window_list(device_id)
+            window_list = await asyncio.to_thread(hdc.get_window_list, device_id)
             if not window_list['success'] or not window_list['windows']:
                 return {
                     'success': False,
@@ -175,7 +176,7 @@ def get_ui_tree(
                 target_window_id = window_list['windows'][0]['window_id']
 
     # 获取UI树原始数据
-    ui_tree_result = hdc.get_ui_tree_raw(device_id, target_window_id)
+    ui_tree_result = await asyncio.to_thread(hdc.get_ui_tree_raw, device_id, target_window_id)
 
     if not ui_tree_result['success']:
         return {
@@ -207,7 +208,7 @@ def get_ui_tree(
 @mcp_tool(category="ui_tree")
 @ToolBase.handle_tool_error('LIST_WINDOWS_ERROR', windows=[], count=0)
 @ToolBase.with_device(windows=[], count=0)
-def list_windows(device_id: str = None) -> ListWindowsResult:
+async def list_windows(device_id: str = None) -> ListWindowsResult:
     """
     列出设备上的所有窗口
 
@@ -218,7 +219,7 @@ def list_windows(device_id: str = None) -> ListWindowsResult:
         窗口列表
     """
     hdc = get_hdc()
-    result = hdc.get_window_list(device_id)
+    result = await asyncio.to_thread(hdc.get_window_list, device_id)
     
     # 确保必需字段存在
     result['device_id'] = device_id

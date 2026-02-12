@@ -3,6 +3,7 @@
 
 提供设备列表、hilog 文件获取等功能。
 """
+import asyncio
 from typing import Optional
 from loguru import logger
 
@@ -14,7 +15,7 @@ from .registry import mcp_tool
 
 @mcp_tool(category="device")
 @ToolBase.handle_tool_error('DEVICE_LIST_ERROR', devices=[], count=0)
-def list_devices() -> ListDevicesResult:
+async def list_devices() -> ListDevicesResult:
     """
     列出所有连接的HarmonyOS设备和模拟器
     
@@ -25,7 +26,7 @@ def list_devices() -> ListDevicesResult:
         - count: 设备数量
     """
     hdc = get_hdc()
-    devices = hdc.list_devices()
+    devices = await asyncio.to_thread(hdc.list_devices)
     
     return {
         'success': True,
@@ -37,7 +38,8 @@ def list_devices() -> ListDevicesResult:
 @mcp_tool(category="device")
 @ToolBase.handle_tool_error('HILOG_RECEIVE_ERROR', files=[], total_size=0)
 @ToolBase.with_device(files=[], total_size=0)
-def hilog_receive(device_id: str = None, local_dir: str = None) -> HilogReceiveResult:
+@ToolBase.validate_params(local_dir=['path'])
+async def hilog_receive(device_id: str = None, local_dir: str = None) -> HilogReceiveResult:
     """
     从HarmonyOS设备的 /data/log/hilog 目录中获取所有 hilog 日志文件和 dict 解密文件
 
@@ -49,7 +51,7 @@ def hilog_receive(device_id: str = None, local_dir: str = None) -> HilogReceiveR
         包含获取结果、文件列表和统计信息的字典
     """
     hdc = get_hdc()
-    result = hdc.hilog_receive(device_id, local_dir)
+    result = await asyncio.to_thread(hdc.hilog_receive, device_id, local_dir)
     
     # 添加设备ID到结果
     result['device_id'] = device_id

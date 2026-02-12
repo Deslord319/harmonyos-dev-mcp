@@ -16,7 +16,24 @@ from harmonyos_mcp.utils.retry import retry, is_transient_hdc_failure
 
 class HdcWrapper:
     """HarmonyOS Device Connector (hdc) 工具封装类"""
-    
+
+    # Shell 命令白名单：仅允许执行以下命令
+    SHELL_COMMAND_WHITELIST = [
+        'ls', 'cat', 'pidof', 'ps', 'cp', 'rm', 'mkdir',
+        'hilog', 'bm', 'aa', 'param', 'dumpsys', 'hidumper',
+        'uitest', 'snapshot_display', 'power-shell',
+        'getprop', 'settings', 'wm', 'input',
+        'chmod', 'chown', 'stat', 'df', 'du',
+        'echo', 'grep', 'find', 'head', 'tail', 'wc',
+        'date', 'id', 'whoami', 'uname',
+    ]
+
+    # 危险字符模式：禁止命令中包含以下字符序列
+    SHELL_DANGEROUS_PATTERNS = ['&&', '||', '`', '$(', ';', '\n', '\r']
+
+    # 管道操作仅允许以下命令
+    PIPE_ALLOWED_COMMANDS = ['ls', 'ps', 'cat', 'grep', 'hilog', 'dumpsys']
+
     def __init__(self, hdc_path: Optional[str] = None):
         """
         初始化hdc包装器
@@ -203,9 +220,54 @@ class HdcWrapper:
             logger.error(f"应用卸载失败: {result['stderr']}")
             return False
 
+    def _validate_shell_command(self, command: str) -> None:
+        """
+        校验 shell 命令安全性
+        
+        检查：
+        1. 命令是否在白名单中
+        2. 是否包含危险字符（&&, ||, ``, $() 等）
+        3. 管道操作是否合法
+        
+        Args:
+            command: 待校验的 shell 命令
+            
+        Raises:
+            ValueError: 命令不合法时
+        """
+        stripped = command.strip()
+        if not stripped:
+            raise ValueError("Shell 命令不能为空")
+        
+        # 检查危险模式
+        for pattern in self.SHELL_DANGEROUS_PATTERNS:
+            if pattern in stripped:
+                raise ValueError(
+                    f"Shell 命令包含危险字符 '{pattern}': {command!r}"
+                )
+        
+        # 检查管道
+        if '|' in stripped:
+            parts = [p.strip() for p in stripped.split('|')]
+            for part in parts:
+                cmd_name = part.split()[0] if part.split() else ''
+                if cmd_name not in self.PIPE_ALLOWED_COMMANDS:
+                    raise ValueError(
+                        f"管道命令 '{cmd_name}' 不在允许列表中: {self.PIPE_ALLOWED_COMMANDS}"
+                    )
+            return
+        
+        # 提取主命令（处理 2>/dev/null 等重定向）
+        cmd_name = stripped.split()[0]
+        if cmd_name not in self.SHELL_COMMAND_WHITELIST:
+            raise ValueError(
+                f"Shell 命令 '{cmd_name}' 不在白名单中。"
+                f"允许的命令: {self.SHELL_COMMAND_WHITELIST}"
+            )
+
     def execute_shell(self, device_id: str, command: str, timeout: int = None) -> Dict[str, Any]:
         """
-        在设备上执行Shell命令
+        在设备上执行Shell命令（带白名单校验）
 
         Args:
             device_id: 设备ID
@@ -215,6 +277,9 @@ class HdcWrapper:
         Returns:
             命令执行结果
         """
+        # 安全校验
+        self._validate_shell_command(command)
+
         logger.debug(f"在设备 {device_id} 上执行Shell命令: {command}" + (f", 超时: {timeout}s" if timeout else ""))
         result = self._execute_command(['-t', device_id, 'shell', command], timeout=timeout)
         return result

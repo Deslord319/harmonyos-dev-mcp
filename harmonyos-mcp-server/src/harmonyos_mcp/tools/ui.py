@@ -3,6 +3,7 @@ UI 操作工具
 
 提供点击、滑动、输入、按键等 UI 自动化操作。
 """
+import asyncio
 from typing import Optional
 from loguru import logger
 
@@ -15,7 +16,7 @@ from .registry import mcp_tool
 @mcp_tool(category="ui")
 @ToolBase.handle_tool_error('CLICK_ERROR', x=0, y=0)
 @ToolBase.with_device(x=0, y=0)
-def click_element(
+async def click_element(
     device_id: str = None,
     x: int = None,
     y: int = None,
@@ -56,14 +57,14 @@ def click_element(
     # 如果提供了坐标，直接点击
     if has_coords:
         if double_click:
-            return ui_ops.double_click(device_id, x, y)
+            return await asyncio.to_thread(ui_ops.double_click, device_id, x, y)
         else:
-            return ui_ops.click(device_id, x, y)
+            return await asyncio.to_thread(ui_ops.click, device_id, x, y)
 
     # 如果提供了text或element_type，先查找元素
     if has_search:
-        result = ui_ops.find_element(
-            device_id, text=text, element_type=element_type, bundle_name=bundle_name
+        result = await asyncio.to_thread(
+            ui_ops.find_element, device_id, text=text, element_type=element_type, bundle_name=bundle_name
         )
         if not result['success']:
             result.update(default_result)
@@ -87,9 +88,9 @@ def click_element(
             }
 
         if double_click:
-            return ui_ops.double_click(device_id, element['x'], element['y'])
+            return await asyncio.to_thread(ui_ops.double_click, device_id, element['x'], element['y'])
         else:
-            return ui_ops.click(device_id, element['x'], element['y'])
+            return await asyncio.to_thread(ui_ops.click, device_id, element['x'], element['y'])
 
     return {
         'success': False,
@@ -102,7 +103,7 @@ def click_element(
 @mcp_tool(category="ui")
 @ToolBase.handle_tool_error('LONG_PRESS_ERROR')
 @ToolBase.with_device()
-def long_press_element(
+async def long_press_element(
     device_id: str = None,
     x: int = None,
     y: int = None,
@@ -128,12 +129,12 @@ def long_press_element(
 
     # 如果提供了坐标，直接长按
     if x is not None and y is not None:
-        return ui_ops.long_click(device_id, x, y)
+        return await asyncio.to_thread(ui_ops.long_click, device_id, x, y)
 
     # 查找元素
     if text or element_type:
-        result = ui_ops.find_element(
-            device_id, text=text, element_type=element_type, bundle_name=bundle_name
+        result = await asyncio.to_thread(
+            ui_ops.find_element, device_id, text=text, element_type=element_type, bundle_name=bundle_name
         )
         if not result['success']:
             return result
@@ -152,7 +153,7 @@ def long_press_element(
                 'error_code': 'INVALID_ELEMENT_COORDS'
             }
 
-        return ui_ops.long_click(device_id, element['x'], element['y'])
+        return await asyncio.to_thread(ui_ops.long_click, device_id, element['x'], element['y'])
 
     return {
         'success': False,
@@ -164,7 +165,7 @@ def long_press_element(
 @mcp_tool(category="ui")
 @ToolBase.handle_tool_error('SWIPE_ERROR', from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
 @ToolBase.with_device(from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
-def swipe(
+async def swipe(
     device_id: str = None,
     from_x: int = None,
     from_y: int = None,
@@ -200,11 +201,11 @@ def swipe(
 
     # 如果提供了方向，使用方向滑动
     if direction:
-        return ui_ops.swipe_direction(device_id, direction, speed)
+        return await asyncio.to_thread(ui_ops.swipe_direction, device_id, direction, speed)
 
     # 如果提供了坐标，使用坐标滑动
     if all(v is not None for v in [from_x, from_y, to_x, to_y]):
-        return ui_ops.swipe(device_id, from_x, from_y, to_x, to_y, speed)
+        return await asyncio.to_thread(ui_ops.swipe, device_id, from_x, from_y, to_x, to_y, speed)
 
     return {
         'success': False,
@@ -217,7 +218,7 @@ def swipe(
 @mcp_tool(category="ui")
 @ToolBase.handle_tool_error('INPUT_TEXT_ERROR', text='', x=0, y=0)
 @ToolBase.with_device(text='', x=0, y=0)
-def input_text(
+async def input_text(
     device_id: str = None,
     x: int = None,
     y: int = None,
@@ -259,12 +260,12 @@ def input_text(
 
     # 如果提供了坐标，直接输入
     if x is not None and y is not None:
-        return ui_ops.input_text(device_id, x, y, text)
+        return await asyncio.to_thread(ui_ops.input_text, device_id, x, y, text)
 
     # 查找元素
     if element_text or element_type:
-        result = ui_ops.find_element(
-            device_id, text=element_text, element_type=element_type, bundle_name=bundle_name
+        result = await asyncio.to_thread(
+            ui_ops.find_element, device_id, text=element_text, element_type=element_type, bundle_name=bundle_name
         )
         if not result['success']:
             result.update(default_result)
@@ -286,7 +287,7 @@ def input_text(
                 **default_result
             }
 
-        return ui_ops.input_text(device_id, element['x'], element['y'], text)
+        return await asyncio.to_thread(ui_ops.input_text, device_id, element['x'], element['y'], text)
 
     return {
         'success': False,
@@ -299,7 +300,7 @@ def input_text(
 @mcp_tool(category="ui")
 @ToolBase.handle_tool_error('PRESS_KEY_ERROR', key='')
 @ToolBase.with_device(key='')
-def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
+async def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
     """
     模拟按键操作
 
@@ -319,13 +320,13 @@ def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
         }
 
     ui_ops = get_ui_operations()
-    return ui_ops.press_key(device_id, key)
+    return await asyncio.to_thread(ui_ops.press_key, device_id, key)
 
 
 @mcp_tool(category="ui")
 @ToolBase.handle_tool_error('FIND_ELEMENT_ERROR', elements=[], count=0)
 @ToolBase.with_device(elements=[], count=0)
-def find_element(
+async def find_element(
     device_id: str = None,
     text: str = None,
     element_type: str = None,
@@ -354,12 +355,9 @@ def find_element(
         }
 
     ui_ops = get_ui_operations()
-    result = ui_ops.find_element(
-        device_id,
-        text=text,
-        element_type=element_type,
-        element_id=element_id,
-        bundle_name=bundle_name
+    result = await asyncio.to_thread(
+        ui_ops.find_element, device_id,
+        text=text, element_type=element_type, element_id=element_id, bundle_name=bundle_name
     )
     
     # 确保必需字段存在

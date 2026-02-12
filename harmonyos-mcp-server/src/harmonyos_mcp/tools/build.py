@@ -3,6 +3,7 @@
 
 提供应用构建、安装、运行、卸载等功能。
 """
+import asyncio
 import time
 from pathlib import Path
 from typing import Optional
@@ -16,7 +17,7 @@ from .registry import mcp_tool
 
 
 @mcp_tool(category="build")
-def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
+async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
     """
     构建HarmonyOS应用
 
@@ -35,7 +36,7 @@ def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
 
     try:
         hvigor = HvigorWrapper(project_path)
-        result = hvigor.build_hap(build_mode=build_mode)
+        result = await asyncio.to_thread(hvigor.build_hap, build_mode=build_mode)
         elapsed = time.time() - start_time
 
         response: BuildResult = {
@@ -91,7 +92,7 @@ def _extract_build_error(project_path: str) -> Optional[str]:
 @mcp_tool(category="build")
 @ToolBase.handle_tool_error('INSTALL_ERROR', hap_path='')
 @ToolBase.with_device(hap_path='')
-def install_app(hap_path: str, device_id: str = None) -> InstallResult:
+async def install_app(hap_path: str, device_id: str = None) -> InstallResult:
     """
     安装应用到设备
 
@@ -106,7 +107,7 @@ def install_app(hap_path: str, device_id: str = None) -> InstallResult:
         - hap_path: HAP包路径
     """
     hdc = get_hdc()
-    success = hdc.install_app(device_id, hap_path)
+    success = await asyncio.to_thread(hdc.install_app, device_id, hap_path)
 
     return {
         'success': success,
@@ -118,7 +119,7 @@ def install_app(hap_path: str, device_id: str = None) -> InstallResult:
 @mcp_tool(category="build")
 @ToolBase.handle_tool_error('RUN_APP_ERROR', bundle_name='', ability_name='', module_name='entry', auto_detected=False, command_success=False, window_found=False, window=None)
 @ToolBase.with_device(bundle_name='', ability_name='', module_name='entry', auto_detected=False, command_success=False, window_found=False, window=None)
-def run_app(
+async def run_app(
     bundle_name: str,
     device_id: str = None,
     ability_name: str = None,
@@ -148,11 +149,11 @@ def run_app(
     hdc = get_hdc()
 
     # 解析 Ability 信息
-    final_ability, final_module, auto_detected = _resolve_ability(
-        hdc, device_id, bundle_name, ability_name, module_name, auto_detect
+    final_ability, final_module, auto_detected = await asyncio.to_thread(
+        _resolve_ability, hdc, device_id, bundle_name, ability_name, module_name, auto_detect
     )
 
-    start_result = hdc.start_app(device_id, bundle_name, final_ability, final_module)
+    start_result = await asyncio.to_thread(hdc.start_app, device_id, bundle_name, final_ability, final_module)
 
     result = {
         'success': start_result['success'],
@@ -213,7 +214,7 @@ def _resolve_ability(hdc, device_id: str, bundle_name: str,
 @mcp_tool(category="build")
 @ToolBase.handle_tool_error('UNINSTALL_ERROR', bundle_name='')
 @ToolBase.with_device(bundle_name='')
-def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
+async def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
     """
     卸载应用
 
@@ -225,7 +226,7 @@ def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
         卸载结果
     """
     hdc = get_hdc()
-    success = hdc.uninstall_app(device_id, bundle_name)
+    success = await asyncio.to_thread(hdc.uninstall_app, device_id, bundle_name)
 
     return {
         'success': success,

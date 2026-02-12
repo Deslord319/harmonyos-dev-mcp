@@ -3,6 +3,7 @@
 
 提供应用包列表、Ability 查询等功能。
 """
+import asyncio
 from typing import Optional
 from loguru import logger
 
@@ -15,7 +16,7 @@ from .registry import mcp_tool
 @mcp_tool(category="packages")
 @ToolBase.handle_tool_error('LIST_PACKAGES_ERROR', packages=[], count=0)
 @ToolBase.with_device(packages=[], count=0)
-def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesResult:
+async def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesResult:
     """
     列出设备上已安装的应用包
 
@@ -31,7 +32,7 @@ def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesRes
         list_packages()  -> 列出所有已安装的包
     """
     hdc = get_hdc()
-    result = hdc.list_packages(device_id, keyword)
+    result = await asyncio.to_thread(hdc.list_packages, device_id, keyword)
     result['device_id'] = device_id
     
     # 确保必需字段存在
@@ -46,7 +47,7 @@ def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesRes
 @mcp_tool(category="packages")
 @ToolBase.handle_tool_error('GET_ABILITIES_ERROR', bundle_name='', abilities=[], modules=[], main_ability=None, ability_count=0)
 @ToolBase.with_device(bundle_name='', abilities=[], modules=[], main_ability=None, ability_count=0)
-def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbilitiesResult:
+async def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbilitiesResult:
     """
     获取指定包的所有Abilities
 
@@ -61,7 +62,7 @@ def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbi
         get_package_abilities("com.huawei.hmos.settings")
     """
     hdc = get_hdc()
-    result = hdc.get_package_info(device_id, bundle_name)
+    result = await asyncio.to_thread(hdc.get_package_info, device_id, bundle_name)
 
     if result['success']:
         return {
@@ -86,7 +87,7 @@ def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbi
 @mcp_tool(category="packages")
 @ToolBase.handle_tool_error('GET_MAIN_ABILITY_ERROR', ability_name='', module_name='', bundle_name='')
 @ToolBase.with_device(ability_name='', module_name='', bundle_name='')
-def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResult:
+async def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResult:
     """
     获取指定包的主入口Ability
 
@@ -102,7 +103,7 @@ def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResu
         -> {"ability_name": "MainAbility", "module_name": "entry"}
     """
     hdc = get_hdc()
-    result = hdc.get_main_ability(device_id, bundle_name)
+    result = await asyncio.to_thread(hdc.get_main_ability, device_id, bundle_name)
     result['device_id'] = device_id
     
     # 确保必需字段存在

@@ -3,6 +3,7 @@
 
 提供日志获取、保存快照、结构化分析等功能。
 """
+import asyncio
 import os
 import zipfile
 from datetime import datetime, timedelta
@@ -154,7 +155,7 @@ def _fetch_from_historical_files(
     """
     从设备历史 hilog 落盘文件中获取日志
     
-    流程: list_hilog_files → pull_hilog_files → hilogtool 解密 → 解析过滤
+    流程: list_hilog_files -> pull_hilog_files -> hilogtool 解密 -> 解析过滤
     """
     hdc = get_hdc()
     hilogtool = get_hilogtool()
@@ -216,9 +217,6 @@ def _fetch_from_historical_files(
     os.makedirs(local_dir, exist_ok=True)
     
     # 5. 先按时间范围过滤文件列表，再按与目标时间的距离排序，最后限制数量
-    #    hilog 文件的 timestamp 是文件创建/轮转时间，文件内容可能覆盖此前一段时间的日志
-    #    因此向前扩展 1 小时容差，确保不会遗漏包含目标时间段日志的文件
-    #    排除 hilog_diag.*（诊断文件）和 hilog_dict.*（解密字典），它们不是日志文件
     all_files = [
         f for f in list_result['files']
         if not f['name'].startswith('hilog_diag.')
@@ -231,23 +229,19 @@ def _fetch_from_historical_files(
         for f in all_files:
             fts = f.get('timestamp_dt')
             if not fts:
-                matched_files.append(f)  # 无法判断时间的文件也保留
+                matched_files.append(f)
                 continue
-            # 文件时间戳在 [start - 1h, end + 1h] 范围内视为可能包含目标日志
             if start_dt and fts < (start_dt - buffer):
                 continue
             if end_dt and fts > (end_dt + buffer):
                 continue
             matched_files.append(f)
-        # 按与目标时间范围中心点的距离排序，取最近的5个文件
-        # 确保优先拉取最可能包含目标时间段日志的文件
-        # 无时间戳的文件排到末尾（使用 timedelta.max 作为距离）
         target_center = start_dt
         if start_dt and end_dt:
             target_center = start_dt + (end_dt - start_dt) / 2
         elif end_dt:
             target_center = end_dt
-        max_distance = timedelta(days=36500)  # 无时间戳文件排末尾
+        max_distance = timedelta(days=36500)
         matched_files.sort(key=lambda f: abs(f['timestamp_dt'] - target_center) if f.get('timestamp_dt') else max_distance)
         files_to_pull = matched_files[:5]
     else:
@@ -270,7 +264,7 @@ def _fetch_from_historical_files(
     
     logger.info(f"匹配到 {len(files_to_pull)} 个历史日志文件: {[f['name'] for f in files_to_pull]}")
     
-    # 6. 拉取文件（不再传时间过滤，因为已在上面过滤）
+    # 6. 拉取文件
     pull_result = hdc.pull_hilog_files(
         device,
         files_to_pull,
@@ -313,7 +307,6 @@ def _fetch_from_historical_files(
         if parse_result['success']:
             logs = parse_result.get('logs', [])
             
-            # 检查是否有 OpenUuidFile fail 错误
             for line in logs[:10]:
                 if 'OpenUuidFile fail' in line:
                     logger.warning("hilogtool 输出包含 OpenUuidFile fail 错误，dict 文件可能无效")
@@ -399,12 +392,12 @@ def _logs_fetch_impl(
     seconds: int = None
 ) -> dict:
     """
-    日志获取的内部实现（供工具函数调用）
+    日志获取的内部实现（同步，供 asyncio.to_thread 调用）
 
     Args:
         package_name: 应用包名，如果指定则自动获取该应用的PID进行过滤
     """
-    # 归一化 level 参数：支持 'Error'→'E', 'Warning'→'W' 等写法
+    # 归一化 level 参数：支持 'Error'->'E', 'Warning'->'W' 等写法
     level = LogParser.normalize_level(level) or level
 
     # 构建过滤配置（用于所有返回路径）
@@ -574,7 +567,7 @@ def _build_time_range(seconds: int, start_time: str, end_time: str) -> Optional[
 
 
 @mcp_tool(category="logs")
-def logs_fetch(
+async def logs_fetch(
     device_id: str = None,
     lines: int = 100,
     level: str = None,
@@ -604,7 +597,8 @@ def logs_fetch(
     Returns:
         包含日志内容、过滤信息和统计的字典
     """
-    return _logs_fetch_impl(
+    return await asyncio.to_thread(
+        _logs_fetch_impl,
         device_id=device_id,
         lines=lines,
         level=level,
@@ -619,7 +613,7 @@ def logs_fetch(
 
 
 @mcp_tool(category="logs")
-def logs_save_snapshot(
+async def logs_save_snapshot(
     device_id: str = None,
     output_path: str = None,
     lines: int = 1000,
@@ -651,89 +645,92 @@ def logs_save_snapshot(
     Returns:
         保存结果，包含文件路径和统计信息
     """
-    # 默认值，用于错误返回
-    default_result = {
-        'saved_path': '',
-        'file_size': 0,
-        'file_size_human': '0 B',
-        'log_count': 0,
-        'truncated': False
-    }
-    
-    try:
-        # 先获取日志
-        fetch_result = _logs_fetch_impl(
-            device_id=device_id,
-            lines=lines,
-            level=level,
-            tag=tag,
-            keyword=keyword,
-            package_name=package_name,
-            seconds=seconds,
-            start_time=start_time,
-            end_time=end_time
-        )
-
-        if not fetch_result['success']:
-            # 移除 LogsFetchResult 特有的字段（LogsSaveResult 不需要）
-            fetch_result.pop('filters_applied', None)
-            fetch_result.pop('summary', None)
-            fetch_result.pop('logs', None)
-            fetch_result.pop('total_lines', None)
-            fetch_result.update(default_result)
-            return fetch_result
-
-        logs = fetch_result.get('logs', [])
-        if not logs:
-            return {
-                'success': False,
-                'device_id': fetch_result.get('device_id', ''),
-                'error': '没有日志可保存',
-                'error_code': 'NO_LOGS',
-                **default_result
-            }
-
-        # 确定输出路径
-        if not output_path:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_path = f"./hm_logs/hilog_snapshot_{timestamp}.txt"
-
-        # 验证路径白名单
-        valid, result_path = LogSecurityConfig.validate_save_path(output_path)
-        if not valid:
-            return {
-                'success': False,
-                'device_id': fetch_result.get('device_id', ''),
-                'error': result_path,
-                'error_code': 'PATH_NOT_ALLOWED',
-                **default_result
-            }
-
-        # 确保目录存在
-        output_dir = os.path.dirname(result_path)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-
-        # 写入文件
-        _write_log_file(result_path, fetch_result, logs, include_analysis)
-
-        # 获取文件大小
-        file_size = os.path.getsize(result_path)
-
-        return {
-            'success': True,
-            'saved_path': result_path,
-            'file_size': file_size,
-            'file_size_human': _format_file_size(file_size),
-            'log_count': len(logs),
-            'device_id': fetch_result.get('device_id'),
-            'truncated': fetch_result.get('truncated', False)
+    def _save():
+        # 默认值，用于错误返回
+        default_result = {
+            'saved_path': '',
+            'file_size': 0,
+            'file_size_human': '0 B',
+            'log_count': 0,
+            'truncated': False
         }
+        
+        try:
+            # 先获取日志
+            fetch_result = _logs_fetch_impl(
+                device_id=device_id,
+                lines=lines,
+                level=level,
+                tag=tag,
+                keyword=keyword,
+                package_name=package_name,
+                seconds=seconds,
+                start_time=start_time,
+                end_time=end_time
+            )
 
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'LOG_SAVE_ERROR')
-        error_result.update(default_result)
-        return error_result
+            if not fetch_result['success']:
+                fetch_result.pop('filters_applied', None)
+                fetch_result.pop('summary', None)
+                fetch_result.pop('logs', None)
+                fetch_result.pop('total_lines', None)
+                fetch_result.update(default_result)
+                return fetch_result
+
+            logs = fetch_result.get('logs', [])
+            if not logs:
+                return {
+                    'success': False,
+                    'device_id': fetch_result.get('device_id', ''),
+                    'error': '没有日志可保存',
+                    'error_code': 'NO_LOGS',
+                    **default_result
+                }
+
+            # 确定输出路径
+            _output_path = output_path
+            if not _output_path:
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                _output_path = f"./hm_logs/hilog_snapshot_{timestamp}.txt"
+
+            # 验证路径白名单
+            valid, result_path = LogSecurityConfig.validate_save_path(_output_path)
+            if not valid:
+                return {
+                    'success': False,
+                    'device_id': fetch_result.get('device_id', ''),
+                    'error': result_path,
+                    'error_code': 'PATH_NOT_ALLOWED',
+                    **default_result
+                }
+
+            # 确保目录存在
+            output_dir = os.path.dirname(result_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+
+            # 写入文件
+            _write_log_file(result_path, fetch_result, logs, include_analysis)
+
+            # 获取文件大小
+            file_size = os.path.getsize(result_path)
+
+            return {
+                'success': True,
+                'saved_path': result_path,
+                'file_size': file_size,
+                'file_size_human': _format_file_size(file_size),
+                'log_count': len(logs),
+                'device_id': fetch_result.get('device_id'),
+                'truncated': fetch_result.get('truncated', False)
+            }
+
+        except Exception as e:
+            error_result = ToolBase.wrap_error(e, 'LOG_SAVE_ERROR')
+            error_result.update(default_result)
+            return error_result
+
+    return await asyncio.to_thread(_save)
 
 
 def _write_log_file(path: str, fetch_result: dict, logs: List[str], include_analysis: bool):
@@ -785,7 +782,7 @@ def _format_file_size(size: int) -> str:
 
 
 @mcp_tool(category="logs")
-def logs_analyze(
+async def logs_analyze(
     logs: list = None,
     input_file: str = None,
     input_files: list = None,
@@ -825,109 +822,114 @@ def logs_analyze(
     Returns:
         分析结果，包含 success、analysis_type、result 和 evidence_lines
     """
-    # 构建过滤配置
-    filters = _clean_dict({
-        'level': level,
-        'tag': tag,
-        'keyword': keyword,
-        'package_name': package_name
-    })
-    
-    # 默认值，用于错误返回
-    default_result = {
-        'analysis_type': analysis_type,
-        'result': {},
-        'evidence_lines': [],
-        'total_entries_analyzed': 0,
-        'filters_applied': filters
-    }
-    
-    try:
-        # 从文件读取日志（input_file / input_files）
-        if not logs and (input_file or input_files):
-            file_paths = []
-            if input_files:
-                file_paths.extend(input_files)
-            if input_file and input_file not in file_paths:
-                file_paths.append(input_file)
-
-            all_lines = []
-            for fpath in file_paths:
-                if not os.path.isfile(fpath):
-                    error_result = {
-                        'success': False,
-                        'error': f'文件不存在: {fpath}',
-                        'error_code': 'FILE_NOT_FOUND'
-                    }
-                    error_result.update(default_result)
-                    return error_result
-                try:
-                    with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
-                        all_lines.extend(f.read().splitlines())
-                except OSError as e:
-                    error_result = {
-                        'success': False,
-                        'error': f'读取文件失败: {fpath}: {e}',
-                        'error_code': 'FILE_READ_ERROR'
-                    }
-                    error_result.update(default_result)
-                    return error_result
-            logs = all_lines
-
-        # 如果没有提供日志，则从设备获取
-        if not logs:
-            fetch_result = _logs_fetch_impl(
-                device_id=device_id,
-                package_name=package_name,
-                lines=lines,
-                tag=tag
-            )
-
-            if not fetch_result['success']:
-                # 移除 LogsFetchResult 特有的字段（LogsAnalyzeResult 不需要）
-                fetch_result.pop('logs', None)
-                fetch_result.pop('total_lines', None)
-                fetch_result.pop('truncated', None)
-                fetch_result.pop('summary', None)
-                # filters_applied 会被 default_result 覆盖
-                fetch_result.update(default_result)
-                return fetch_result
-
-            logs = fetch_result.get('logs', [])
-            device_id = fetch_result.get('device_id')
-
-        # 解析日志
-        entries = LogParser.parse_logs(logs)
-
-        # 应用过滤
-        if level or tag or keyword:
-            entries = LogParser.filter_entries(
-                entries,
-                level=level,
-                tag=tag,
-                keyword=keyword
-            )
-
-        # 执行分析
-        result = LogParser.analyze(entries, analysis_type, custom_regex)
-
-        # 获取证据行（用于审计）
-        evidence_lines = _extract_evidence_lines(entries, analysis_type)
-
-        return {
-            'success': True,
+    def _analyze():
+        # 构建过滤配置
+        filters = _clean_dict({
+            'level': level,
+            'tag': tag,
+            'keyword': keyword,
+            'package_name': package_name
+        })
+        
+        # 默认值，用于错误返回
+        default_result = {
             'analysis_type': analysis_type,
-            'result': result,
-            'evidence_lines': evidence_lines,
-            'total_entries_analyzed': len(entries),
-            'device_id': device_id or '',
+            'result': {},
+            'evidence_lines': [],
+            'total_entries_analyzed': 0,
             'filters_applied': filters
         }
+        
+        # 使用可变的本地变量
+        _logs = logs
+        _device_id = device_id
+        
+        try:
+            # 从文件读取日志（input_file / input_files）
+            if not _logs and (input_file or input_files):
+                file_paths = []
+                if input_files:
+                    file_paths.extend(input_files)
+                if input_file and input_file not in file_paths:
+                    file_paths.append(input_file)
 
-    except Exception as e:
-        error_result = ToolBase.wrap_error(e, 'LOG_ANALYZE_ERROR')
-        error_result.update(default_result)
-        return error_result
+                all_lines = []
+                for fpath in file_paths:
+                    if not os.path.isfile(fpath):
+                        error_result = {
+                            'success': False,
+                            'error': f'文件不存在: {fpath}',
+                            'error_code': 'FILE_NOT_FOUND'
+                        }
+                        error_result.update(default_result)
+                        return error_result
+                    try:
+                        with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+                            all_lines.extend(f.read().splitlines())
+                    except OSError as e:
+                        error_result = {
+                            'success': False,
+                            'error': f'读取文件失败: {fpath}: {e}',
+                            'error_code': 'FILE_READ_ERROR'
+                        }
+                        error_result.update(default_result)
+                        return error_result
+                _logs = all_lines
+
+            # 如果没有提供日志，则从设备获取
+            if not _logs:
+                fetch_result = _logs_fetch_impl(
+                    device_id=_device_id,
+                    package_name=package_name,
+                    lines=lines,
+                    tag=tag
+                )
+
+                if not fetch_result['success']:
+                    fetch_result.pop('logs', None)
+                    fetch_result.pop('total_lines', None)
+                    fetch_result.pop('truncated', None)
+                    fetch_result.pop('summary', None)
+                    fetch_result.update(default_result)
+                    return fetch_result
+
+                _logs = fetch_result.get('logs', [])
+                _device_id = fetch_result.get('device_id')
+
+            # 解析日志
+            entries = LogParser.parse_logs(_logs)
+
+            # 应用过滤
+            if level or tag or keyword:
+                entries = LogParser.filter_entries(
+                    entries,
+                    level=level,
+                    tag=tag,
+                    keyword=keyword
+                )
+
+            # 执行分析
+            result = LogParser.analyze(entries, analysis_type, custom_regex)
+
+            # 获取证据行（用于审计）
+            evidence_lines = _extract_evidence_lines(entries, analysis_type)
+
+            return {
+                'success': True,
+                'analysis_type': analysis_type,
+                'result': result,
+                'evidence_lines': evidence_lines,
+                'total_entries_analyzed': len(entries),
+                'device_id': _device_id or '',
+                'filters_applied': filters
+            }
+
+        except Exception as e:
+            error_result = ToolBase.wrap_error(e, 'LOG_ANALYZE_ERROR')
+            error_result.update(default_result)
+            return error_result
+
+    return await asyncio.to_thread(_analyze)
 
 
 def _extract_evidence_lines(entries: List[LogEntry], analysis_type: str) -> List[str]:
