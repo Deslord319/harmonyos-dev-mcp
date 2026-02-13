@@ -16,7 +16,7 @@ from .registry import mcp_tool
 @mcp_tool(category="packages")
 @ToolBase.handle_tool_error('LIST_PACKAGES_ERROR', packages=[], count=0)
 @ToolBase.with_device(packages=[], count=0)
-async def list_packages(device_id: str = None, keyword: str = None) -> ListPackagesResult:
+async def list_packages(device_id: Optional[str] = None, keyword: Optional[str] = None) -> ListPackagesResult:
     """
     列出设备上已安装的应用包
 
@@ -47,7 +47,7 @@ async def list_packages(device_id: str = None, keyword: str = None) -> ListPacka
 @mcp_tool(category="packages")
 @ToolBase.handle_tool_error('GET_ABILITIES_ERROR', bundle_name='', abilities=[], modules=[], main_ability=None, ability_count=0)
 @ToolBase.with_device(bundle_name='', abilities=[], modules=[], main_ability=None, ability_count=0)
-async def get_package_abilities(bundle_name: str, device_id: str = None) -> PackageAbilitiesResult:
+async def get_package_abilities(bundle_name: str, device_id: Optional[str] = None) -> PackageAbilitiesResult:
     """
     获取指定包的所有Abilities
 
@@ -87,7 +87,7 @@ async def get_package_abilities(bundle_name: str, device_id: str = None) -> Pack
 @mcp_tool(category="packages")
 @ToolBase.handle_tool_error('GET_MAIN_ABILITY_ERROR', ability_name='', module_name='', bundle_name='')
 @ToolBase.with_device(ability_name='', module_name='', bundle_name='')
-async def get_main_ability(bundle_name: str, device_id: str = None) -> MainAbilityResult:
+async def get_main_ability(bundle_name: str, device_id: Optional[str] = None) -> MainAbilityResult:
     """
     获取指定包的主入口Ability
 

@@ -568,16 +568,16 @@ def _build_time_range(seconds: int, start_time: str, end_time: str) -> Optional[
 
 @mcp_tool(category="logs")
 async def logs_fetch(
-    device_id: str = None,
+    device_id: Optional[str] = None,
     lines: int = 100,
-    level: str = None,
-    tag: str = None,
-    keyword: str = None,
-    pid: int = None,
-    package_name: str = None,
-    start_time: str = None,
-    end_time: str = None,
-    seconds: int = None
+    level: Optional[str] = None,
+    tag: Optional[str] = None,
+    keyword: Optional[str] = None,
+    pid: Optional[int] = None,
+    package_name: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    seconds: Optional[int] = None
 ) -> LogsFetchResult:
     """
     从设备获取日志（支持多种过滤条件）
@@ -614,16 +614,16 @@ async def logs_fetch(
 
 @mcp_tool(category="logs")
 async def logs_save_snapshot(
-    device_id: str = None,
-    output_path: str = None,
+    device_id: Optional[str] = None,
+    output_path: Optional[str] = None,
     lines: int = 1000,
-    level: str = None,
-    tag: str = None,
-    keyword: str = None,
-    package_name: str = None,
-    seconds: int = None,
-    start_time: str = None,
-    end_time: str = None,
+    level: Optional[str] = None,
+    tag: Optional[str] = None,
+    keyword: Optional[str] = None,
+    package_name: Optional[str] = None,
+    seconds: Optional[int] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
     include_analysis: bool = True
 ) -> LogsSaveResult:
     """
@@ -783,17 +783,17 @@ def _format_file_size(size: int) -> str:
 
 @mcp_tool(category="logs")
 async def logs_analyze(
-    logs: list = None,
-    input_file: str = None,
-    input_files: list = None,
-    device_id: str = None,
-    package_name: str = None,
+    logs: Optional[List[str]] = None,
+    input_file: Optional[str] = None,
+    input_files: Optional[List[str]] = None,
+    device_id: Optional[str] = None,
+    package_name: Optional[str] = None,
     analysis_type: str = "summary",
-    level: str = None,
-    tag: str = None,
-    keyword: str = None,
+    level: Optional[str] = None,
+    tag: Optional[str] = None,
+    keyword: Optional[str] = None,
     lines: int = 1000,
-    custom_regex: str = None
+    custom_regex: Optional[str] = None
 ) -> LogsAnalyzeResult:
     """
     对日志进行结构化分析（基于正则匹配，不依赖LLM）

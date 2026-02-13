@@ -92,7 +92,7 @@ def _extract_build_error(project_path: str) -> Optional[str]:
 @mcp_tool(category="build")
 @ToolBase.handle_tool_error('INSTALL_ERROR', hap_path='')
 @ToolBase.with_device(hap_path='')
-async def install_app(hap_path: str, device_id: str = None) -> InstallResult:
+async def install_app(hap_path: str, device_id: Optional[str] = None) -> InstallResult:
     """
     安装应用到设备
 
@@ -121,9 +121,9 @@ async def install_app(hap_path: str, device_id: str = None) -> InstallResult:
 @ToolBase.with_device(bundle_name='', ability_name='', module_name='entry', auto_detected=False, command_success=False, window_found=False, window=None)
 async def run_app(
     bundle_name: str,
-    device_id: str = None,
-    ability_name: str = None,
-    module_name: str = None,
+    device_id: Optional[str] = None,
+    ability_name: Optional[str] = None,
+    module_name: Optional[str] = None,
     auto_detect: bool = True
 ) -> RunAppResult:
     """
@@ -214,7 +214,7 @@ def _resolve_ability(hdc, device_id: str, bundle_name: str,
 @mcp_tool(category="build")
 @ToolBase.handle_tool_error('UNINSTALL_ERROR', bundle_name='')
 @ToolBase.with_device(bundle_name='')
-async def uninstall_app(bundle_name: str, device_id: str = None) -> UninstallResult:
+async def uninstall_app(bundle_name: str, device_id: Optional[str] = None) -> UninstallResult:
     """
     卸载应用
 

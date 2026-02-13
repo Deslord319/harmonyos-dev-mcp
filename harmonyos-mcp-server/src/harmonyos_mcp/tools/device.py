@@ -39,7 +39,7 @@ async def list_devices() -> ListDevicesResult:
 @ToolBase.handle_tool_error('HILOG_RECEIVE_ERROR', files=[], total_size=0)
 @ToolBase.with_device(files=[], total_size=0)
 @ToolBase.validate_params(local_dir=['path'])
-async def hilog_receive(device_id: str = None, local_dir: str = None) -> HilogReceiveResult:
+async def hilog_receive(device_id: Optional[str] = None, local_dir: Optional[str] = None) -> HilogReceiveResult:
     """
     从HarmonyOS设备的 /data/log/hilog 目录中获取所有 hilog 日志文件和 dict 解密文件
 

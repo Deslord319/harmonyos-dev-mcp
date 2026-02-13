@@ -48,7 +48,7 @@ async def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandli
 
 @mcp_tool(category="compile")
 @ToolBase.handle_tool_error('CLONE_LIBRARY_ERROR')
-async def clone_library(repo_url: str, local_path: str, version: str = None) -> CloneLibraryResult:
+async def clone_library(repo_url: str, local_path: str, version: Optional[str] = None) -> CloneLibraryResult:
     """
     拉取三方库代码仓库并切换到指定版本
 
@@ -174,7 +174,7 @@ async def execute_compile_script(script_path: str, timeout: int = 1800) -> Execu
 
 @mcp_tool(category="compile")
 @ToolBase.handle_tool_error('VERIFY_SO_ERROR')
-async def verify_so_output(project_dir: str, output_dir: str = None) -> VerifyOutputResult:
+async def verify_so_output(project_dir: str, output_dir: Optional[str] = None) -> VerifyOutputResult:
     """
     验证编译输出的 .so 文件
 

@@ -114,6 +114,19 @@ class LogParser:
         'timeout': re.compile(r'(?i)(timeout|timed?\s*out)', re.IGNORECASE),
     }
     
+    # 系统噪声日志模式（在错误分析中自动过滤）
+    NOISE_PATTERNS = [
+        re.compile(r'/sys/power/last_sr'),                    # XCollie 看门狗系统文件读取
+        re.compile(r'XCollie.*last_sr'),                      # XCollie 相关
+        re.compile(r'Failed to read file:\s*/sys/'),          # /sys/ 系统目录读取失败
+    ]
+    
+    @classmethod
+    def _is_noise(cls, entry: LogEntry) -> bool:
+        """检查日志条目是否为系统噪声"""
+        text = entry.message or entry.raw_line
+        return any(p.search(text) for p in cls.NOISE_PATTERNS)
+    
     # 关键词提取模式
     KEYWORD_PATTERNS = {
         # 错误码提取: code: 401, error=123, errno:-1
@@ -389,8 +402,12 @@ class LogParser:
         Returns:
             错误分析结果
         """
-        # 筛选 E/F 级别日志
-        errors = [e for e in entries if e.level in ('E', 'F')]
+        # 筛选 E/F 级别日志，排除系统噪声
+        errors = [
+            e for e in entries
+            if e.level in ('E', 'F')
+            and not cls._is_noise(e)
+        ]
         
         # 按 tag 分组
         by_tag = defaultdict(list)
@@ -403,9 +420,11 @@ class LogParser:
                 'level': entry.level
             })
         
-        # 检测特定错误类型
+        # 检测特定错误类型（同样排除噪声）
         error_types = defaultdict(list)
         for entry in entries:
+            if cls._is_noise(entry):
+                continue
             for error_type, pattern in cls.ERROR_PATTERNS.items():
                 if pattern.search(entry.message) or pattern.search(entry.raw_line):
                     error_types[error_type].append({

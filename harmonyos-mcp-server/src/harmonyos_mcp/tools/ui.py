@@ -17,13 +17,13 @@ from .registry import mcp_tool
 @ToolBase.handle_tool_error('CLICK_ERROR', x=0, y=0)
 @ToolBase.with_device(x=0, y=0)
 async def click_element(
-    device_id: str = None,
-    x: int = None,
-    y: int = None,
-    text: str = None,
-    element_type: str = None,
+    device_id: Optional[str] = None,
+    x: Optional[int] = None,
+    y: Optional[int] = None,
+    text: Optional[str] = None,
+    element_type: Optional[str] = None,
     double_click: bool = False,
-    bundle_name: str = None
+    bundle_name: Optional[str] = None
 ) -> dict:
     """
     点击屏幕上的元素
@@ -104,12 +104,12 @@ async def click_element(
 @ToolBase.handle_tool_error('LONG_PRESS_ERROR')
 @ToolBase.with_device()
 async def long_press_element(
-    device_id: str = None,
-    x: int = None,
-    y: int = None,
-    text: str = None,
-    element_type: str = None,
-    bundle_name: str = None
+    device_id: Optional[str] = None,
+    x: Optional[int] = None,
+    y: Optional[int] = None,
+    text: Optional[str] = None,
+    element_type: Optional[str] = None,
+    bundle_name: Optional[str] = None
 ) -> dict:
     """
     长按屏幕上的元素
@@ -166,12 +166,12 @@ async def long_press_element(
 @ToolBase.handle_tool_error('SWIPE_ERROR', from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
 @ToolBase.with_device(from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
 async def swipe(
-    device_id: str = None,
-    from_x: int = None,
-    from_y: int = None,
-    to_x: int = None,
-    to_y: int = None,
-    direction: str = None,
+    device_id: Optional[str] = None,
+    from_x: Optional[int] = None,
+    from_y: Optional[int] = None,
+    to_x: Optional[int] = None,
+    to_y: Optional[int] = None,
+    direction: Optional[str] = None,
     speed: int = 600
 ) -> SwipeResult:
     """
@@ -219,13 +219,13 @@ async def swipe(
 @ToolBase.handle_tool_error('INPUT_TEXT_ERROR', text='', x=0, y=0)
 @ToolBase.with_device(text='', x=0, y=0)
 async def input_text(
-    device_id: str = None,
-    x: int = None,
-    y: int = None,
-    text: str = None,
-    element_text: str = None,
-    element_type: str = None,
-    bundle_name: str = None
+    device_id: Optional[str] = None,
+    x: Optional[int] = None,
+    y: Optional[int] = None,
+    text: Optional[str] = None,
+    element_text: Optional[str] = None,
+    element_type: Optional[str] = None,
+    bundle_name: Optional[str] = None
 ) -> InputTextResult:
     """
     在输入框中输入文本
@@ -300,7 +300,7 @@ async def input_text(
 @mcp_tool(category="ui")
 @ToolBase.handle_tool_error('PRESS_KEY_ERROR', key='')
 @ToolBase.with_device(key='')
-async def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
+async def press_key(device_id: Optional[str] = None, key: Optional[str] = None) -> PressKeyResult:
     """
     模拟按键操作
 
@@ -327,11 +327,11 @@ async def press_key(device_id: str = None, key: str = None) -> PressKeyResult:
 @ToolBase.handle_tool_error('FIND_ELEMENT_ERROR', elements=[], count=0)
 @ToolBase.with_device(elements=[], count=0)
 async def find_element(
-    device_id: str = None,
-    text: str = None,
-    element_type: str = None,
-    element_id: str = None,
-    bundle_name: str = None
+    device_id: Optional[str] = None,
+    text: Optional[str] = None,
+    element_type: Optional[str] = None,
+    element_id: Optional[str] = None,
+    bundle_name: Optional[str] = None
 ) -> FindElementResult:
     """
     在UI树中查找元素

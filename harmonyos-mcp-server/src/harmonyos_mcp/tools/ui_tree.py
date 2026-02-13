@@ -121,9 +121,9 @@ def _iterative_deep_copy(obj):
 @ToolBase.handle_tool_error('GET_UI_TREE_ERROR', window_id=0, ui_tree={}, node_count=0)
 @ToolBase.with_device(window_id=0, ui_tree={}, node_count=0)
 async def get_ui_tree(
-    device_id: str = None,
-    bundle_name: str = None,
-    window_id: int = None
+    device_id: Optional[str] = None,
+    bundle_name: Optional[str] = None,
+    window_id: Optional[int] = None
 ) -> UITreeResult:
     """
     获取应用的UI组件树
@@ -208,7 +208,7 @@ async def get_ui_tree(
 @mcp_tool(category="ui_tree")
 @ToolBase.handle_tool_error('LIST_WINDOWS_ERROR', windows=[], count=0)
 @ToolBase.with_device(windows=[], count=0)
-async def list_windows(device_id: str = None) -> ListWindowsResult:
+async def list_windows(device_id: Optional[str] = None) -> ListWindowsResult:
     """
     列出设备上的所有窗口
 
