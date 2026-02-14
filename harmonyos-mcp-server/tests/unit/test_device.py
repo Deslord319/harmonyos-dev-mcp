@@ -1,4 +1,4 @@
-"""
+﻿"""
 设备管理工具单元测试
 """
 import pytest
@@ -8,11 +8,12 @@ from unittest.mock import MagicMock
 class TestListDevices:
     """list_devices 测试"""
 
-    def test_returns_device_list(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_returns_device_list(self, mock_hdc: MagicMock):
         """应返回设备列表"""
         from harmonyos_mcp.tools import device
 
-        result = device.list_devices()
+        result = await device.list_devices()
 
         assert result['success'] is True
         assert result['count'] == 2
@@ -20,23 +21,25 @@ class TestListDevices:
         assert 'device_002' in result['devices']
         mock_hdc.list_devices.assert_called_once()
 
-    def test_handles_empty_devices(self, no_device_mock: MagicMock):
+    @pytest.mark.asyncio
+    async def test_handles_empty_devices(self, no_device_mock: MagicMock):
         """无设备时应返回空列表"""
         from harmonyos_mcp.tools import device
 
-        result = device.list_devices()
+        result = await device.list_devices()
 
         assert result['success'] is True
         assert result['count'] == 0
         assert result['devices'] == []
 
-    def test_handles_exception(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_handles_exception(self, mock_hdc: MagicMock):
         """异常时应返回错误"""
         from harmonyos_mcp.tools import device
 
         mock_hdc.list_devices.side_effect = Exception("Connection failed")
 
-        result = device.list_devices()
+        result = await device.list_devices()
 
         assert result['success'] is False
         assert 'Connection failed' in result['error']
@@ -45,37 +48,41 @@ class TestListDevices:
 class TestHilogReceive:
     """hilog_receive 测试"""
 
-    def test_uses_first_device_when_not_specified(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_uses_first_device_when_not_specified(self, mock_hdc: MagicMock):
         """未指定设备时使用第一个设备"""
         from harmonyos_mcp.tools import device
 
-        result = device.hilog_receive()
+        result = await device.hilog_receive()
 
         assert result['device_id'] == 'device_001'
         mock_hdc.hilog_receive.assert_called_once_with('device_001', None)
 
-    def test_uses_specified_device(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_uses_specified_device(self, mock_hdc: MagicMock):
         """使用指定的设备"""
         from harmonyos_mcp.tools import device
 
-        result = device.hilog_receive(device_id='device_002')
+        result = await device.hilog_receive(device_id='device_002')
 
         assert result['device_id'] == 'device_002'
         mock_hdc.hilog_receive.assert_called_once_with('device_002', None)
 
-    def test_uses_specified_local_dir(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_uses_specified_local_dir(self, mock_hdc: MagicMock):
         """使用指定的本地目录"""
         from harmonyos_mcp.tools import device
 
-        result = device.hilog_receive(local_dir='/tmp/logs')
+        result = await device.hilog_receive(local_dir='/tmp/logs')
 
         mock_hdc.hilog_receive.assert_called_once_with('device_001', '/tmp/logs')
 
-    def test_fails_when_no_device(self, no_device_mock: MagicMock):
+    @pytest.mark.asyncio
+    async def test_fails_when_no_device(self, no_device_mock: MagicMock):
         """无设备时返回错误"""
         from harmonyos_mcp.tools import device
 
-        result = device.hilog_receive()
+        result = await device.hilog_receive()
 
         assert result['success'] is False
         assert '没有找到' in result['error']

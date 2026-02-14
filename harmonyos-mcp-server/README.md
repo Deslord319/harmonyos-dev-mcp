@@ -10,7 +10,7 @@
 
 | 类别 | 功能 | 工具数 |
 |------|------|--------|
-| 设备管理 | 列出设备、获取 hilog 文件 | 2 |
+| 设备管理 | 列出设备、获取 hilog 文件、截图 | 4 |
 | 三方库编译 | WSL 检查、克隆仓库、分析构建系统、交叉编译 | 8 |
 | 构建部署 | 编译、安装、运行、卸载应用 | 4 |
 | 包管理 | 列出包、获取 Abilities、查询主入口 | 3 |
@@ -18,7 +18,7 @@
 | UI 操作 | 点击、输入、滑动、长按、按键、查找 | 6 |
 | 日志分析 | 获取日志、保存快照、结构化分析 | 3 |
 
-**共计 28 个 MCP 工具**
+**共计 30 个 MCP 工具**
 
 ---
 
@@ -222,6 +222,8 @@ mcpServers:
 |--------|------|
 | list_devices | 列出所有连接的 HarmonyOS 设备和模拟器 |
 | hilog_receive | 从设备获取 hilog 日志文件 |
+| take_screenshot | 对设备屏幕进行截图 |
+| take_element_screenshot | 对指定元素区域进行截图 |
 
 ### 构建部署 (Build)
 
@@ -229,7 +231,8 @@ mcpServers:
 |--------|------|
 | uild_app | 构建 HarmonyOS 应用 |
 | install_app | 安装应用到设备 |
-| un_app | 运行应用 |
+| 
+un_app | 运行应用 |
 | uninstall_app | 卸载应用 |
 
 ### 包管理 (Packages)
@@ -274,7 +277,8 @@ mcpServers:
 | check_harmonyos_compiler_tools | 检查 HarmonyOS 编译工具 |
 | clone_library | 拉取三方库代码仓库 |
 | nalyze_build_system | 分析项目构建系统类型 |
-| ead_build_files | 读取构建系统文件 |
+| 
+ead_build_files | 读取构建系统文件 |
 | write_compile_script | 生成编译脚本 |
 | execute_compile_script | 执行编译脚本 |
 | erify_so_output | 验证编译输出的 .so 文件 |

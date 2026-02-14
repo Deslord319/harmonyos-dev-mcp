@@ -46,6 +46,20 @@ class HilogReceiveResult(DeviceResult):
     total_size: int
 
 
+class ScreenshotResult(DeviceResult):
+    """take_screenshot 返回类型"""
+    local_path: str
+    file_size: int
+
+
+class ElementScreenshotResult(DeviceResult):
+    """take_element_screenshot 返回类型"""
+    local_path: str
+    file_size: int
+    bounds: dict
+    warning: Optional[str]
+
+
 # ============================================================================
 # 构建部署类型
 # ============================================================================

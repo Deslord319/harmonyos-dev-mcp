@@ -1,4 +1,4 @@
-"""
+﻿"""
 构建部署工具单元测试
 """
 import pytest
@@ -9,7 +9,8 @@ class TestBuildApp:
     """build_app 测试"""
 
     @patch('harmonyos_mcp.tools.build.HvigorWrapper')
-    def test_build_success(self, mock_hvigor_cls):
+    @pytest.mark.asyncio
+    async def test_build_success(self, mock_hvigor_cls):
         """构建成功"""
         from harmonyos_mcp.tools import build
 
@@ -20,7 +21,7 @@ class TestBuildApp:
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
-        result = build.build_app('/path/to/project')
+        result = await build.build_app('/path/to/project')
 
         assert result['success'] is True
         assert result['hap_path'] == '/path/to/output.hap'
@@ -28,7 +29,8 @@ class TestBuildApp:
         assert 'duration' in result
 
     @patch('harmonyos_mcp.tools.build.HvigorWrapper')
-    def test_build_failure(self, mock_hvigor_cls):
+    @pytest.mark.asyncio
+    async def test_build_failure(self, mock_hvigor_cls):
         """构建失败"""
         from harmonyos_mcp.tools import build
 
@@ -36,13 +38,14 @@ class TestBuildApp:
         mock_hvigor.build_hap.return_value = {'success': False}
         mock_hvigor_cls.return_value = mock_hvigor
 
-        result = build.build_app('/path/to/project')
+        result = await build.build_app('/path/to/project')
 
         assert result['success'] is False
         assert '失败' in result['message']
 
     @patch('harmonyos_mcp.tools.build.HvigorWrapper')
-    def test_build_with_release_mode(self, mock_hvigor_cls):
+    @pytest.mark.asyncio
+    async def test_build_with_release_mode(self, mock_hvigor_cls):
         """使用 release 模式构建"""
         from harmonyos_mcp.tools import build
 
@@ -50,7 +53,7 @@ class TestBuildApp:
         mock_hvigor.build_hap.return_value = {'success': True}
         mock_hvigor_cls.return_value = mock_hvigor
 
-        build.build_app('/path/to/project', build_mode='release')
+        await build.build_app('/path/to/project', build_mode='release')
 
         mock_hvigor.build_hap.assert_called_once_with(build_mode='release')
 
@@ -58,31 +61,34 @@ class TestBuildApp:
 class TestInstallApp:
     """install_app 测试"""
 
-    def test_install_success(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_install_success(self, mock_hdc: MagicMock):
         """安装成功"""
         from harmonyos_mcp.tools import build
 
-        result = build.install_app('/path/to/app.hap')
+        result = await build.install_app('/path/to/app.hap')
 
         assert result['success'] is True
         assert result['device_id'] == 'device_001'
         assert result['hap_path'] == '/path/to/app.hap'
         mock_hdc.install_app.assert_called_once()
 
-    def test_install_to_specific_device(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_install_to_specific_device(self, mock_hdc: MagicMock):
         """安装到指定设备"""
         from harmonyos_mcp.tools import build
 
-        result = build.install_app('/path/to/app.hap', device_id='device_002')
+        result = await build.install_app('/path/to/app.hap', device_id='device_002')
 
         assert result['device_id'] == 'device_002'
         mock_hdc.install_app.assert_called_with('device_002', '/path/to/app.hap')
 
-    def test_install_fails_when_no_device(self, no_device_mock: MagicMock):
+    @pytest.mark.asyncio
+    async def test_install_fails_when_no_device(self, no_device_mock: MagicMock):
         """无设备时安装失败"""
         from harmonyos_mcp.tools import build
 
-        result = build.install_app('/path/to/app.hap')
+        result = await build.install_app('/path/to/app.hap')
 
         assert result['success'] is False
         assert '没有找到' in result['error']
@@ -91,22 +97,24 @@ class TestInstallApp:
 class TestRunApp:
     """run_app 测试"""
 
-    def test_auto_detect_ability(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_auto_detect_ability(self, mock_hdc: MagicMock):
         """自动检测主 Ability"""
         from harmonyos_mcp.tools import build
 
-        result = build.run_app('com.example.app')
+        result = await build.run_app('com.example.app')
 
         assert result['success'] is True
         assert result['ability_name'] == 'MainAbility'
         assert result['module_name'] == 'entry'
         assert result['auto_detected'] is True
 
-    def test_use_specified_ability(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_use_specified_ability(self, mock_hdc: MagicMock):
         """使用指定的 Ability"""
         from harmonyos_mcp.tools import build
 
-        result = build.run_app(
+        result = await build.run_app(
             'com.example.app',
             ability_name='CustomAbility',
             module_name='feature'
@@ -116,7 +124,8 @@ class TestRunApp:
         assert result['module_name'] == 'feature'
         assert result['auto_detected'] is False
 
-    def test_use_default_ability_when_detection_fails(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_use_default_ability_when_detection_fails(self, mock_hdc: MagicMock):
         """检测失败时使用默认 Ability"""
         from harmonyos_mcp.tools import build
 
@@ -125,17 +134,18 @@ class TestRunApp:
             'error': 'Package not found'
         }
 
-        result = build.run_app('com.example.app')
+        result = await build.run_app('com.example.app')
 
         assert result['ability_name'] == 'EntryAbility'
         assert result['module_name'] == 'entry'
         assert result['auto_detected'] is False
 
-    def test_run_fails_when_no_device(self, no_device_mock: MagicMock):
+    @pytest.mark.asyncio
+    async def test_run_fails_when_no_device(self, no_device_mock: MagicMock):
         """无设备时运行失败"""
         from harmonyos_mcp.tools import build
 
-        result = build.run_app('com.example.app')
+        result = await build.run_app('com.example.app')
 
         assert result['success'] is False
 
@@ -143,20 +153,22 @@ class TestRunApp:
 class TestUninstallApp:
     """uninstall_app 测试"""
 
-    def test_uninstall_success(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_uninstall_success(self, mock_hdc: MagicMock):
         """卸载成功"""
         from harmonyos_mcp.tools import build
 
-        result = build.uninstall_app('com.example.app')
+        result = await build.uninstall_app('com.example.app')
 
         assert result['success'] is True
         assert result['bundle_name'] == 'com.example.app'
         mock_hdc.uninstall_app.assert_called_once()
 
-    def test_uninstall_from_specific_device(self, mock_hdc: MagicMock):
+    @pytest.mark.asyncio
+    async def test_uninstall_from_specific_device(self, mock_hdc: MagicMock):
         """从指定设备卸载"""
         from harmonyos_mcp.tools import build
 
-        result = build.uninstall_app('com.example.app', device_id='device_002')
+        result = await build.uninstall_app('com.example.app', device_id='device_002')
 
         mock_hdc.uninstall_app.assert_called_with('device_002', 'com.example.app')

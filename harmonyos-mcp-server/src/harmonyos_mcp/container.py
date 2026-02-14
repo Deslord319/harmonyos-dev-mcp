@@ -95,6 +95,11 @@ class _Container:
             logger.info("HilogtoolWrapper 初始化成功")
             return instance
             
+        elif service_type == HvigorWrapper:
+            instance = HvigorWrapper()
+            logger.info("HvigorWrapper 初始化成功")
+            return instance
+            
         else:
             raise ValueError(f"未知的服务类型: {service_type.__name__}")
     
@@ -190,3 +195,9 @@ def get_hilogtool():
     """获取 HilogtoolWrapper 实例"""
     from .utils.hilogtool_wrapper import HilogtoolWrapper
     return Container.get(HilogtoolWrapper)
+
+
+def get_hvigor():
+    """获取 HvigorWrapper 实例"""
+    from .utils.hvigor_wrapper import HvigorWrapper
+    return Container.get(HvigorWrapper)

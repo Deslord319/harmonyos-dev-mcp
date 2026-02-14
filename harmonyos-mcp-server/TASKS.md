@@ -35,7 +35,7 @@
 | 2.3 日志收集与分析   | ✅      | logs_fetch, logs_save_snapshot, logs_analyze（多种过滤条件）  |
 | ~~2.4 签名管理工具~~ | ❌ 取消 | HarmonyOS签名类似Apple，需在线申请证书                        |
 | 2.5 设备管理增强     | 🔄      | hilog_receive 已完成，connect/disconnect/get_info 待实现      |
-| 2.6 截图功能         | ⏳      | 全屏/控件截图                                                 |
+| 2.6 截图功能         | ✅      | take_screenshot, take_element_screenshot                      |
 | 2.7 错误处理与重试   | ⏳      | 超时管理                                                      |
 | 2.8 集成测试与优化   | ⏳      |                                                               |
 | 2.9 配置管理与打包   | ✅      | 环境变量、pyproject.toml、pip安装                             |

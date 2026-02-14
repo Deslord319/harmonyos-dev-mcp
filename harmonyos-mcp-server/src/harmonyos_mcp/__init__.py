@@ -18,7 +18,7 @@ __author__ = "HarmonyOS MCP Team"
 from .server import mcp, main
 
 # 容器
-from .container import Container, get_hdc, get_compile_manager, get_ui_operations, get_hilogtool
+from .container import Container, get_hdc, get_compile_manager, get_ui_operations, get_hilogtool, get_hvigor
 
 # 异常
 from .exceptions import (
@@ -40,6 +40,8 @@ from .types import (
     DeviceResult,
     ListDevicesResult,
     HilogReceiveResult,
+    ScreenshotResult,
+    ElementScreenshotResult,
     BuildResult,
     InstallResult,
     RunAppResult,
@@ -74,6 +76,7 @@ __all__ = [
     "get_compile_manager",
     "get_ui_operations",
     "get_hilogtool",
+    "get_hvigor",
     # 配置
     "Config",
     "LogSecurityConfig",
@@ -90,6 +93,8 @@ __all__ = [
     "DeviceResult",
     "ListDevicesResult",
     "HilogReceiveResult",
+    "ScreenshotResult",
+    "ElementScreenshotResult",
     "BuildResult",
     "InstallResult",
     "RunAppResult",
