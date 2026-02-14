@@ -10,13 +10,12 @@
 
 | 类别 | 功能 | 工具数 |
 |------|------|--------|
-| 通用 | 设备管理、包管理 | 4 |
-| 鸿蒙日志分析 | hilog 获取、日志过滤、快照保存、结构化分析 | 4 |
+| 通用 | 设备管理、包管理、日志查询 | 3 |
 | 鸿蒙打包编译 | 编译、安装、运行、卸载应用 | 4 |
 | UI 测试 | UI 树感知、元素查找、点击/输入/滑动、截图 | 10 |
 | 三方库编译 | WSL 检查、克隆仓库、分析构建系统、交叉编译 | 8 |
 
-**共计 30 个 MCP 工具**
+**共计 25 个 MCP 工具**
 
 ---
 
@@ -219,20 +218,12 @@ mcpServers:
 | 工具名 | 描述 |
 |--------|------|
 | list_devices | 列出所有连接的 HarmonyOS 设备和模拟器 |
-| list_packages | 列出设备上已安装的应用包 |
-| get_package_abilities | 获取指定包的所有 Abilities |
-| get_main_ability | 获取指定包的主入口 Ability |
+| query_package | 统一包查询（列出包/获取 Abilities/获取主 Ability） |
+| logs_query | 统一日志查询（拉取/解析/过滤/分析/保存一体化） |
 
-### 二、鸿蒙日志分析 (Logs)
+> 工具详细参数见：[query_package](harmonyos-mcp-server/docs/tools/query_package.md) | [logs_query](harmonyos-mcp-server/docs/tools/logs_query.md)
 
-| 工具名 | 描述 |
-|--------|------|
-| hilog_receive | 从设备获取 hilog 日志文件 |
-| logs_fetch | 从设备获取日志（支持多种过滤条件） |
-| logs_save_snapshot | 保存日志快照到本地文件 |
-| logs_analyze | 对日志进行结构化分析 |
-
-### 三、鸿蒙打包编译 (Build)
+### 二、鸿蒙打包编译 (Build)
 
 | 工具名 | 描述 |
 |--------|------|
@@ -241,7 +232,7 @@ mcpServers:
 | run_app | 运行应用 |
 | uninstall_app | 卸载应用 |
 
-### 四、UI 测试 (UI Test)
+### 三、UI 测试 (UI Test)
 
 | 工具名 | 描述 |
 |--------|------|
@@ -256,7 +247,7 @@ mcpServers:
 | screenshot | 对设备屏幕进行截图 |
 | screenshot_element | 对指定元素区域进行截图 |
 
-### 五、三方库编译 (Compile)
+### 四、三方库编译 (Compile)
 
 | 工具名 | 描述 |
 |--------|------|
@@ -271,46 +262,34 @@ mcpServers:
 
 ---
 
-## 项目结构
-
-```
-src/harmonyos_mcp/
-├── tools/                    # MCP 工具模块
-│   ├── general.py            # 通用（设备+包管理）
-│   ├── logs.py               # 鸿蒙日志分析
-│   ├── build.py              # 鸿蒙打包编译
-│   ├── ui.py                 # UI 测试（操作+截图）
-│   ├── ui_tree.py            # UI 测试（树+窗口）
-│   └── compile.py            # 三方库编译
-├── utils/                    # 工具类
-│   ├── hdc_wrapper.py        # hdc 命令封装（组合类）
-│   ├── hdc_base.py           # hdc 基础命令执行
-│   ├── hdc_device.py         # 设备管理
-│   ├── hdc_app.py            # 应用管理
-│   ├── hdc_file.py           # 文件操作
-│   ├── hdc_ui.py             # UI 操作（hidumper）
-│   ├── hdc_package.py        # 包管理
-│   ├── hdc_screenshot.py     # 截图
-│   ├── ui_operations.py      # uitest 命令封装
-│   ├── hvigor_wrapper.py     # hvigor 构建封装
-│   ├── compile_wrapper.py    # 三方库编译管理
-│   ├── log_parser.py         # 日志解析与分析
-│   ├── hilogtool_wrapper.py  # hilogtool 历史日志解析
-│   ├── uitree_parser.py      # UI 树解析
-│   ├── retry.py              # 重试与退避机制
-│   └── logger.py             # 日志配置
-├── container.py              # 依赖注入容器
-├── config.py                 # 配置管理
-├── types.py                  # 类型定义
-├── exceptions.py             # 异常定义
-└── server.py                 # MCP 服务器入口
-```
-
----
-
 ## 项目路线图
 
 详见 [harmonyos-mcp-server/TASKS.md](harmonyos-mcp-server/TASKS.md)
+
+---
+
+## 项目结构
+
+```
+harmonyos-mcp-server/
+├── harmonyos_mcp/
+│   ├── tools/                # MCP 工具模块
+│   │   ├── general.py        # 通用（设备+包管理）
+│   │   ├── logs.py           # 鸿蒙日志分析
+│   │   ├── build.py          # 鸿蒙打包编译
+│   │   ├── ui.py             # UI 测试（操作+截图）
+│   │   ├── ui_tree.py        # UI 测试（树+窗口）
+│   │   └── compile.py        # 三方库编译
+│   ├── utils/                # 工具类
+│   │   ├── hdc_wrapper.py    # hdc 命令封装
+│   │   ├── hvigor_wrapper.py # hvigor 构建封装
+│   │   └── ...
+│   └── ...
+├── docs/tools/               # 工具文档
+│   ├── query_package.md
+│   └── logs_query.md
+└── tests/                    # 测试用例
+```
 
 ---
 
