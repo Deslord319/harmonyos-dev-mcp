@@ -310,11 +310,24 @@ class Config:
 class LogSecurityConfig:
     """日志安全配置类"""
     
-    # 日志保存白名单路径（相对于项目目录）
-    ALLOWED_SAVE_PATHS: List[str] = [
+    # 日志保存白名单路径（必须使用绝对路径，防止路径遍历攻击）
+    # 注意：这些类初始化时转换为绝对路径
+    _ALLOWED_SAVE_PATHS_RELATIVE: List[str] = [
         "./hm_logs",
         "./hilog_files",
     ]
+
+    # 缓存转换后的绝对路径
+    _ALLOWED_SAVE_PATHS_ABS: List[str] = []
+
+    @classmethod
+    def get_allowed_save_paths(cls) -> List[str]:
+        """获取绝对路径形式的白名单目录"""
+        if not cls._ALLOWED_SAVE_PATHS_ABS:
+            cls._ALLOWED_SAVE_PATHS_ABS = [
+                os.path.abspath(p) for p in cls._ALLOWED_SAVE_PATHS_RELATIVE
+            ]
+        return cls._ALLOWED_SAVE_PATHS_ABS
     
     # 最大日志行数限制
     MAX_LOG_LINES: int = int(os.getenv('MAX_LOG_LINES', '50000'))
@@ -332,27 +345,31 @@ class LogSecurityConfig:
     def validate_save_path(cls, path: str) -> tuple:
         """
         验证保存路径是否在白名单内
-        
+
         使用 realpath 解析符号链接，防止通过 symlink 绕过白名单。
-        
+        使用绝对路径白名单，防止路径遍历攻击。
+
         Args:
             path: 要验证的路径
-            
+
         Returns:
             (是否有效, 绝对路径或错误信息)
         """
         try:
             # realpath 同时解析符号链接和相对路径，比 abspath 更安全
-            real_path = os.path.realpath(path)
-            
-            for allowed in cls.ALLOWED_SAVE_PATHS:
-                allowed_real = os.path.realpath(allowed)
-                if real_path.startswith(allowed_real + os.sep) or real_path == allowed_real:
+            real_path = os.path.realpath(os.path.abspath(path))
+
+            # 获取绝对路径白名单
+            allowed_paths = cls.get_allowed_save_paths()
+
+            # 验证路径是否在白名单内
+            for allowed in allowed_paths:
+                if real_path.startswith(allowed + os.sep) or real_path == allowed:
                     # 确保目录存在
                     os.makedirs(os.path.dirname(real_path) if os.path.splitext(real_path)[1] else real_path, exist_ok=True)
                     return True, real_path
-            
-            return False, f"路径不在白名单内。允许的路径: {cls.ALLOWED_SAVE_PATHS}"
+
+            return False, f"路径不在白名单内。允许的路径: {allowed_paths}"
         except Exception as e:
             return False, f"路径验证失败: {e}"
     

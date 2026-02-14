@@ -29,7 +29,21 @@ class HdcWrapper:
     ]
 
     # 危险字符模式：禁止命令中包含以下字符序列
-    SHELL_DANGEROUS_PATTERNS = ['&&', '||', '`', '$(', ';', '\n', '\r']
+    SHELL_DANGEROUS_PATTERNS = ['&&', '||', '`', '$(', ';', '\\n', '\\r', '$((', '|}']
+
+
+    # 禁止的危险命令（即使在白名单中也不允许）
+    SHELL_COMMAND_BLACKLIST = [
+        'base64', 'tar', 'zip', 'unzip', 'gzip', 'gunzip', 'bzip2', 'xz',
+        'wget', 'curl', 'nc', 'netcat', 'ncat', 'socat',
+        'python', 'python3', 'perl', 'ruby', 'php', 'node',
+        'bash', 'sh', 'dash', 'ash', 'zsh',
+        'chsh', 'passwd', 'su', 'sudo', 'login',
+        'dd', 'mkfs', 'fdisk', 'parted',
+        'reboot', 'shutdown', 'poweroff', 'halt',
+        'iptables', 'ufw', 'firewall-cmd',
+        'mount', 'umount', 'losetup',
+    ]
 
     # 管道操作仅允许以下命令
     PIPE_ALLOWED_COMMANDS = ['ls', 'ps', 'cat', 'grep', 'hilog', 'dumpsys']
@@ -259,6 +273,11 @@ class HdcWrapper:
         
         # 提取主命令（处理 2>/dev/null 等重定向）
         cmd_name = stripped.split()[0]
+
+        # 检查黑名单
+        if hasattr(self, 'SHELL_COMMAND_BLACKLIST') and cmd_name in self.SHELL_COMMAND_BLACKLIST:
+            raise ValueError(f"Shell 命令 '{cmd_name}' 被禁止执行")
+
         if cmd_name not in self.SHELL_COMMAND_WHITELIST:
             raise ValueError(
                 f"Shell 命令 '{cmd_name}' 不在白名单中。"
