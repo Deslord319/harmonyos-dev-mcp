@@ -15,12 +15,33 @@ import os
 import glob
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import Tuple
 from loguru import logger
 
 from ..config import Config
 
-# 项目根目录: harmonyos-mcp-server/
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+def _find_project_root(
+    marker_files: Tuple[str, ...] = ("pyproject.toml", ".git", "setup.py")
+) -> Path:
+    """
+    从当前文件向上查找包含标记文件的目录作为项目根目录
+    
+    Args:
+        marker_files: 用于识别项目根目录的标记文件列表
+        
+    Returns:
+        项目根目录路径
+    """
+    current = Path(__file__).resolve().parent
+    for parent in [current] + list(current.parents):
+        if any((parent / marker).exists() for marker in marker_files):
+            return parent
+    # fallback: 使用包的父目录 (harmonyos_mcp 的父目录)
+    return Path(__file__).resolve().parent.parent.parent
+
+
+_PROJECT_ROOT = _find_project_root()
 _LOG_DIR = _PROJECT_ROOT / "logs"
 
 # 日志配置常量

@@ -6,6 +6,24 @@ pytest 配置和 fixtures
 import pytest
 from typing import Generator
 from unittest.mock import MagicMock
+from loguru import logger
+import sys
+
+
+# ============================================================================
+# 测试日志配置
+# ============================================================================
+def pytest_configure(config):
+    """pytest 配置钩子，在测试开始前配置日志"""
+    # 移除默认 handler，避免测试时输出过多 DEBUG 日志
+    logger.remove()
+    # 测试时使用 WARNING 级别，减少日志噪音
+    logger.add(
+        sys.stderr,
+        format="<level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>",
+        level="WARNING",
+        colorize=True,
+    )
 
 
 @pytest.fixture(autouse=True)

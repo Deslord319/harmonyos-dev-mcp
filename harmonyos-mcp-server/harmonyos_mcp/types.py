@@ -40,10 +40,7 @@ class ListDevicesResult(BaseResult):
     count: int
 
 
-class HilogReceiveResult(DeviceResult):
-    """hilog_receive 返回类型"""
-    files: List[str]
-    total_size: int
+
 
 
 class ScreenshotResult(DeviceResult):
@@ -247,34 +244,28 @@ class LogsSummary(TypedDict, total=False):
     error_count: int
 
 
-class LogsFetchResult(DeviceResult):
-    """logs_fetch 返回类型"""
+class LogsQueryResult(BaseResult, total=False):
+    """logs_query 返回类型（统一日志查询结果）"""
+    device_id: str
+    source: str                          # "direct" | "file" | "realtime_buffer" | "persist_file"
     logs: List[str]
     total_lines: int
     truncated: bool
     filters_applied: LogsFilterConfig
-    summary: LogsSummary
-    source: str          # "realtime_buffer" | "persist_file"
-    dict_used: bool      # 历史文件是否使用 dict 解密
-    files_count: int     # 历史文件拉取数量
-
-
-class LogsSaveResult(DeviceResult):
-    """logs_save_snapshot 返回类型"""
+    analysis_type: str
+    analysis: dict
+    evidence_lines: List[str]
+    total_entries_analyzed: int
+    # raw_files 模式字段
+    files: List[str]
+    total_size: int
+    # 保存模式字段
     saved_path: str
     file_size: int
     file_size_human: str
-    log_count: int
-    truncated: bool
-
-
-class LogsAnalyzeResult(DeviceResult):
-    """logs_analyze 返回类型"""
-    analysis_type: AnalysisType
-    result: dict
-    evidence_lines: List[str]
-    total_entries_analyzed: int
-    filters_applied: LogsFilterConfig
+    # 历史文件模式字段
+    dict_used: bool
+    files_count: int
 
 
 # ============================================================================

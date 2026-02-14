@@ -9,13 +9,6 @@ from fastmcp import FastMCP
 from loguru import logger
 
 from .config import Config
-from .utils.logger import setup_logger
-
-# 设置日志
-setup_logger()
-
-# 初始化配置（懒加载，首次调用时检测工具路径）
-Config.ensure_init()
 
 # 创建MCP服务器
 server = FastMCP("harmonyos-tools")
@@ -54,6 +47,14 @@ mcp = server
 
 def main():
     """MCP 服务器入口函数"""
+    from .utils.logger import setup_logger
+    
+    # 设置日志（仅在实际运行服务时配置，测试时不触发）
+    setup_logger()
+    
+    # 初始化配置
+    Config.ensure_init()
+    
     # 验证配置
     if not Config.validate():
         logger.error("配置验证失败,请检查环境变量")

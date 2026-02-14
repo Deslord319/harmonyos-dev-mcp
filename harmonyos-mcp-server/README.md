@@ -10,13 +10,12 @@
 
 | 类别 | 功能 | 工具数 |
 |------|------|--------|
-| 通用 | 设备管理、包管理 | 4 |
-| 鸿蒙日志分析 | hilog 获取、日志过滤、快照保存、结构化分析 | 4 |
+| 通用 | 设备管理、包管理、日志查询 | 5 |
 | 鸿蒙打包编译 | 编译、安装、运行、卸载应用 | 4 |
 | UI 测试 | UI 树感知、元素查找、点击/输入/滑动、截图 | 10 |
 | 三方库编译 | WSL 检查、克隆仓库、分析构建系统、交叉编译 | 8 |
 
-**共计 30 个 MCP 工具**
+**共计 27 个 MCP 工具**
 
 ---
 
@@ -222,17 +221,11 @@ mcpServers:
 | list_packages | 列出设备上已安装的应用包 |
 | get_package_abilities | 获取指定包的所有 Abilities |
 | get_main_ability | 获取指定包的主入口 Ability |
+| logs_query | 统一日志查询（拉取/解析/过滤/分析/保存一体化） |
 
-### 二、鸿蒙日志分析 (Logs)
+> 日志工具详细参数见 [docs/tools/logs_query.md](docs/tools/logs_query.md)
 
-| 工具名 | 描述 |
-|--------|------|
-| hilog_receive | 从设备获取 hilog 日志文件 |
-| logs_fetch | 从设备获取日志（支持多种过滤条件） |
-| logs_save_snapshot | 保存日志快照到本地文件 |
-| logs_analyze | 对日志进行结构化分析 |
-
-### 三、鸿蒙打包编译 (Build)
+### 二、鸿蒙打包编译 (Build)
 
 | 工具名 | 描述 |
 |--------|------|
@@ -241,7 +234,7 @@ mcpServers:
 | run_app | 运行应用 |
 | uninstall_app | 卸载应用 |
 
-### 四、UI 测试 (UI Test)
+### 三、UI 测试 (UI Test)
 
 | 工具名 | 描述 |
 |--------|------|
@@ -256,7 +249,7 @@ mcpServers:
 | screenshot | 对设备屏幕进行截图 |
 | screenshot_element | 对指定元素区域进行截图 |
 
-### 五、三方库编译 (Compile)
+### 四、三方库编译 (Compile)
 
 | 工具名 | 描述 |
 |--------|------|

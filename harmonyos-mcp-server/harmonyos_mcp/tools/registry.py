@@ -66,7 +66,7 @@ def get_tool_summary() -> dict:
 
     Returns:
         {
-            "total": 30,
+            "total": 27,
             "categories": {"general": 4, "build": 4, ...}
         }
     """

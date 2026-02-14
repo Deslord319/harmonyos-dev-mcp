@@ -45,15 +45,15 @@ class TestListDevices:
         assert 'Connection failed' in result['error']
 
 
-class TestHilogReceive:
-    """hilog_receive 测试"""
+class TestLogsQuery:
+    """logs_query 测试（raw_files 模式）"""
 
     @pytest.mark.asyncio
     async def test_uses_first_device_when_not_specified(self, mock_hdc: MagicMock):
         """未指定设备时使用第一个设备"""
         from harmonyos_mcp.tools import logs
 
-        result = await logs.hilog_receive()
+        result = await logs.logs_query(raw_files=True)
 
         assert result['device_id'] == 'device_001'
         mock_hdc.hilog_receive.assert_called_once_with('device_001', None)
@@ -63,17 +63,17 @@ class TestHilogReceive:
         """使用指定的设备"""
         from harmonyos_mcp.tools import logs
 
-        result = await logs.hilog_receive(device_id='device_002')
+        result = await logs.logs_query(device_id='device_002', raw_files=True)
 
         assert result['device_id'] == 'device_002'
         mock_hdc.hilog_receive.assert_called_once_with('device_002', None)
 
     @pytest.mark.asyncio
-    async def test_uses_specified_local_dir(self, mock_hdc: MagicMock):
-        """使用指定的本地目录"""
+    async def test_uses_specified_save_path(self, mock_hdc: MagicMock):
+        """使用指定的保存路径"""
         from harmonyos_mcp.tools import logs
 
-        result = await logs.hilog_receive(local_dir='/tmp/logs')
+        result = await logs.logs_query(raw_files=True, save_path='/tmp/logs')
 
         mock_hdc.hilog_receive.assert_called_once_with('device_001', '/tmp/logs')
 
@@ -82,7 +82,7 @@ class TestHilogReceive:
         """无设备时返回错误"""
         from harmonyos_mcp.tools import logs
 
-        result = await logs.hilog_receive()
+        result = await logs.logs_query(raw_files=True)
 
         assert result['success'] is False
         assert '没有找到' in result['error']

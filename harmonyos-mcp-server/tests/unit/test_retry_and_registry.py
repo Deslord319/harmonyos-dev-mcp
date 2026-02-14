@@ -253,7 +253,7 @@ class TestRealToolRegistration:
     """验证实际工具模块的注册结果"""
 
     def test_all_tools_registered(self):
-        """确认所有 30 个工具通过 @mcp_tool 注册"""
+        """确认所有 27 个工具通过 @mcp_tool 注册"""
         # 导入工具模块触发注册
         from harmonyos_mcp.tools import general, build, ui, ui_tree, logs, compile  # noqa: F401
         from harmonyos_mcp.tools.registry import get_registered_tools, get_tool_summary
@@ -261,8 +261,8 @@ class TestRealToolRegistration:
         tools = get_registered_tools()
         summary = get_tool_summary()
 
-        assert summary["total"] == 30, (
-            f"期望 30 个工具, 实际 {summary['total']}. "
+        assert summary["total"] == 27, (
+            f"期望 27 个工具, 实际 {summary['total']}. "
             f"分类: {summary['categories']}"
         )
 
@@ -273,11 +273,10 @@ class TestRealToolRegistration:
 
         summary = get_tool_summary()
         expected = {
-            "general": 4,
+            "general": 5,
             "build": 4,
             "ui": 8,
             "ui_tree": 2,
-            "logs": 4,
             "compile": 8,
         }
         assert summary["categories"] == expected, (

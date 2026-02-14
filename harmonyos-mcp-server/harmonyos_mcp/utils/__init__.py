@@ -10,14 +10,12 @@ HarmonyOS MCP Server Utilities
 from .hdc import HdcWrapper
 from .wrappers import HvigorWrapper, UiTestWrapper, CompileLibraryManager
 from .logger import setup_logger
-from .log_parser import LogParser
 
 __all__ = [
     "HdcWrapper",
     "HvigorWrapper",
     "UiTestWrapper",
     "setup_logger",
-    "LogParser",
     "CompileLibraryManager",
 ]
 
