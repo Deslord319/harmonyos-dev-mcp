@@ -1,7 +1,0 @@
-docs: 合并 README.md，删除子目录重复文档
-
-- 更新根目录 README.md 为最新内容（25 个工具）
-- 删除 harmonyos-mcp-server/README.md 避免重复
-- 调整文档链接路径指向子目录
-
-🤖 Generated with [Qoder][https://qoder.com]
