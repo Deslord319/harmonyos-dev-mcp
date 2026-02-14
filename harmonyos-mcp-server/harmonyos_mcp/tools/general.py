@@ -4,11 +4,11 @@
 提供设备管理、包管理等基础功能。
 """
 import asyncio
-from typing import Optional
+from typing import Optional, Literal
 from loguru import logger
 
 from ..container import get_hdc
-from ..types import ListDevicesResult, ListPackagesResult, PackageAbilitiesResult, MainAbilityResult
+from ..types import ListDevicesResult, QueryPackageResult
 from .base import ToolBase
 from .registry import mcp_tool
 
@@ -35,102 +35,138 @@ async def list_devices() -> ListDevicesResult:
     }
 
 
-@mcp_tool(category="general")
-@ToolBase.handle_tool_error('LIST_PACKAGES_ERROR', packages=[], count=0)
-@ToolBase.with_device(packages=[], count=0)
-async def list_packages(device_id: Optional[str] = None, keyword: Optional[str] = None) -> ListPackagesResult:
-    """
-    列出设备上已安装的应用包
-
-    Args:
-        device_id: 设备ID,如果为None则使用第一个设备
-        keyword: 可选的关键字过滤,用于搜索包名
-
-    Returns:
-        包含已安装包列表的字典
-
-    Example:
-        list_packages(keyword="settings")  -> 搜索包含"settings"的包
-        list_packages()  -> 列出所有已安装的包
-    """
-    hdc = get_hdc()
-    result = await asyncio.to_thread(hdc.list_packages, device_id, keyword)
-    result['device_id'] = device_id
-    
-    # 确保必需字段存在
-    if 'packages' not in result:
-        result['packages'] = []
-    if 'count' not in result:
-        result['count'] = len(result['packages'])
-    
-    return result
+# query_package 的默认错误字段
+_QUERY_PACKAGE_ERROR_DEFAULTS = {
+    'info_type': 'list',
+    'packages': [],
+    'count': 0,
+    'bundle_name': '',
+    'abilities': [],
+    'modules': [],
+    'main_ability': None,
+    'ability_count': 0,
+    'ability_name': '',
+    'module_name': ''
+}
 
 
 @mcp_tool(category="general")
-@ToolBase.handle_tool_error('GET_ABILITIES_ERROR', bundle_name='', abilities=[], modules=[], main_ability=None, ability_count=0)
-@ToolBase.with_device(bundle_name='', abilities=[], modules=[], main_ability=None, ability_count=0)
-async def get_package_abilities(bundle_name: str, device_id: Optional[str] = None) -> PackageAbilitiesResult:
+@ToolBase.handle_tool_error('QUERY_PACKAGE_ERROR', **_QUERY_PACKAGE_ERROR_DEFAULTS)
+@ToolBase.with_device(**_QUERY_PACKAGE_ERROR_DEFAULTS)
+async def query_package(
+    device_id: Optional[str] = None,
+    bundle_name: Optional[str] = None,
+    keyword: Optional[str] = None,
+    info_type: Literal['list', 'abilities', 'main_ability'] = 'list'
+) -> QueryPackageResult:
     """
-    获取指定包的所有Abilities
+    统一的包查询工具（合并 list_packages、get_package_abilities、get_main_ability）
+    
+    根据参数组合执行不同查询：
+    - bundle_name 为空: 列出所有包（可用 keyword 过滤）
+    - bundle_name 非空 + info_type="abilities": 获取所有 Abilities
+    - bundle_name 非空 + info_type="main_ability": 仅获取主 Ability
 
     Args:
-        bundle_name: 应用包名
-        device_id: 设备ID,如果为None则使用第一个设备
+        device_id: 设备ID，如果为None则使用第一个设备
+        bundle_name: 应用包名（可选，指定后查询该包的详情）
+        keyword: 关键字过滤（仅在 list 模式下生效）
+        info_type: 查询类型
+            - list: 列出所有包（默认）
+            - abilities: 获取指定包的所有 Abilities
+            - main_ability: 获取指定包的主入口 Ability
 
     Returns:
-        包含Abilities列表的字典,每个Ability包含name、module、type等信息
+        根据 info_type 返回不同结构的结果字典
 
     Example:
-        get_package_abilities("com.huawei.hmos.settings")
+        # 列出所有包
+        query_package()
+        
+        # 搜索包含 "settings" 的包
+        query_package(keyword="settings")
+        
+        # 获取指定包的所有 Abilities
+        query_package(bundle_name="com.huawei.hmos.settings", info_type="abilities")
+        
+        # 获取指定包的主 Ability
+        query_package(bundle_name="com.huawei.hmos.settings", info_type="main_ability")
     """
     hdc = get_hdc()
-    result = await asyncio.to_thread(hdc.get_package_info, device_id, bundle_name)
-
-    if result['success']:
+    
+    # 参数校验：需要 bundle_name 的查询类型
+    if info_type in ('abilities', 'main_ability') and not bundle_name:
         return {
-            'success': True,
+            'success': False,
+            'error': f'info_type="{info_type}" 需要指定 bundle_name 参数',
+            'error_code': 'MISSING_BUNDLE_NAME',
             'device_id': device_id,
-            'bundle_name': bundle_name,
-            'abilities': result.get('abilities', []),
-            'modules': result.get('modules', []),
-            'main_ability': result.get('main_ability'),
-            'ability_count': len(result.get('abilities', []))
+            'info_type': info_type,
+            **{k: v for k, v in _QUERY_PACKAGE_ERROR_DEFAULTS.items() if k not in ('info_type',)}
         }
-    else:
-        result['bundle_name'] = bundle_name
-        result['device_id'] = device_id
-        result.setdefault('abilities', [])
-        result.setdefault('modules', [])
-        result.setdefault('main_ability', None)
-        result.setdefault('ability_count', 0)
-        return result
-
-
-@mcp_tool(category="general")
-@ToolBase.handle_tool_error('GET_MAIN_ABILITY_ERROR', ability_name='', module_name='', bundle_name='')
-@ToolBase.with_device(ability_name='', module_name='', bundle_name='')
-async def get_main_ability(bundle_name: str, device_id: Optional[str] = None) -> MainAbilityResult:
-    """
-    获取指定包的主入口Ability
-
-    Args:
-        bundle_name: 应用包名
-        device_id: 设备ID,如果为None则使用第一个设备
-
-    Returns:
-        包含主Ability信息的字典(ability_name, module_name)
-
-    Example:
-        get_main_ability("com.huawei.hmos.settings")
-        -> {"ability_name": "MainAbility", "module_name": "entry"}
-    """
-    hdc = get_hdc()
-    result = await asyncio.to_thread(hdc.get_main_ability, device_id, bundle_name)
-    result['device_id'] = device_id
     
-    # 确保必需字段存在
-    result.setdefault('ability_name', '')
-    result.setdefault('module_name', '')
-    result.setdefault('bundle_name', bundle_name)
+    # 如果指定了 bundle_name 但 info_type 是 list，自动切换到 abilities
+    if bundle_name and info_type == 'list':
+        info_type = 'abilities'
     
-    return result
+    # === list 模式：列出所有包 ===
+    if info_type == 'list':
+        result = await asyncio.to_thread(hdc.list_packages, device_id, keyword)
+        return {
+            'success': result.get('success', True),
+            'device_id': device_id,
+            'info_type': 'list',
+            'packages': result.get('packages', []),
+            'count': result.get('count', len(result.get('packages', []))),
+            'keyword': keyword or ''
+        }
+    
+    # === abilities 模式：获取所有 Abilities ===
+    if info_type == 'abilities':
+        result = await asyncio.to_thread(hdc.get_package_info, device_id, bundle_name)
+        if result.get('success'):
+            return {
+                'success': True,
+                'device_id': device_id,
+                'info_type': 'abilities',
+                'bundle_name': bundle_name,
+                'abilities': result.get('abilities', []),
+                'modules': result.get('modules', []),
+                'main_ability': result.get('main_ability'),
+                'ability_count': len(result.get('abilities', []))
+            }
+        else:
+            return {
+                'success': False,
+                'error': result.get('error', '获取 Abilities 失败'),
+                'error_code': result.get('error_code', 'GET_ABILITIES_ERROR'),
+                'device_id': device_id,
+                'info_type': 'abilities',
+                'bundle_name': bundle_name,
+                'abilities': [],
+                'modules': [],
+                'main_ability': None,
+                'ability_count': 0
+            }
+    
+    # === main_ability 模式：仅获取主 Ability ===
+    if info_type == 'main_ability':
+        result = await asyncio.to_thread(hdc.get_main_ability, device_id, bundle_name)
+        return {
+            'success': result.get('success', False),
+            'device_id': device_id,
+            'info_type': 'main_ability',
+            'bundle_name': bundle_name,
+            'ability_name': result.get('ability_name', ''),
+            'module_name': result.get('module_name', ''),
+            'error': result.get('error') if not result.get('success') else None
+        }
+    
+    # 不应到达此处
+    return {
+        'success': False,
+        'error': f'不支持的 info_type: {info_type}',
+        'error_code': 'INVALID_INFO_TYPE',
+        'device_id': device_id,
+        'info_type': info_type
+    }

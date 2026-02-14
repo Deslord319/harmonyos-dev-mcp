@@ -99,24 +99,29 @@ class AbilityInfo(TypedDict, total=False):
     type: str
 
 
-class ListPackagesResult(DeviceResult):
-    """list_packages 返回类型"""
+QueryInfoType = Literal['list', 'abilities', 'main_ability']
+
+
+class QueryPackageResult(DeviceResult, total=False):
+    """query_package 返回类型（统一包查询结果）
+    
+    根据 info_type 不同，返回字段有所差异：
+    - list: 返回 packages, count
+    - abilities: 返回 bundle_name, abilities, modules, main_ability, ability_count
+    - main_ability: 返回 bundle_name, ability_name, module_name
+    """
+    info_type: QueryInfoType
+    # list 模式字段
     packages: List[str]
     count: int
-
-
-class PackageAbilitiesResult(DeviceResult):
-    """get_package_abilities 返回类型"""
+    keyword: str
+    # abilities 模式字段
     bundle_name: str
     abilities: List[AbilityInfo]
     modules: List[str]
     main_ability: Optional[AbilityInfo]
     ability_count: int
-
-
-class MainAbilityResult(DeviceResult):
-    """get_main_ability 返回类型"""
-    bundle_name: str
+    # main_ability 模式字段
     ability_name: str
     module_name: str
 
