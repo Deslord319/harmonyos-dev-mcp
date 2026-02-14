@@ -5,12 +5,12 @@ HarmonyOS MCP Server Utilities
 from .hdc_wrapper import (
     HdcWrapper,
     HdcBase,
-    HdcDeviceMixin,
-    HdcAppMixin,
-    HdcFileMixin,
-    HdcUIMixin,
-    HdcPackageMixin,
-    HdcScreenshotMixin,
+    HdcDevice,
+    HdcApp,
+    HdcFile,
+    HdcUI,
+    HdcPackage,
+    HdcScreenshot,
 )
 from .hvigor_wrapper import HvigorWrapper
 from .ui_operations import UIOperations
@@ -24,12 +24,12 @@ __all__ = [
     # HdcWrapper 及其组件
     "HdcWrapper",
     "HdcBase",
-    "HdcDeviceMixin",
-    "HdcAppMixin",
-    "HdcFileMixin",
-    "HdcUIMixin",
-    "HdcPackageMixin",
-    "HdcScreenshotMixin",
+    "HdcDevice",
+    "HdcApp",
+    "HdcFile",
+    "HdcUI",
+    "HdcPackage",
+    "HdcScreenshot",
     # 其他工具
     "HvigorWrapper",
     "UIOperations",

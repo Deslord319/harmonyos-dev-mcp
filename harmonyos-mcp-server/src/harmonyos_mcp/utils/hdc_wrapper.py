@@ -1,36 +1,36 @@
 """
 hdc命令行工具封装
 
-组合所有 Mixin 提供完整的 HarmonyOS 设备控制功能。
+组合所有功能模块提供完整的 HarmonyOS 设备控制功能。
 保持向后兼容的 API。
 
 架构：
 - HdcBase: 基础命令执行和 shell 校验
-- HdcDeviceMixin: 设备管理（list_devices, install_app, uninstall_app）
-- HdcAppMixin: 应用管理（start_app, get_app_pid, forward_port）
-- HdcFileMixin: 文件操作（push_file, pull_file, hilog 相关）
-- HdcUIMixin: UI 操作（get_window_list, get_ui_tree_raw, find_window_by_bundle）
-- HdcPackageMixin: 包管理（list_packages, get_package_info, get_main_ability）
-- HdcScreenshotMixin: 截图功能（take_screenshot, take_element_screenshot）
+- HdcDevice: 设备管理（list_devices, install_app, uninstall_app）
+- HdcApp: 应用管理（start_app, get_app_pid, forward_port）
+- HdcFile: 文件操作（push_file, pull_file, hilog 相关）
+- HdcUI: UI 操作（get_window_list, get_ui_tree_raw, find_window_by_bundle）
+- HdcPackage: 包管理（list_packages, get_package_info, get_main_ability）
+- HdcScreenshot: 截图功能（take_screenshot, take_element_screenshot）
 """
 
 from .hdc_base import HdcBase
-from .hdc_device_mixin import HdcDeviceMixin
-from .hdc_app_mixin import HdcAppMixin
-from .hdc_file_mixin import HdcFileMixin
-from .hdc_ui_mixin import HdcUIMixin
-from .hdc_package_mixin import HdcPackageMixin
-from .hdc_screenshot_mixin import HdcScreenshotMixin
+from .hdc_device import HdcDevice
+from .hdc_app import HdcApp
+from .hdc_file import HdcFile
+from .hdc_ui import HdcUI
+from .hdc_package import HdcPackage
+from .hdc_screenshot import HdcScreenshot
 
 
 class HdcWrapper(
     HdcBase,
-    HdcDeviceMixin,
-    HdcAppMixin,
-    HdcFileMixin,
-    HdcUIMixin,
-    HdcPackageMixin,
-    HdcScreenshotMixin
+    HdcDevice,
+    HdcApp,
+    HdcFile,
+    HdcUI,
+    HdcPackage,
+    HdcScreenshot
 ):
     """
     HarmonyOS Device Connector (hdc) 工具封装类
@@ -77,14 +77,14 @@ class HdcWrapper(
     pass
 
 
-# 向后兼容：导出所有相关类
+# 导出所有相关类
 __all__ = [
     'HdcWrapper',
     'HdcBase',
-    'HdcDeviceMixin',
-    'HdcAppMixin',
-    'HdcFileMixin',
-    'HdcUIMixin',
-    'HdcPackageMixin',
-    'HdcScreenshotMixin',
+    'HdcDevice',
+    'HdcApp',
+    'HdcFile',
+    'HdcUI',
+    'HdcPackage',
+    'HdcScreenshot',
 ]

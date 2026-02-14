@@ -1,7 +1,7 @@
 """
 日志分析工具
 
-提供日志获取、保存快照、结构化分析等功能。
+提供 hilog 文件获取、日志获取、保存快照、结构化分析等功能。
 """
 import asyncio
 import os
@@ -13,9 +13,39 @@ from loguru import logger
 from ..container import get_hdc, get_hilogtool
 from ..config import LogSecurityConfig
 from ..utils.log_parser import LogParser, LogEntry
-from ..types import LogsFetchResult, LogsSaveResult, LogsAnalyzeResult, AnalysisType
+from ..types import LogsFetchResult, LogsSaveResult, LogsAnalyzeResult, AnalysisType, HilogReceiveResult
 from .base import ToolBase
 from .registry import mcp_tool
+
+
+@mcp_tool(category="logs")
+@ToolBase.handle_tool_error('HILOG_RECEIVE_ERROR', files=[], total_size=0)
+@ToolBase.with_device(files=[], total_size=0)
+@ToolBase.validate_params(local_dir=['path'])
+async def hilog_receive(device_id: Optional[str] = None, local_dir: Optional[str] = None) -> HilogReceiveResult:
+    """
+    从HarmonyOS设备的 /data/log/hilog 目录中获取所有 hilog 日志文件和 dict 解密文件
+
+    Args:
+        device_id: 设备ID，如果为None则使用第一个设备
+        local_dir: 本地保存目录，如果为None则使用当前工作目录
+
+    Returns:
+        包含获取结果、文件列表和统计信息的字典
+    """
+    hdc = get_hdc()
+    result = await asyncio.to_thread(hdc.hilog_receive, device_id, local_dir)
+    
+    # 添加设备ID到结果
+    result['device_id'] = device_id
+    
+    # 确保必需字段存在
+    if 'files' not in result:
+        result['files'] = []
+    if 'total_size' not in result:
+        result['total_size'] = 0
+    
+    return result
 
 
 def _empty_filters() -> dict:

@@ -1,5 +1,5 @@
 """
-hdc UI 操作 Mixin
+hdc UI 操作模块
 
 提供 UI 树获取、窗口管理等功能。
 """
@@ -10,7 +10,7 @@ from loguru import logger
 from harmonyos_mcp.config import Config
 
 
-class HdcUIMixin:
+class HdcUI:
     """UI 操作相关方法"""
 
     def get_window_list(self, device_id: str) -> Dict[str, Any]:

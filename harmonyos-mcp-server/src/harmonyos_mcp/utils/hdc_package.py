@@ -1,5 +1,5 @@
 """
-hdc 包管理 Mixin
+hdc 包管理模块
 
 提供包列表、包信息查询、Ability 解析等功能。
 """
@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 from loguru import logger
 
 
-class HdcPackageMixin:
+class HdcPackage:
     """包管理相关方法"""
 
     def list_packages(self, device_id: str, keyword: Optional[str] = None) -> Dict[str, Any]:

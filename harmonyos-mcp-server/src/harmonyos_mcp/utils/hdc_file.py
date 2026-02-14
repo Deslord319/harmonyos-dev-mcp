@@ -1,5 +1,5 @@
 """
-hdc 文件操作 Mixin
+hdc 文件操作模块
 
 提供文件推送/拉取、hilog 文件管理等功能。
 """
@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 from loguru import logger
 
 
-class HdcFileMixin:
+class HdcFile:
     """文件操作相关方法"""
 
     def push_file(self, device_id: str, local_path: str, remote_path: str) -> bool:

@@ -31,7 +31,7 @@ def _register_tools():
     3. 遍历注册表，将所有工具注册到 FastMCP 服务器
     """
     # 导入工具模块（触发 @mcp_tool 装饰器注册）
-    from .tools import device, build, packages, ui, ui_tree, logs, compile  # noqa: F401
+    from .tools import general, build, ui, ui_tree, logs, compile  # noqa: F401
     from .tools.registry import get_registered_tools, get_tool_summary
 
     # 从注册表自动注册到 FastMCP

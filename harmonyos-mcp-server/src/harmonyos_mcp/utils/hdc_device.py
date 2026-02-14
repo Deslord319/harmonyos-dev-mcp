@@ -1,5 +1,5 @@
 """
-hdc 设备管理 Mixin
+hdc 设备管理模块
 
 提供设备列表、应用安装/卸载等功能。
 """
@@ -9,7 +9,7 @@ from loguru import logger
 from harmonyos_mcp.config import Config
 
 
-class HdcDeviceMixin:
+class HdcDevice:
     """设备管理相关方法"""
 
     def list_devices(self) -> List[str]:

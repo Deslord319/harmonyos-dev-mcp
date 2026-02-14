@@ -1,5 +1,5 @@
 """
-hdc 应用管理 Mixin
+hdc 应用管理模块
 
 提供应用启动、进程管理、端口转发等功能。
 """
@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from loguru import logger
 
 
-class HdcAppMixin:
+class HdcApp:
     """应用管理相关方法"""
 
     def get_app_pid(self, device_id: str, package_name: str) -> Optional[int]:

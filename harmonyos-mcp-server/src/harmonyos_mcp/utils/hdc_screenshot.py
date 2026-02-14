@@ -1,5 +1,5 @@
 """
-hdc 截图 Mixin
+hdc 截图模块
 
 提供设备截图功能。
 """
@@ -9,7 +9,7 @@ from typing import Dict, Any
 from loguru import logger
 
 
-class HdcScreenshotMixin:
+class HdcScreenshot:
     """截图相关方法"""
 
     def take_screenshot(
