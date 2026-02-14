@@ -59,11 +59,11 @@ Repository = "https://github.com/Deslord319/mcp_ho_dev"
 Issues = "https://github.com/Deslord319/mcp_ho_dev/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/harmonyos_mcp"]
+packages = ["harmonyos_mcp"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/src",
+    "/harmonyos_mcp",
     "/README.md",
     "/tests",
 ]
@@ -82,7 +82,7 @@ addopts = "-v --tb=short"
 # coverage 配置
 # ============================================================================
 [tool.coverage.run]
-source = ["src/harmonyos_mcp"]
+source = ["harmonyos_mcp"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",

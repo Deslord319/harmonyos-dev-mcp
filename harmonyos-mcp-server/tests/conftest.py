@@ -23,7 +23,7 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
     
     提供默认的返回值，可以在测试中覆盖。
     """
-    from harmonyos_mcp.utils.hdc_wrapper import HdcWrapper
+    from harmonyos_mcp.utils.hdc import HdcWrapper
     from harmonyos_mcp.container import Container
     
     mock = MagicMock(spec=HdcWrapper)
@@ -96,7 +96,7 @@ def no_device_mock(mock_hdc: MagicMock) -> MagicMock:
 @pytest.fixture
 def mock_ui_operations() -> Generator[MagicMock, None, None]:
     """Mock UiTestWrapper"""
-    from harmonyos_mcp.utils.ui_operations import UiTestWrapper
+    from harmonyos_mcp.utils.wrappers.ui_operations import UiTestWrapper
     from harmonyos_mcp.container import Container
     
     mock = MagicMock(spec=UiTestWrapper)
@@ -123,7 +123,7 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
 @pytest.fixture
 def mock_compile_manager() -> Generator[MagicMock, None, None]:
     """Mock CompileLibraryManager"""
-    from harmonyos_mcp.utils.compile_wrapper import CompileLibraryManager
+    from harmonyos_mcp.utils.wrappers.compile_wrapper import CompileLibraryManager
     from harmonyos_mcp.container import Container
     
     mock = MagicMock(spec=CompileLibraryManager)
