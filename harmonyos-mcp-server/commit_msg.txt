@@ -1,7 +1,0 @@
-docs: 更新文档，反映 query_package 工具合并
-
-- 更新 TASKS.md：工具数量从 30 改为 25，更新包管理和日志工具描述
-- 更新 README.md：添加 query_package 文档链接
-- 新增 docs/tools/query_package.md：统一包查询工具使用文档
-
-🤖 Generated with [Qoder][https://qoder.com]
