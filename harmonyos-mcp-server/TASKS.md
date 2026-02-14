@@ -31,8 +31,8 @@
 | 任务                 | 状态   | 说明                                                          |
 | -------------------- | ------ | ------------------------------------------------------------- |
 | 2.1 UI操作工具       | ✅      | click, long_press, swipe, input_text, press_key, find_element |
-| 2.2 包管理工具       | ✅      | list_packages, get_package_abilities, get_main_ability        |
-| 2.3 日志收集与分析   | ✅      | logs_fetch, logs_save_snapshot, logs_analyze（多种过滤条件）  |
+| 2.2 包管理工具       | ✅      | query_package（合并 list_packages, get_package_abilities, get_main_ability） |
+| 2.3 日志收集与分析   | ✅      | logs_query（合并 hilog_receive, logs_fetch, logs_save_snapshot, logs_analyze） |
 | ~~2.4 签名管理工具~~ | ❌ 取消 | HarmonyOS签名类似Apple，需在线申请证书                        |
 | 2.5 设备管理增强     | 🔄      | hilog_receive 已完成，connect/disconnect/get_info 待实现      |
 | 2.6 截图功能         | ✅      | screenshot, screenshot_element                                |
@@ -49,7 +49,7 @@
 | ~~3.1 AGC API集成~~ | ❌ 取消 | 需华为开发者OAuth认证，封闭生态 |
 | 3.2 性能分析工具    | ⏳      | DevEco Profiler集成             |
 | 3.3 代码生成工具    | ⏳      | 基于UI树生成ArkTS代码           |
-| 3.4 MCP工具性能优化 | ✅      | 全部30个工具通过 asyncio.to_thread 实现非阻塞并发，另有 _execute_command_async 原生异步执行 |
+| 3.4 MCP工具性能优化 | ✅      | 全部25个工具通过 asyncio.to_thread 实现非阻塞并发，另有 _execute_command_async 原生异步执行 |
 | 3.5 安全性增强      | ✅      | Shell命令白名单/黑名单、ToolBase.validate_params 输入校验、LogSecurityConfig 路径白名单、危险字符检测 |
 | 3.6 多设备并发支持  | ⏳      |                                 |
 | 3.7 版本兼容性管理  | ⏳      | SDK版本检测                     |

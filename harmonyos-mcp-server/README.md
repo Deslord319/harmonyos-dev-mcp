@@ -221,7 +221,7 @@ mcpServers:
 | query_package | 统一包查询（列出包/获取 Abilities/获取主 Ability） |
 | logs_query | 统一日志查询（拉取/解析/过滤/分析/保存一体化） |
 
-> 日志工具详细参数见 [docs/tools/logs_query.md](docs/tools/logs_query.md)
+> 工具详细参数见：[query_package](docs/tools/query_package.md) | [logs_query](docs/tools/logs_query.md)
 
 ### 二、鸿蒙打包编译 (Build)
 
