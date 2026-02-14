@@ -95,11 +95,11 @@ def no_device_mock(mock_hdc: MagicMock) -> MagicMock:
 
 @pytest.fixture
 def mock_ui_operations() -> Generator[MagicMock, None, None]:
-    """Mock UIOperations"""
-    from harmonyos_mcp.utils.ui_operations import UIOperations
+    """Mock UiTestWrapper"""
+    from harmonyos_mcp.utils.ui_operations import UiTestWrapper
     from harmonyos_mcp.container import Container
     
-    mock = MagicMock(spec=UIOperations)
+    mock = MagicMock(spec=UiTestWrapper)
     
     # 默认返回值
     mock.click.return_value = {'success': True, 'x': 100, 'y': 200}
@@ -115,7 +115,7 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
         'count': 1
     }
     
-    Container.register(UIOperations, mock)
+    Container.register(UiTestWrapper, mock)
     
     yield mock
 

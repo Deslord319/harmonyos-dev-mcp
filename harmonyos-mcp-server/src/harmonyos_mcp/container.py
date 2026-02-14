@@ -69,7 +69,7 @@ class _Container:
         # 延迟导入避免循环依赖
         from .utils.hdc_wrapper import HdcWrapper
         from .utils.compile_wrapper import CompileLibraryManager
-        from .utils.ui_operations import UIOperations
+        from .utils.ui_operations import UiTestWrapper
         from .utils.hvigor_wrapper import HvigorWrapper
         from .utils.hilogtool_wrapper import HilogtoolWrapper
         
@@ -83,11 +83,11 @@ class _Container:
             logger.info("CompileLibraryManager 初始化成功")
             return instance
             
-        elif service_type == UIOperations:
-            # UIOperations 依赖 HdcWrapper
+        elif service_type == UiTestWrapper:
+            # UiTestWrapper 依赖 HdcWrapper
             hdc = self.get(HdcWrapper)
-            instance = UIOperations(hdc)
-            logger.info("UIOperations 初始化成功")
+            instance = UiTestWrapper(hdc)
+            logger.info("UiTestWrapper 初始化成功")
             return instance
             
         elif service_type == HilogtoolWrapper:
@@ -186,9 +186,9 @@ def get_compile_manager():
 
 
 def get_ui_operations():
-    """获取 UIOperations 实例"""
-    from .utils.ui_operations import UIOperations
-    return Container.get(UIOperations)
+    """获取 UiTestWrapper 实例"""
+    from .utils.ui_operations import UiTestWrapper
+    return Container.get(UiTestWrapper)
 
 
 def get_hilogtool():

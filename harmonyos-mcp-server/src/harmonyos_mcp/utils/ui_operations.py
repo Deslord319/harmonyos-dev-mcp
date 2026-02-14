@@ -1,6 +1,7 @@
 """
-UI操作工具封装
-封装 hdc shell uitest uiInput 命令，提供UI自动化操作能力
+uitest 命令封装
+
+封装 hdc shell uitest uiInput 命令，提供 UI 自动化操作能力。
 """
 import re
 from typing import Dict, Any, Optional, List, Tuple
@@ -9,8 +10,8 @@ from loguru import logger
 from .hdc_wrapper import HdcWrapper
 
 
-class UIOperations:
-    """UI操作工具类"""
+class UiTestWrapper:
+    """uitest uiInput 命令封装"""
     
     def __init__(self, hdc: HdcWrapper):
         """
@@ -410,9 +411,9 @@ class UIOperations:
         Returns:
             (x, y) 中心点坐标，解析失败返回None
         """
-        bounds = UIOperations.parse_bounds(bounds_str)
+        bounds = UiTestWrapper.parse_bounds(bounds_str)
         if bounds:
-            return UIOperations.calculate_center(bounds)
+            return UiTestWrapper.calculate_center(bounds)
         return None
 
     # ========================================================================
