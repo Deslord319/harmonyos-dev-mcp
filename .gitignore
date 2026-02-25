@@ -50,10 +50,5 @@ htmlcov/
 .env
 *.local
 
-# HarmonyOS
-*.hap
-*.app
-build-profile.json5.backup
-
 # Misc
 get-pip.py
