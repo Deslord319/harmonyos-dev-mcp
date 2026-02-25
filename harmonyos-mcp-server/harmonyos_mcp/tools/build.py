@@ -176,6 +176,11 @@ def _resolve_ability(hdc, device_id: str, bundle_name: str,
     """
     解析 Ability 信息
     
+    优化的自动检测逻辑：
+    1. 优先使用 get_main_ability 获取推荐的主入口
+    2. 如果失败，尝试从 abilities 列表中选择第一个 page 类型的可见 Ability
+    3. 最后使用默认值 EntryAbility/entry
+    
     Args:
         hdc: HdcWrapper 实例
         device_id: 设备ID
@@ -192,16 +197,38 @@ def _resolve_ability(hdc, device_id: str, bundle_name: str,
     auto_detected = False
 
     if not final_ability and auto_detect:
-        logger.info(f"未指定Ability,尝试自动检测包 {bundle_name} 的主Ability")
+        logger.debug(f"未指定Ability,尝试自动检测包 {bundle_name} 的主Ability")
+        
+        # 1. 优先使用 get_main_ability
         result = hdc.get_main_ability(device_id, bundle_name)
-
-        if result['success']:
+        if result['success'] and result.get('ability_name'):
             final_ability = result['ability_name']
             final_module = final_module or result['module_name']
             auto_detected = True
-            logger.info(f"自动检测到主Ability: {final_ability}, module: {final_module}")
+            logger.debug(f"自动检测到主Ability: {final_ability}, module: {final_module}")
         else:
-            logger.warning(f"自动检测主Ability失败: {result.get('error')}")
+            # 2. 尝试从 abilities 列表中选择备选
+            logger.debug(f"get_main_ability 未找到，尝试从 abilities 列表选择")
+            pkg_info = hdc.get_package_info(device_id, bundle_name)
+            if pkg_info.get('success'):
+                abilities = pkg_info.get('abilities', [])
+                # 优先选择 page 类型且 visible 的 Ability
+                for ability in abilities:
+                    if ability.get('type') == 'page' and ability.get('visible', False):
+                        final_ability = ability.get('name')
+                        final_module = final_module or ability.get('module', 'entry')
+                        auto_detected = True
+                        logger.debug(f"从abilities列表选择: {final_ability}, module: {final_module}")
+                        break
+                # 如果没有，选择第一个 page 类型
+                if not final_ability:
+                    for ability in abilities:
+                        if ability.get('type') == 'page':
+                            final_ability = ability.get('name')
+                            final_module = final_module or ability.get('module', 'entry')
+                            auto_detected = True
+                            logger.debug(f"选择第一个page类型: {final_ability}, module: {final_module}")
+                            break
 
     # 使用默认值
     return (

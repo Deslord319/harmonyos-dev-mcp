@@ -19,14 +19,22 @@ async def list_devices() -> ListDevicesResult:
     """
     列出所有连接的HarmonyOS设备和模拟器
     
+    默认返回设备详细信息（型号、系统版本、屏幕分辨率等）。
+    
     Returns:
         包含设备列表的字典:
         - success: 是否成功
-        - devices: 设备ID列表
+        - devices: 设备信息列表，每个设备包含:
+            - device_id: 设备ID
+            - model: 设备型号
+            - brand: 品牌
+            - os_version: 系统版本
+            - api_version: API版本
+            - screen_size: 屏幕分辨率
         - count: 设备数量
     """
     hdc = get_hdc()
-    devices = await asyncio.to_thread(hdc.list_devices)
+    devices = await asyncio.to_thread(hdc.list_devices_with_info)
     
     return {
         'success': True,
@@ -46,7 +54,9 @@ _QUERY_PACKAGE_ERROR_DEFAULTS = {
     'main_ability': None,
     'ability_count': 0,
     'ability_name': '',
-    'module_name': ''
+    'module_name': '',
+    'requested_permissions': [],
+    'permission_count': 0
 }
 
 
@@ -57,15 +67,16 @@ async def query_package(
     device_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
     keyword: Optional[str] = None,
-    info_type: Literal['list', 'abilities', 'main_ability'] = 'list'
+    info_type: Literal['list', 'abilities', 'main_ability', 'permissions'] = 'list'
 ) -> QueryPackageResult:
     """
-    统一的包查询工具（合并 list_packages、get_package_abilities、get_main_ability）
+    统一的包查询工具（合并 list_packages、get_package_abilities、get_main_ability、get_permissions）
     
     根据参数组合执行不同查询：
     - bundle_name 为空: 列出所有包（可用 keyword 过滤）
     - bundle_name 非空 + info_type="abilities": 获取所有 Abilities
     - bundle_name 非空 + info_type="main_ability": 仅获取主 Ability
+    - bundle_name 非空 + info_type="permissions": 获取应用权限列表
 
     Args:
         device_id: 设备ID，如果为None则使用第一个设备
@@ -75,6 +86,7 @@ async def query_package(
             - list: 列出所有包（默认）
             - abilities: 获取指定包的所有 Abilities
             - main_ability: 获取指定包的主入口 Ability
+            - permissions: 获取指定包的权限列表
 
     Returns:
         根据 info_type 返回不同结构的结果字典
@@ -91,11 +103,14 @@ async def query_package(
         
         # 获取指定包的主 Ability
         query_package(bundle_name="com.huawei.hmos.settings", info_type="main_ability")
+        
+        # 获取指定包的权限列表
+        query_package(bundle_name="com.huawei.hmos.settings", info_type="permissions")
     """
     hdc = get_hdc()
     
     # 参数校验：需要 bundle_name 的查询类型
-    if info_type in ('abilities', 'main_ability') and not bundle_name:
+    if info_type in ('abilities', 'main_ability', 'permissions') and not bundle_name:
         return {
             'success': False,
             'error': f'info_type="{info_type}" 需要指定 bundle_name 参数',
@@ -159,6 +174,19 @@ async def query_package(
             'bundle_name': bundle_name,
             'ability_name': result.get('ability_name', ''),
             'module_name': result.get('module_name', ''),
+            'error': result.get('error') if not result.get('success') else None
+        }
+    
+    # === permissions 模式：获取应用权限列表 ===
+    if info_type == 'permissions':
+        result = await asyncio.to_thread(hdc.get_package_permissions, device_id, bundle_name)
+        return {
+            'success': result.get('success', False),
+            'device_id': device_id,
+            'info_type': 'permissions',
+            'bundle_name': bundle_name,
+            'requested_permissions': result.get('requested_permissions', []),
+            'permission_count': result.get('permission_count', 0),
             'error': result.get('error') if not result.get('success') else None
         }
     

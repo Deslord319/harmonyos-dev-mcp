@@ -501,3 +501,69 @@ class HdcPackage:
                 sources.append('普通ability')
         
         return ', '.join(sources)
+
+    def get_package_permissions(self, device_id: str, bundle_name: str) -> Dict[str, Any]:
+        """
+        获取指定包的权限信息
+        
+        Args:
+            device_id: 设备ID
+            bundle_name: 应用包名
+            
+        Returns:
+            包含权限列表的字典:
+            - success: 是否成功
+            - bundle_name: 包名
+            - requested_permissions: 申请的权限列表
+            - permission_count: 权限数量
+        """
+        logger.debug(f"获取包 {bundle_name} 的权限信息")
+        
+        # 使用 bm dump -n 获取包详情
+        command = f"bm dump -n {bundle_name}"
+        result = self.execute_shell(device_id, command)
+        
+        if not result['success']:
+            return {
+                'success': False,
+                'error': result['stderr'],
+                'bundle_name': bundle_name,
+                'requested_permissions': [],
+                'permission_count': 0
+            }
+        
+        output = result['stdout']
+        permissions = []
+        
+        try:
+            # 尝试 JSON 解析
+            lines = output.split('\n', 1)
+            json_str = lines[1] if len(lines) > 1 and ':' in lines[0] else output
+            data = json.loads(json_str)
+            
+            # 从 reqPermissions 或 requestPermissions 获取
+            permissions = data.get('reqPermissions', []) or data.get('requestPermissions', [])
+            
+            # 如果是字典格式，提取权限名称
+            if permissions and isinstance(permissions[0], dict):
+                permissions = [p.get('name', '') for p in permissions if p.get('name')]
+            
+        except json.JSONDecodeError:
+            # 文本解析 - 查找 reqPermissions 部分
+            for line in output.split('\n'):
+                stripped = line.strip()
+                if 'permission' in stripped.lower() and ':' in stripped:
+                    # 尝试提取权限名称
+                    match = re.search(r'"([^"]*permission[^"]*)"', stripped, re.IGNORECASE)
+                    if match:
+                        permissions.append(match.group(1))
+        
+        # 去重
+        permissions = list(set(permissions))
+        
+        return {
+            'success': True,
+            'bundle_name': bundle_name,
+            'requested_permissions': sorted(permissions),
+            'permission_count': len(permissions)
+        }
