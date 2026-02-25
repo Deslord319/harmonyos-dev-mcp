@@ -126,9 +126,10 @@ class HdcScreenshot:
         """
         logger.info(f"对设备 {device_id} 的元素区域进行截图: {bounds}")
 
-        # 先进行全屏截图
+        # 先进行全屏截图（使用独立的临时文件名，避免与目标路径冲突）
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        temp_path = local_path.replace('.png', f'_full_{timestamp}.png')
+        base, ext = os.path.splitext(local_path)
+        temp_path = f"{base}_full_{timestamp}{ext or '.png'}"
 
         full_result = self.take_screenshot(device_id, temp_path)
 
@@ -157,7 +158,10 @@ class HdcScreenshot:
                 cropped.save(local_path)
 
             # 删除临时全屏截图
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except OSError as e:
+                logger.warning(f"删除临时截图失败: {e}")
 
             file_size = os.path.getsize(local_path) if os.path.exists(local_path) else 0
 

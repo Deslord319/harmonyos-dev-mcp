@@ -27,13 +27,6 @@ class DeviceResult(BaseResult):
 # 设备管理类型
 # ============================================================================
 
-class DeviceInfo(TypedDict):
-    """设备信息"""
-    device_id: str
-    status: str
-    model: Optional[str]
-
-
 class ListDevicesResult(BaseResult):
     """list_devices 返回类型"""
     devices: List[str]
@@ -225,7 +218,7 @@ class ListWindowsResult(DeviceResult):
 # ============================================================================
 
 LogLevel = Literal['D', 'I', 'W', 'E', 'F']
-AnalysisType = Literal['summary', 'errors', 'performance', 'crashes', 'keywords', 'custom']
+AnalysisType = Literal['summary', 'custom']
 
 
 class LogsFilterConfig(TypedDict, total=False):
@@ -238,6 +231,7 @@ class LogsFilterConfig(TypedDict, total=False):
     seconds: int
     start_time: str
     end_time: str
+    time_expr: str
     time_range: Optional[dict]
 
 
@@ -261,9 +255,6 @@ class LogsQueryResult(BaseResult, total=False):
     analysis: dict
     evidence_lines: List[str]
     total_entries_analyzed: int
-    # raw_files 模式字段
-    files: List[str]
-    total_size: int
     # 保存模式字段
     saved_path: str
     file_size: int
@@ -338,16 +329,3 @@ class VerifyOutputResult(BaseResult):
     verified: bool
     architecture: str
     file_sizes: dict
-
-
-# ============================================================================
-# 工具定义类型（用于插件系统）
-# ============================================================================
-
-@dataclass
-class ToolDefinition:
-    """工具定义"""
-    name: str
-    func: Any  # Callable
-    description: str
-    category: str

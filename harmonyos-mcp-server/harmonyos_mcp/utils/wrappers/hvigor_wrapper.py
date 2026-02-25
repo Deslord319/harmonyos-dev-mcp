@@ -211,7 +211,6 @@ class HvigorWrapper:
         Args:
             pid: 进程ID
         """
-        import platform
         try:
             if platform.system() == 'Windows':
                 # 在 Windows 上使用 taskkill 终止进程树

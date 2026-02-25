@@ -284,53 +284,6 @@ class HdcPackage:
         
         return abilities
 
-    def _get_modules_from_dump(self, dump_output: str) -> List[Dict[str, str]]:
-        """
-        从bm dump输出中解析模块信息
-
-        Args:
-            dump_output: bm dump命令的原始输出
-
-        Returns:
-            模块列表，每个模块包含 name 字段
-        """
-        modules = []
-        seen_names = set()
-        
-        # 方法1: 从JSON解析
-        try:
-            lines = dump_output.split('\n', 1)
-            if len(lines) > 1:
-                json_str = lines[1] if ':' in lines[0] else dump_output
-            else:
-                json_str = dump_output
-            
-            data = json.loads(json_str)
-            for hap in data.get('hapModuleInfos', []):
-                module_name = hap.get('moduleName', '')
-                if module_name and module_name not in seen_names:
-                    modules.append({'name': module_name})
-                    seen_names.add(module_name)
-        except (json.JSONDecodeError, KeyError):
-            pass
-        
-        # 方法2: 文本模式解析
-        if not modules:
-            for line in dump_output.split('\n'):
-                if 'moduleName' in line or '"module"' in line:
-                    match = re.search(r'module[Nn]?ame?["\']?\s*[:=]\s*["\']?(\w+)', line)
-                    if match:
-                        module_name = match.group(1)
-                        if module_name not in seen_names:
-                            modules.append({'name': module_name})
-                            seen_names.add(module_name)
-        
-        # 默认返回 entry 模块
-        if not modules:
-            modules.append({'name': 'entry'})
-        
-        return modules
-
     def _find_main_ability(self, abilities: List[Dict[str, Any]], 
                            modules: List[Dict[str, str]],
                            module_main_abilities: Dict[str, str] = None) -> Optional[Dict[str, Any]]:

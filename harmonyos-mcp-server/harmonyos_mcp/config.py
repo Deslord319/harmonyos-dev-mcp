@@ -65,99 +65,8 @@ class Config:
     RETRY_DELAY: int = 2
 
     # ========================================================================
-    # 自动检测方法
+    # 初始化方法
     # ========================================================================
-
-    @classmethod
-    def _get_deveco_search_paths(cls) -> List[Path]:
-        """获取 DevEco Studio 搜索路径列表"""
-        paths = []
-        system = platform.system()
-
-        if system == "Windows":
-            # Windows 常见安装路径
-            paths.extend([
-                Path("C:/Program Files/Huawei/DevEco Studio"),
-                Path("C:/Program Files (x86)/Huawei/DevEco Studio"),
-                Path(os.path.expanduser("~/AppData/Local/Huawei/DevEco Studio")),
-                Path(os.path.expanduser("~/AppData/Local/Programs/Huawei/DevEco Studio")),
-            ])
-            # 尝试从注册表或常见位置检测
-            program_files = os.environ.get('ProgramFiles', 'C:/Program Files')
-            program_files_x86 = os.environ.get('ProgramFiles(x86)', 'C:/Program Files (x86)')
-            paths.extend([
-                Path(program_files) / "Huawei" / "DevEco Studio",
-                Path(program_files_x86) / "Huawei" / "DevEco Studio",
-            ])
-        elif system == "Darwin":
-            # macOS 常见安装路径
-            paths.extend([
-                Path("/Applications/DevEco Studio.app/Contents"),
-                Path(os.path.expanduser("~/Applications/DevEco Studio.app/Contents")),
-            ])
-        else:
-            # Linux 常见安装路径
-            paths.extend([
-                Path(os.path.expanduser("~/DevEco Studio")),
-                Path(os.path.expanduser("~/deveco-studio")),
-                Path("/opt/DevEco Studio"),
-                Path("/opt/deveco-studio"),
-            ])
-
-        # 去重
-        return list(dict.fromkeys(paths))
-
-    @classmethod
-    def _get_sdk_search_paths(cls) -> List[Path]:
-        """获取 SDK 搜索路径列表"""
-        paths = []
-        system = platform.system()
-
-        # 如果已知 DevEco Studio 路径，优先从中查找
-        if cls.DEVECO_STUDIO_PATH:
-            deveco = Path(cls.DEVECO_STUDIO_PATH)
-            paths.append(deveco / "sdk" / "default")
-            paths.append(deveco / "sdk" / "HarmonyOS")
-
-        if system == "Windows":
-            paths.extend([
-                Path(os.path.expanduser("~/AppData/Local/Huawei/Sdk")),
-                Path(os.path.expanduser("~/Huawei/Sdk")),
-            ])
-            # 从 DevEco Studio 默认位置查找
-            for deveco_path in cls._get_deveco_search_paths():
-                paths.append(deveco_path / "sdk" / "default")
-        elif system == "Darwin":
-            paths.extend([
-                Path(os.path.expanduser("~/Library/Huawei/Sdk")),
-                Path(os.path.expanduser("~/Huawei/Sdk")),
-            ])
-        else:
-            paths.extend([
-                Path(os.path.expanduser("~/Huawei/Sdk")),
-                Path(os.path.expanduser("~/.local/share/Huawei/Sdk")),
-            ])
-
-        return list(dict.fromkeys(paths))
-
-    @classmethod
-    def _find_hdc_in_sdk(cls, sdk_path: Path) -> Optional[str]:
-        """在 SDK 路径中查找 hdc 工具"""
-        system = platform.system()
-        hdc_name = "hdc.exe" if system == "Windows" else "hdc"
-
-        # 可能的 hdc 位置
-        possible_paths = [
-            sdk_path / "toolchains" / hdc_name,
-            sdk_path / "openharmony" / "toolchains" / hdc_name,
-            sdk_path / "HarmonyOS" / "toolchains" / hdc_name,
-        ]
-
-        for path in possible_paths:
-            if path.exists():
-                return str(path)
-
-        return None
 
     @classmethod
     def ensure_init(cls):
@@ -167,94 +76,87 @@ class Config:
 
     @classmethod
     def init(cls):
-        """初始化配置（自动检测工具路径）"""
+        """初始化配置（从环境变量或PATH检测工具路径）"""
         cls._initialized = True
+        system = platform.system()
 
-        # 1. 检测 DevEco Studio 路径
-        # 优先级: DEVECO_STUDIO_PATH 环境变量 > "DevEco Studio" 环境变量 > 自动检测
+        # 1. 检测 DevEco Studio 路径（仅从 "DevEco Studio" 环境变量）
         if not cls.DEVECO_STUDIO_PATH:
-            # 尝试从 "DevEco Studio" 环境变量获取（路径形如 ...\bin; 需要去掉 \bin 和分号）
             deveco_env = os.getenv('DevEco Studio')
             if deveco_env:
-                # 处理可能的分号分隔（取第一个路径）和去掉末尾分号
                 deveco_env = deveco_env.split(';')[0].strip()
                 if deveco_env:
                     deveco_path = Path(deveco_env)
-                    # 如果路径以 bin 结尾，取其父目录
                     if deveco_path.name.lower() == 'bin':
                         deveco_path = deveco_path.parent
                     if deveco_path.exists():
                         cls.DEVECO_STUDIO_PATH = str(deveco_path)
-                        logger.info(f"从环境变量 'DevEco Studio' 检测到: {deveco_path}")
+                        logger.debug(f"从环境变量 'DevEco Studio' 检测到: {deveco_path}")
 
-            # 如果仍未找到，尝试自动检测常见路径
-            if not cls.DEVECO_STUDIO_PATH:
-                for path in cls._get_deveco_search_paths():
-                    if path.exists():
-                        cls.DEVECO_STUDIO_PATH = str(path)
-                        logger.info(f"自动检测到 DevEco Studio: {path}")
-                        break
-
-        # 2. 检测 SDK 路径
+        # 2. 检测 HarmonyOS SDK 路径
         if not cls.HARMONYOS_SDK_PATH:
-            for path in cls._get_sdk_search_paths():
-                if path.exists():
-                    cls.HARMONYOS_SDK_PATH = str(path)
-                    logger.info(f"自动检测到 SDK: {path}")
+            sdk_candidates = []
+            # 从 DevEco Studio 路径推断
+            if cls.DEVECO_STUDIO_PATH:
+                deveco = Path(cls.DEVECO_STUDIO_PATH)
+                sdk_candidates.append(deveco / "sdk")
+                sdk_candidates.append(deveco.parent / "sdk")
+            # 用户目录下常见位置
+            user_home = Path.home()
+            sdk_candidates.extend([
+                user_home / "HarmonyOS" / "sdk",
+                user_home / "AppData" / "Local" / "HarmonyOS" / "Sdk",
+                user_home / "AppData" / "Local" / "Huawei" / "Sdk",
+                user_home / ".harmonyos" / "sdk",
+            ])
+            for candidate in sdk_candidates:
+                if candidate.exists() and candidate.is_dir():
+                    cls.HARMONYOS_SDK_PATH = str(candidate)
+                    logger.debug(f"自动检测到 SDK 路径: {candidate}")
                     break
 
         # 3. 检测 hdc 路径
         if not cls.HDC_PATH:
-            # 首先尝试从 SDK 路径查找
+            # 从 SDK 路径查找
             if cls.HARMONYOS_SDK_PATH:
-                cls.HDC_PATH = cls._find_hdc_in_sdk(Path(cls.HARMONYOS_SDK_PATH))
+                hdc_name = "hdc.exe" if system == "Windows" else "hdc"
+                sdk = Path(cls.HARMONYOS_SDK_PATH)
+                for subdir in ["toolchains", "openharmony/toolchains", "HarmonyOS/toolchains"]:
+                    hdc_path = sdk / subdir / hdc_name
+                    if hdc_path.exists():
+                        cls.HDC_PATH = str(hdc_path)
+                        break
 
-            # 如果没找到，尝试从系统 PATH 查找
+            # 从系统 PATH 查找
             if not cls.HDC_PATH:
                 hdc_in_path = shutil.which('hdc')
                 if hdc_in_path:
                     cls.HDC_PATH = hdc_in_path
                     logger.info(f"从 PATH 找到 hdc: {hdc_in_path}")
 
-        # 4. 检测 Node.js 和 hvigor 路径（从 DevEco Studio）
+        # 3. 检测 Node.js 和 hvigor（从 DevEco Studio）
         if cls.DEVECO_STUDIO_PATH:
             deveco = Path(cls.DEVECO_STUDIO_PATH)
-            system = platform.system()
-
-            # Node.js
             node_name = "node.exe" if system == "Windows" else "node"
             node_path = deveco / "tools" / "node" / node_name
             if node_path.exists():
                 cls.NODE_PATH = str(node_path)
 
-            # hvigor
             hvigor_path = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
             if hvigor_path.exists():
                 cls.HVIGOR_PATH = str(hvigor_path)
 
-        # 5. 检测 hilogtool 路径
-        if not cls.HILOGTOOL_PATH:
-            system = platform.system()
+        # 4. 检测 hilogtool 路径
+        if not cls.HILOGTOOL_PATH and cls.HARMONYOS_SDK_PATH:
             hilogtool_name = "hilogtool.exe" if system == "Windows" else "hilogtool"
-
-            search_bases = []
-            if cls.HARMONYOS_SDK_PATH:
-                sdk = Path(cls.HARMONYOS_SDK_PATH)
-                search_bases.extend([
-                    sdk / "hms" / "toolchains",
-                    sdk / "toolchains",
-                    sdk / "openharmony" / "toolchains",
-                ])
-            if cls.DEVECO_STUDIO_PATH:
-                deveco = Path(cls.DEVECO_STUDIO_PATH)
-                search_bases.append(deveco / "sdk" / "default" / "hms" / "toolchains")
-
-            for base in search_bases:
-                candidate = base / hilogtool_name
+            sdk = Path(cls.HARMONYOS_SDK_PATH)
+            for subdir in ["hms/toolchains", "toolchains", "openharmony/toolchains"]:
+                candidate = sdk / subdir / hilogtool_name
                 if candidate.exists():
                     cls.HILOGTOOL_PATH = str(candidate)
                     break
 
+        # 输出检测结果
         if cls.HDC_PATH:
             logger.info(f"hdc 路径: {cls.HDC_PATH}")
         if cls.NODE_PATH:
@@ -267,27 +169,23 @@ class Config:
     @classmethod
     def validate(cls) -> bool:
         """验证配置是否有效"""
-        warnings = []
+        hints = []
         errors = []
 
         if not cls.DEVECO_STUDIO_PATH:
-            warnings.append("DEVECO_STUDIO_PATH 未设置，部分功能可能不可用")
+            hints.append("DEVECO_STUDIO_PATH 未设置，部分功能可能不可用")
 
         if not cls.HARMONYOS_SDK_PATH:
-            warnings.append("HARMONYOS_SDK_PATH 未设置，将尝试自动检测")
+            hints.append("HARMONYOS_SDK_PATH 未检测到，部分功能可能不可用")
 
         if not cls.HDC_PATH:
             errors.append("未找到 hdc 工具，请设置 HDC_PATH 环境变量或安装 DevEco Studio")
 
-        # 打印警告
-        for warning in warnings:
-            logger.warning(warning)
-
-        # 打印错误
+        for hint in hints:
+            logger.debug(hint)
         for error in errors:
             logger.error(error)
 
-        # 只要能找到 hdc 就允许启动
         return cls.HDC_PATH is not None
 
     @classmethod

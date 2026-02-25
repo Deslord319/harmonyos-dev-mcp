@@ -112,7 +112,6 @@ class CompileEnvironment:
                 'toolchain': self.get_toolchain_tools(),
                 'host': self.get_host_tools()
             },
-            'cmake': self.get_cmake_path(),
             'target_arch': target_arch
         }
 

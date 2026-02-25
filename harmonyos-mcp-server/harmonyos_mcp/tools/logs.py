@@ -7,7 +7,6 @@
 import asyncio
 import os
 import re
-import statistics
 import zipfile
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -21,6 +20,8 @@ from ..config import LogSecurityConfig
 from ..types import LogsQueryResult
 from .base import ToolBase
 from .registry import mcp_tool
+
+LOG_FETCH_MULTIPLIER = 5
 
 
 # ============================================================================
@@ -103,41 +104,21 @@ class LogParser:
         'F': 'F', 'FATAL': 'F',
     }
 
-    ERROR_PATTERNS = {
-        'exception': re.compile(r'(?i)(exception|error|fail|crash)', re.IGNORECASE),
-        'anr': re.compile(r'(?i)(anr|application not responding)', re.IGNORECASE),
-        'crash': re.compile(r'(?i)(crash|fatal|abort|segfault|sigsegv)', re.IGNORECASE),
-        'oom': re.compile(r'(?i)(out\s*of\s*memory|oom|memory\s*allocation\s*failed)', re.IGNORECASE),
-        'timeout': re.compile(r'(?i)(timeout|timed?\s*out)', re.IGNORECASE),
-    }
+    PRIO_MAP = {'D': 0, 'I': 1, 'W': 2, 'E': 3, 'F': 4}
 
     NOISE_PATTERNS = [
         re.compile(r'/sys/power/last_sr'),
         re.compile(r'XCollie.*last_sr'),
         re.compile(r'Failed to read file:\s*/sys/'),
+        re.compile(r'\blogd\b.*\bprune\b', re.IGNORECASE),
+        re.compile(r'\bhealthd\b', re.IGNORECASE),
+        re.compile(r'\bchatty\b.*\bidentical\b', re.IGNORECASE),
+        re.compile(r'ServiceManager:\s*Waiting for service'),
+        re.compile(r'\bsuspend\b|\bresume\b', re.IGNORECASE),
+        re.compile(r'\bWatchdog\b', re.IGNORECASE),
+        re.compile(r'\bGC\b.*(?:pause|heap|allocation)', re.IGNORECASE),
+        re.compile(r'\bChoreographer\b', re.IGNORECASE),
     ]
-
-    KEYWORD_PATTERNS = {
-        'error_code': re.compile(
-            r'(?:code|error|errno|status|ret|result)\s*[:=]\s*(-?\d+)', re.IGNORECASE),
-        'component': re.compile(
-            r'\[(\w+)\]\[(\w+)\]|\[([A-Z][a-zA-Z]+)\]|<([A-Z][a-zA-Z]+)>'),
-        'exception_name': re.compile(
-            r'\b([A-Z][a-zA-Z]*(?:Exception|Error|Failure|Fault))\b'),
-        'error_phrase': re.compile(
-            r'((?:Failed|Unable|Cannot|Could not|Couldn\'t|Error|Fail)'
-            r'\s+to\s+[\w\s]+?)(?:\.|,|$|Cause)', re.IGNORECASE),
-        'message_content': re.compile(
-            r'(?:msg|message|reason|cause)\s*[:=]\s*([^,\n\.]+)', re.IGNORECASE),
-    }
-
-    PERF_PATTERNS = {
-        'duration': re.compile(
-            r'(?i)(cost|duration|elapsed|time|took|spent)'
-            r'\s*[:\s=]*\s*(\d+(?:\.\d+)?)\s*(ms|s|μs|us|ns)?'),
-        'latency': re.compile(
-            r'(?i)latency\s*[:\s=]*\s*(\d+(?:\.\d+)?)\s*(ms|s)?'),
-    }
 
     # --- 解析 -------------------------------------------------------------
 
@@ -168,9 +149,13 @@ class LogParser:
                         time_str = groups['time']
                         if len(date_str) == 5:  # MM-DD
                             date_str = f"{year}-{date_str}"
-                        entry.timestamp = datetime.strptime(
+                        ts = datetime.strptime(
                             f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S.%f"
                         )
+                        # 跨年修正：如果解析出的时间在未来超过1天，回退到去年
+                        if ts > datetime.now() + timedelta(days=1):
+                            ts = ts.replace(year=ts.year - 1)
+                        entry.timestamp = ts
                     except ValueError:
                         pass
                 elif 'timestamp' in groups:
@@ -224,66 +209,58 @@ class LogParser:
         keyword: Optional[str] = None,
         time_range: Optional[Dict] = None,
         pid: Optional[int] = None,
-        seconds: Optional[int] = None
+        seconds: Optional[int] = None,
+        package_name: Optional[str] = None,
     ) -> List[LogEntry]:
-        """过滤日志条目"""
-        filtered = entries
-
+        """过滤日志条目（单趟遍历）"""
+        # 预计算过滤条件
+        min_p = None
         if level:
             normalized = cls.normalize_level(level)
-            prio = {'D': 0, 'I': 1, 'W': 2, 'E': 3, 'F': 4}
-            min_p = prio.get(normalized, 0) if normalized else 0
-            filtered = [
-                e for e in filtered
-                if e.level and prio.get(e.level.upper(), 0) >= min_p
-            ]
+            min_p = cls.PRIO_MAP.get(normalized, 0) if normalized else 0
 
-        if tag:
-            filtered = [
-                e for e in filtered
-                if e.tag and tag.lower() in e.tag.lower()
-            ]
+        tag_lower = tag.lower() if tag else None
+        kw_lower = keyword.lower() if keyword else None
+        pkg_lower = package_name.lower() if package_name else None
 
-        if keyword:
-            kw = keyword.lower()
-            filtered = [
-                e for e in filtered
-                if kw in e.message.lower() or kw in e.raw_line.lower()
-            ]
-
-        if pid:
-            filtered = [e for e in filtered if e.pid == pid]
-
+        start_dt = end_dt = None
         if time_range:
-            start = time_range.get('start')
-            end = time_range.get('end')
-            if start:
-                try:
-                    start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
-                    filtered = [
-                        e for e in filtered
-                        if e.timestamp and e.timestamp >= start_dt
-                    ]
-                except ValueError:
-                    pass
-            if end:
-                try:
-                    end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
-                    filtered = [
-                        e for e in filtered
-                        if e.timestamp and e.timestamp <= end_dt
-                    ]
-                except ValueError:
-                    pass
+            start_dt = time_range.get('start')
+            end_dt = time_range.get('end')
 
+        cutoff = None
         if seconds:
             cutoff = datetime.now() - timedelta(seconds=seconds)
-            filtered = [
-                e for e in filtered
-                if e.timestamp and e.timestamp >= cutoff
-            ]
 
-        return filtered
+        # 单趟遍历
+        result = []
+        for entry in entries:
+            if min_p is not None:
+                if not entry.level or cls.PRIO_MAP.get(entry.level.upper(), 0) < min_p:
+                    continue
+            if tag_lower:
+                if not entry.tag or tag_lower not in entry.tag.lower():
+                    continue
+            if kw_lower:
+                if kw_lower not in entry.message.lower() and kw_lower not in entry.raw_line.lower():
+                    continue
+            if pid:
+                if entry.pid != pid:
+                    continue
+            if start_dt:
+                if not entry.timestamp or entry.timestamp < start_dt:
+                    continue
+            if end_dt:
+                if not entry.timestamp or entry.timestamp > end_dt:
+                    continue
+            if cutoff:
+                if not entry.timestamp or entry.timestamp < cutoff:
+                    continue
+            if pkg_lower:
+                if pkg_lower not in entry.raw_line.lower():
+                    continue
+            result.append(entry)
+        return result
 
     # --- 分析 -------------------------------------------------------------
 
@@ -325,327 +302,16 @@ class LogParser:
         }
 
     @classmethod
-    def analyze_errors(cls, entries: List[LogEntry]) -> Dict[str, Any]:
-        """分析错误日志"""
-        errors = [
-            e for e in entries
-            if e.level in ('E', 'F') and not cls._is_noise(e)
-        ]
-
-        by_tag: Dict[str, list] = defaultdict(list)
-        for entry in errors:
-            tag = entry.tag or 'Unknown'
-            by_tag[tag].append({
-                'message': entry.message,
-                'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
-                'pid': entry.pid,
-                'level': entry.level,
-            })
-
-        error_types: Dict[str, list] = defaultdict(list)
-        for entry in entries:
-            if cls._is_noise(entry):
-                continue
-            for error_type, pattern in cls.ERROR_PATTERNS.items():
-                if pattern.search(entry.message) or pattern.search(entry.raw_line):
-                    error_types[error_type].append({
-                        'message': entry.message[:200],
-                        'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
-                        'tag': entry.tag,
-                        'level': entry.level,
-                    })
-
-        return {
-            'total_errors': len(errors),
-            'error_level_count': sum(1 for e in errors if e.level == 'E'),
-            'fatal_level_count': sum(1 for e in errors if e.level == 'F'),
-            'by_tag': {
-                tag: {'count': len(items), 'samples': items[:5]}
-                for tag, items in by_tag.items()
-            },
-            'error_types': {
-                et: {'count': len(items), 'samples': items[:3]}
-                for et, items in error_types.items()
-            },
-        }
-
-    @classmethod
-    def analyze_performance(cls, entries: List[LogEntry]) -> Dict[str, Any]:
-        """分析性能相关日志"""
-        durations_ms: List[float] = []
-        perf_logs: List[dict] = []
-
-        for entry in entries:
-            text = entry.message + ' ' + entry.raw_line
-            for _, pattern in cls.PERF_PATTERNS.items():
-                for match in pattern.findall(text):
-                    try:
-                        if len(match) >= 2:
-                            value = float(match[1]) if isinstance(match, tuple) else float(match)
-                            unit = match[2] if len(match) > 2 and match[2] else 'ms'
-                        else:
-                            continue
-
-                        if unit == 's':
-                            value *= 1000
-                        elif unit in ('μs', 'us'):
-                            value /= 1000
-                        elif unit == 'ns':
-                            value /= 1000000
-
-                        durations_ms.append(value)
-                        perf_logs.append({
-                            'message': entry.message[:100],
-                            'value_ms': value,
-                            'tag': entry.tag,
-                            'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
-                        })
-                    except (ValueError, TypeError, IndexError):
-                        continue
-
-        result: Dict[str, Any] = {
-            'total_perf_logs': len(perf_logs),
-            'duration_samples': len(durations_ms),
-            'samples': perf_logs[:10],
-        }
-
-        if durations_ms:
-            sorted_d = sorted(durations_ms)
-            result['statistics'] = {
-                'min_ms': round(min(durations_ms), 2),
-                'max_ms': round(max(durations_ms), 2),
-                'avg_ms': round(statistics.mean(durations_ms), 2),
-                'median_ms': round(statistics.median(durations_ms), 2),
-            }
-            if len(sorted_d) >= 20:
-                result['statistics']['p95_ms'] = round(
-                    sorted_d[int(len(sorted_d) * 0.95)], 2
-                )
-                result['statistics']['p99_ms'] = round(
-                    sorted_d[int(len(sorted_d) * 0.99)], 2
-                )
-
-        return result
-
-    @classmethod
-    def analyze_crashes(cls, entries: List[LogEntry]) -> Dict[str, Any]:
-        """分析崩溃相关日志"""
-        crashes: List[dict] = []
-        anrs: List[dict] = []
-        exceptions: List[dict] = []
-
-        for entry in entries:
-            text = entry.message + ' ' + entry.raw_line
-            if cls.ERROR_PATTERNS['crash'].search(text):
-                crashes.append(entry.to_dict())
-            if cls.ERROR_PATTERNS['anr'].search(text):
-                anrs.append(entry.to_dict())
-            if cls.ERROR_PATTERNS['exception'].search(text):
-                exceptions.append(entry.to_dict())
-
-        return {
-            'crashes': {'count': len(crashes), 'samples': crashes[:5]},
-            'anrs': {'count': len(anrs), 'samples': anrs[:5]},
-            'exceptions': {'count': len(exceptions), 'samples': exceptions[:10]},
-            'next_steps': cls._generate_next_steps(crashes, anrs, exceptions),
-        }
-
-    @classmethod
-    def _generate_next_steps(cls, crashes: List, anrs: List, exceptions: List) -> List[str]:
-        """根据日志证据生成排查建议"""
-        steps: List[str] = []
-        if crashes:
-            steps.append(
-                "发现崩溃日志，建议：1) 检查崩溃堆栈信息 "
-                "2) 使用 addr2line 解析地址 3) 检查相关内存操作"
-            )
-        if anrs:
-            steps.append(
-                "发现 ANR 日志，建议：1) 检查主线程阻塞操作 "
-                "2) 分析 trace 文件 3) 检查 Binder 调用超时"
-            )
-        if exceptions:
-            steps.append(
-                "发现异常日志，建议：1) 检查异常堆栈 "
-                "2) 确认异常触发条件 3) 检查相关输入参数"
-            )
-        if not steps:
-            steps.append("未发现明显的崩溃或异常模式")
-        return steps
-
-    @classmethod
-    def analyze_keywords(cls, entries: List[LogEntry]) -> Dict[str, Any]:
-        """分析日志中的异常并提取可检索关键词"""
-        error_entries = [e for e in entries if e.level in ('E', 'F', 'W')]
-
-        if not error_entries:
-            return {
-                'total_errors': 0,
-                'error_groups': [],
-                'search_keywords': [],
-                'message': '未发现错误或警告日志',
-            }
-
-        error_groups: Dict[str, list] = defaultdict(list)
-        for entry in error_entries:
-            error_groups[entry.tag or 'Unknown'].append(entry)
-
-        analyzed_groups: List[dict] = []
-        all_keywords: set = set()
-        for tag, group_entries in error_groups.items():
-            ga = cls._analyze_error_group(tag, group_entries)
-            analyzed_groups.append(ga)
-            all_keywords.update(ga.get('keywords', []))
-
-        analyzed_groups.sort(key=lambda x: x['count'], reverse=True)
-
-        return {
-            'total_errors': len(error_entries),
-            'error_groups': analyzed_groups,
-            'search_keywords': cls._rank_keywords(all_keywords, error_entries),
-            'summary': {
-                'unique_tags': len(error_groups),
-                'error_count': sum(1 for e in error_entries if e.level == 'E'),
-                'fatal_count': sum(1 for e in error_entries if e.level == 'F'),
-                'warning_count': sum(1 for e in error_entries if e.level == 'W'),
-            },
-        }
-
-    @classmethod
-    def _analyze_error_group(cls, tag: str, entries: List[LogEntry]) -> Dict[str, Any]:
-        """分析单个 Tag 的错误组"""
-        keywords: set = set()
-        error_codes: List[str] = []
-        components: List[str] = []
-        exception_names: List[str] = []
-        error_phrases: List[str] = []
-        messages: List[str] = []
-
-        for entry in entries:
-            text = entry.message
-
-            for m in cls.KEYWORD_PATTERNS['error_code'].finditer(text):
-                code = m.group(1)
-                error_codes.append(code)
-                keywords.add(f"code:{code}")
-
-            for m in cls.KEYWORD_PATTERNS['component'].finditer(text):
-                for comp in (g for g in m.groups() if g):
-                    components.append(comp)
-                    keywords.add(comp)
-
-            for m in cls.KEYWORD_PATTERNS['exception_name'].finditer(text):
-                exc = m.group(1)
-                exception_names.append(exc)
-                keywords.add(exc)
-
-            for m in cls.KEYWORD_PATTERNS['error_phrase'].finditer(text):
-                phrase = m.group(1).strip()
-                if len(phrase) > 5:
-                    error_phrases.append(phrase)
-                    keywords.add(phrase)
-
-            for m in cls.KEYWORD_PATTERNS['message_content'].finditer(text):
-                msg = m.group(1).strip()
-                if len(msg) > 5:
-                    messages.append(msg)
-
-        for part in tag.split('/'):
-            if part and len(part) > 2:
-                keywords.add(part)
-
-        return {
-            'tag': tag,
-            'count': len(entries),
-            'levels': dict(Counter(e.level for e in entries)),
-            'keywords': list(keywords),
-            'error_codes': [
-                {'code': c, 'count': n}
-                for c, n in Counter(error_codes).most_common(5)
-            ],
-            'components': [
-                {'name': c, 'count': n}
-                for c, n in Counter(components).most_common(5)
-            ],
-            'exception_names': [
-                {'name': c, 'count': n}
-                for c, n in Counter(exception_names).most_common(5)
-            ],
-            'error_phrases': [
-                {'phrase': c, 'count': n}
-                for c, n in Counter(error_phrases).most_common(5)
-            ],
-            'sample_messages': [e.message[:200] for e in entries[:3]],
-            'time_range': {
-                'first': entries[0].timestamp.isoformat() if entries[0].timestamp else None,
-                'last': entries[-1].timestamp.isoformat() if entries[-1].timestamp else None,
-            } if entries else None,
-        }
-
-    @classmethod
-    def _rank_keywords(
-        cls, keywords: set, entries: List[LogEntry]
-    ) -> List[Dict[str, Any]]:
-        """对关键词按重要性排序"""
-        scores: List[dict] = []
-
-        for kw in keywords:
-            if not kw or len(kw) < 3:
-                continue
-
-            count = sum(1 for e in entries if kw.lower() in e.raw_line.lower())
-            score = float(count)
-
-            if kw.startswith('code:'):
-                score *= 2
-            elif kw.endswith('Exception') or kw.endswith('Error'):
-                score *= 1.8
-            elif kw[0].isupper() and kw.isalnum():
-                score *= 1.5
-            elif ' ' in kw:
-                score *= 1.3
-
-            scores.append({
-                'keyword': kw,
-                'count': count,
-                'score': round(score, 2),
-                'type': cls._classify_keyword(kw),
-            })
-
-        scores.sort(key=lambda x: x['score'], reverse=True)
-        return scores[:20]
-
-    @classmethod
-    def _classify_keyword(cls, keyword: str) -> str:
-        """分类关键词类型"""
-        if keyword.startswith('code:'):
-            return 'error_code'
-        if keyword.endswith(('Exception', 'Error', 'Failure')):
-            return 'exception_name'
-        if keyword[0].isupper() and keyword.isalnum() and len(keyword) > 3:
-            return 'component'
-        if ' ' in keyword:
-            return 'error_phrase'
-        return 'tag'
-
-    @classmethod
     def analyze(
         cls,
         entries: List[LogEntry],
         analysis_type: str = 'summary',
         custom_regex: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """执行日志分析"""
-        dispatch = {
-            'summary': cls.analyze_summary,
-            'errors': cls.analyze_errors,
-            'performance': cls.analyze_performance,
-            'crashes': cls.analyze_crashes,
-            'keywords': cls.analyze_keywords,
-        }
+        """执行日志分析（仅支持 summary 和 custom）"""
         if analysis_type == 'custom' and custom_regex:
             return cls._analyze_custom(entries, custom_regex)
-        return dispatch.get(analysis_type, cls.analyze_summary)(entries)
+        return cls.analyze_summary(entries)
 
     @classmethod
     def _analyze_custom(
@@ -659,7 +325,13 @@ class LogParser:
 
         matches: List[dict] = []
         for entry in entries:
-            m = pattern.search(entry.raw_line)
+            try:
+                m = pattern.search(entry.raw_line)
+            except (RecursionError, TimeoutError):
+                return {
+                    'success': False,
+                    'error': '正则表达式执行超时或复杂度过高，请简化表达式',
+                }
             if m:
                 matches.append({
                     'line': entry.raw_line,
@@ -683,6 +355,95 @@ class LogParser:
 def _clean_dict(d: dict) -> dict:
     """移除字典中值为 None 的键"""
     return {k: v for k, v in d.items() if v is not None}
+
+
+def _parse_time_expr(expr: str) -> Optional[Dict[str, datetime]]:
+    """
+    解析自然语言时间表达式为 start/end datetime 字典。
+
+    支持格式：
+    - 相对时间：最近N分钟/小时/秒
+    - 日期词：今天/昨天/前天/N天前
+    - 时段词：上午/下午/晚上/凌晨/中午
+    - 组合：昨天上午、前天晚上、3天前下午
+
+    Returns:
+        {'start': datetime, 'end': datetime} 或 None（无法解析）
+    """
+    if not expr or not expr.strip():
+        return None
+
+    expr = expr.strip()
+    now = datetime.now()
+
+    # --- 相对时间：最近N分钟/小时/秒 ---
+    m = re.match(r'最近\s*(\d+)\s*(分钟|小时|秒|天)', expr)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2)
+        delta_map = {'秒': timedelta(seconds=n), '分钟': timedelta(minutes=n),
+                     '小时': timedelta(hours=n), '天': timedelta(days=n)}
+        delta = delta_map.get(unit)
+        if delta:
+            return {'start': now - delta, 'end': now}
+
+    # --- 解析日期部分 ---
+    base_date = None  # type: Optional[datetime]
+    remaining = expr
+
+    # N天前
+    m = re.match(r'(\d+)\s*天前', remaining)
+    if m:
+        n = int(m.group(1))
+        base_date = (now - timedelta(days=n)).replace(hour=0, minute=0, second=0, microsecond=0)
+        remaining = remaining[m.end():].strip()
+    elif remaining.startswith('前天'):
+        base_date = (now - timedelta(days=2)).replace(hour=0, minute=0, second=0, microsecond=0)
+        remaining = remaining[2:].strip()
+    elif remaining.startswith('昨天'):
+        base_date = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        remaining = remaining[2:].strip()
+    elif remaining.startswith('今天'):
+        base_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        remaining = remaining[2:].strip()
+
+    # --- 解析时段部分 ---
+    period_ranges = {
+        '凌晨': (0, 6),
+        '上午': (6, 12),
+        '中午': (11, 13),
+        '下午': (12, 18),
+        '晚上': (18, 24),
+    }
+    period_start = period_end = None
+    for period_name, (h_start, h_end) in period_ranges.items():
+        if period_name in remaining:
+            period_start, period_end = h_start, h_end
+            remaining = remaining.replace(period_name, '').strip()
+            break
+
+    # --- 组合结果 ---
+    if base_date is None and period_start is None:
+        return None  # 无法解析
+
+    if base_date is None:
+        # 仅有时段，默认今天
+        base_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if period_start is not None:
+        start = base_date.replace(hour=period_start)
+        end_hour = min(period_end, 23)
+        end = base_date.replace(hour=end_hour, minute=59, second=59)
+    else:
+        # 仅有日期，取全天
+        start = base_date
+        end = base_date.replace(hour=23, minute=59, second=59)
+
+    # 如果结束时间在未来，截断到当前
+    if end > now:
+        end = now
+
+    return {'start': start, 'end': end}
 
 
 def _expand_short_time(t: str) -> str:
@@ -721,20 +482,28 @@ def _needs_historical_logs(start_time: str, seconds: int) -> bool:
 
 
 def _build_time_range(seconds, start_time, end_time):
-    """构建时间范围过滤条件"""
+    """构建时间范围过滤条件（返回 datetime 对象，避免字符串转换）"""
+    now = datetime.now()
     if seconds:
-        now = datetime.now()
         return {
-            'start': (now - timedelta(seconds=seconds)).isoformat(),
-            'end': now.isoformat(),
+            'start': now - timedelta(seconds=seconds),
+            'end': now,
         }
     if start_time or end_time:
         tr: dict = {}
         if start_time:
-            tr['start'] = _expand_short_time(start_time)
+            expanded = _expand_short_time(start_time)
+            try:
+                tr['start'] = datetime.fromisoformat(expanded)
+            except ValueError:
+                pass
         if end_time:
-            tr['end'] = _expand_short_time(end_time)
-        return tr
+            expanded = _expand_short_time(end_time)
+            try:
+                tr['end'] = datetime.fromisoformat(expanded)
+            except ValueError:
+                pass
+        return tr if tr else None
     return None
 
 
@@ -749,18 +518,7 @@ def _format_file_size(size: int) -> str:
 
 def _extract_evidence_lines(entries: List[LogEntry], analysis_type: str) -> List[str]:
     """提取证据行（用于审计）"""
-    if analysis_type == 'errors':
-        return [e.raw_line for e in entries if e.level in ('E', 'F')][:10]
-    if analysis_type == 'crashes':
-        lines = []
-        for e in entries[:100]:
-            if any(p.search(e.raw_line) for p in LogParser.ERROR_PATTERNS.values()):
-                lines.append(e.raw_line)
-                if len(lines) >= 10:
-                    break
-        return lines
-    if analysis_type == 'keywords':
-        return [e.raw_line for e in entries if e.level in ('E', 'F', 'W')][:10]
+    # summary 和 custom 模式不需要单独的证据行
     return []
 
 
@@ -881,17 +639,11 @@ def _fetch_historical_raw_logs(device, start_time, end_time, max_lines) -> dict:
                 continue
             matched.append(f)
 
-        target = start_dt
-        if start_dt and end_dt:
-            target = start_dt + (end_dt - start_dt) / 2
-        elif end_dt:
-            target = end_dt
-
-        max_dist = timedelta(days=36500)
+        # 按时间排序，拉取范围内的全部文件（上限 15 个）
         matched.sort(
-            key=lambda f: abs(f['timestamp_dt'] - target) if f.get('timestamp_dt') else max_dist
+            key=lambda f: f['timestamp_dt'] if f.get('timestamp_dt') else datetime.min
         )
-        files_to_pull = matched[:5]
+        files_to_pull = matched[:15]
     else:
         files_to_pull = all_files[:5]
 
@@ -918,7 +670,7 @@ def _fetch_historical_raw_logs(device, start_time, end_time, max_lines) -> dict:
     dict_path = _pull_dict_files(hdc, device, local_dir)
     all_logs: List[str] = []
     dict_used = False
-    cap = min(max_lines * 5, LogSecurityConfig.MAX_LOG_LINES)
+    cap = min(max_lines * LOG_FETCH_MULTIPLIER, LogSecurityConfig.MAX_LOG_LINES)
 
     for fi in pull_result['pulled_files']:
         local_path = fi['local_path']
@@ -1014,34 +766,24 @@ def _query_impl(
     device_id=None, logs=None, input_file=None, input_files=None,
     lines=100, level=None, tag=None, keyword=None, pid=None,
     package_name=None, start_time=None, end_time=None, seconds=None,
-    analysis_type="summary", custom_regex=None, save_path=None, raw_files=False,
+    analysis_type="summary", custom_regex=None, save_path=None,
+    time_expr=None,
 ):
     """logs_query 的同步实现（供 asyncio.to_thread 调用）"""
-    level = LogParser.normalize_level(level) or level
+
+    # ── 自然语言时间解析（优先级低于显式 start_time/end_time/seconds）──
+    if time_expr and not start_time and not end_time and not seconds:
+        parsed = _parse_time_expr(time_expr)
+        if parsed:
+            start_time = parsed['start'].strftime('%Y-%m-%d %H:%M:%S')
+            end_time = parsed['end'].strftime('%Y-%m-%d %H:%M:%S')
+            logger.info(f"time_expr '{time_expr}' -> {start_time} ~ {end_time}")
+
     filters = _clean_dict({
         'level': level, 'tag': tag, 'keyword': keyword, 'pid': pid,
         'package_name': package_name, 'seconds': seconds,
         'start_time': start_time, 'end_time': end_time,
     })
-
-    # ── raw_files 模式（原 hilog_receive）──────────────────────
-    if raw_files:
-        try:
-            hdc = get_hdc()
-            ok, device = ToolBase.get_device_id(device_id)
-            if not ok:
-                device.setdefault('files', [])
-                device.setdefault('total_size', 0)
-                return device
-            result = hdc.hilog_receive(device, save_path)
-            result['device_id'] = device
-            result.setdefault('files', [])
-            result.setdefault('total_size', 0)
-            return result
-        except Exception as e:
-            err = ToolBase.wrap_error(e, 'RAW_FILES_ERROR')
-            err.update({'files': [], 'total_size': 0})
-            return err
 
     # ── 获取原始日志行 ──────────────────────────────────────────
     try:
@@ -1052,17 +794,26 @@ def _query_impl(
 
         if logs:
             raw_lines = logs
-            source = 'direct'
         elif input_file or input_files:
             paths = list(input_files or [])
             if input_file and input_file not in paths:
                 paths.append(input_file)
             all_lines: List[str] = []
+            MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
             for fpath in paths:
                 if not os.path.isfile(fpath):
                     return {
                         'success': False, 'error': f'文件不存在: {fpath}',
                         'error_code': 'FILE_NOT_FOUND',
+                        'logs': [], 'total_lines': 0, 'truncated': False,
+                        'filters_applied': filters,
+                    }
+                file_size = os.path.getsize(fpath)
+                if file_size > MAX_FILE_SIZE:
+                    return {
+                        'success': False,
+                        'error': f'文件过大: {fpath} ({_format_file_size(file_size)})，上限 200MB',
+                        'error_code': 'FILE_TOO_LARGE',
                         'logs': [], 'total_lines': 0, 'truncated': False,
                         'filters_applied': filters,
                     }
@@ -1116,7 +867,7 @@ def _query_impl(
                             'logs': [], 'total_lines': 0, 'truncated': False,
                             'filters_applied': filters,
                         }
-                fetch_n = min(lines * 5, LogSecurityConfig.MAX_LOG_LINES)
+                fetch_n = min(lines * LOG_FETCH_MULTIPLIER, LogSecurityConfig.MAX_LOG_LINES)
                 log_text = hdc.get_realtime_logs(device, lines=fetch_n, tag=tag, pid=resolved_pid)
                 raw_lines = log_text.split('\n') if log_text else []
 
@@ -1125,13 +876,12 @@ def _query_impl(
 
         # ── 过滤 ─────────────────────────────────────────────────
         time_range = _build_time_range(seconds, start_time, end_time)
+        pkg_filter = package_name if (package_name and source != 'realtime_buffer') else None
         filtered = LogParser.filter_entries(
             entries, level=level, tag=tag, keyword=keyword,
             time_range=time_range, pid=pid, seconds=seconds,
+            package_name=pkg_filter,
         )
-        if package_name and source != 'realtime_buffer':
-            pkg = package_name.lower()
-            filtered = [e for e in filtered if pkg in e.raw_line.lower()]
 
         # ── 截断 ─────────────────────────────────────────────────
         max_n = min(lines, LogSecurityConfig.MAX_LOG_LINES)
@@ -1201,7 +951,7 @@ async def logs_query(
     analysis_type: str = "summary",
     custom_regex: Optional[str] = None,
     save_path: Optional[str] = None,
-    raw_files: bool = False,
+    time_expr: Optional[str] = None,
 ) -> LogsQueryResult:
     """
     统一日志查询工具 - 拉取 / 解析 / 过滤 / 分析 / 保存 一体化
@@ -1210,9 +960,6 @@ async def logs_query(
     1. logs 参数直接传入日志行列表
     2. input_file / input_files 指定本地文件
     3. 从设备获取（自动判断实时缓冲区 or 历史落盘文件）
-
-    特殊模式:
-    - raw_files=True: 直接从设备拉取原始 hilog 日志文件和 dict 解密文件（不解析）
 
     Args:
         device_id: 设备ID，如果为None则使用第一个设备
@@ -1230,17 +977,68 @@ async def logs_query(
         seconds: 获取最近N秒内的日志（与start_time/end_time互斥）
         analysis_type: 分析类型
             - summary: 摘要统计（级别分布、Top Tags、时间范围）
-            - errors: 错误分析（E/F级别日志分组、异常类型识别）
-            - performance: 性能分析（提取耗时数据、统计指标）
-            - crashes: 崩溃分析（Crash/ANR/Exception 识别）
-            - keywords: 关键词提取（提取错误码、组件名、异常名、报错短语）
             - custom: 自定义正则匹配
         custom_regex: 自定义正则表达式（仅 analysis_type=custom 时使用）
         save_path: 保存路径（指定后将日志快照写入文件）
-        raw_files: 是否直接拉取原始日志文件（不解析，用于离线分析）
+        time_expr: 自然语言时间表达式（如"昨天上午"、"最近5分钟"、"前天晚上"），
+                   优先级低于 start_time/end_time/seconds
 
     Returns:
         统一查询结果，包含日志内容、过滤信息、分析结果和保存路径
+
+    HarmonyOS 常见错误模式参考（用于分析返回的日志内容）:
+
+        Crash 崩溃:
+            - 关键词: fatal signal, Native crash
+            - 排查: 堆栈分析、内存越界、空指针
+
+        ANR 无响应:
+            - 关键词: ANR in
+            - 排查: 主线程阻塞、死锁、耗时操作
+
+        JS/ArkTS 错误:
+            - 关键词: JsHeapObject, JavaScript runtime error, ArkTS runtime error
+            - 排查: 变量未初始化、类型错误、异步处理
+
+        权限错误:
+            - 关键词: Permission denied
+            - 排查: module.json5 权限配置、运行时权限申请
+
+        网络错误:
+            - 关键词: network error
+            - 排查: INTERNET 权限、证书配置、网络连通性
+
+        内存错误:
+            - 关键词: OutOfMemory, OOM, malloc failed, allocation failed
+            - 排查: 内存泄漏、大对象、Bitmap 未回收
+
+        UI 错误:
+            - 关键词: Window load failed, loadContent.*failed, Layout inflate error
+            - 排查: main_pages.json 配置、页面路径拼写、组件初始化
+
+        启动错误:
+            - 关键词: Ability.*start failed, EntryAbility.*error, main_pages.*not found
+            - 排查: Ability 配置、入口页面路径
+
+        资源错误:
+            - 关键词: Resource not found, rawfile.*not exist
+            - 排查: 资源路径、rawfile 目录、打包配置
+
+        IPC 错误:
+            - 关键词: IPC.*failed, Binder.*died
+            - 排查: 服务连接、进程间通信
+
+        数据库错误:
+            - 关键词: database.*error, SQL.*exception
+            - 排查: 数据库版本、SQL 语法、事务处理
+
+        签名/证书错误:
+            - 关键词: signature.*failed, certificate.*invalid
+            - 排查: 签名配置、证书有效期
+
+    系统噪声过滤（已自动忽略）:
+        - /sys/power/last_sr, XCollie, logd prune, healthd, chatty
+        - ServiceManager: Waiting, suspend/resume, Watchdog, GC, Choreographer
     """
     return await asyncio.to_thread(
         _query_impl,
@@ -1249,5 +1047,5 @@ async def logs_query(
         keyword=keyword, pid=pid, package_name=package_name,
         start_time=start_time, end_time=end_time, seconds=seconds,
         analysis_type=analysis_type, custom_regex=custom_regex,
-        save_path=save_path, raw_files=raw_files,
+        save_path=save_path, time_expr=time_expr,
     )

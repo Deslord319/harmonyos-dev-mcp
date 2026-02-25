@@ -46,43 +46,44 @@ class TestListDevices:
 
 
 class TestLogsQuery:
-    """logs_query 测试（raw_files 模式）"""
+    """logs_query 测试"""
 
     @pytest.mark.asyncio
-    async def test_uses_first_device_when_not_specified(self, mock_hdc: MagicMock):
-        """未指定设备时使用第一个设备"""
+    async def test_direct_logs_input(self, mock_hdc: MagicMock):
+        """直接传入日志行列表"""
         from harmonyos_mcp.tools import logs
 
-        result = await logs.logs_query(raw_files=True)
+        test_logs = [
+            "01-31 10:00:00.123  1000  2000 E MyApp: test error",
+            "01-31 10:00:01.456  1000  2000 I MyApp: test info",
+        ]
+        result = await logs.logs_query(logs=test_logs)
 
-        assert result['device_id'] == 'device_001'
-        mock_hdc.hilog_receive.assert_called_once_with('device_001', None)
+        assert result['success'] is True
+        assert result['source'] == 'direct'
+        assert result['total_lines'] == 2
 
     @pytest.mark.asyncio
-    async def test_uses_specified_device(self, mock_hdc: MagicMock):
-        """使用指定的设备"""
+    async def test_level_filter(self, mock_hdc: MagicMock):
+        """日志级别过滤"""
         from harmonyos_mcp.tools import logs
 
-        result = await logs.logs_query(device_id='device_002', raw_files=True)
+        test_logs = [
+            "01-31 10:00:00.123  1000  2000 E MyApp: error",
+            "01-31 10:00:01.456  1000  2000 I MyApp: info",
+            "01-31 10:00:02.789  1000  2000 W MyApp: warning",
+        ]
+        result = await logs.logs_query(logs=test_logs, level='E')
 
-        assert result['device_id'] == 'device_002'
-        mock_hdc.hilog_receive.assert_called_once_with('device_002', None)
-
-    @pytest.mark.asyncio
-    async def test_uses_specified_save_path(self, mock_hdc: MagicMock):
-        """使用指定的保存路径"""
-        from harmonyos_mcp.tools import logs
-
-        result = await logs.logs_query(raw_files=True, save_path='/tmp/logs')
-
-        mock_hdc.hilog_receive.assert_called_once_with('device_001', '/tmp/logs')
+        assert result['success'] is True
+        assert result['total_lines'] == 1
 
     @pytest.mark.asyncio
     async def test_fails_when_no_device(self, no_device_mock: MagicMock):
         """无设备时返回错误"""
         from harmonyos_mcp.tools import logs
 
-        result = await logs.logs_query(raw_files=True)
+        result = await logs.logs_query()
 
         assert result['success'] is False
         assert '没有找到' in result['error']

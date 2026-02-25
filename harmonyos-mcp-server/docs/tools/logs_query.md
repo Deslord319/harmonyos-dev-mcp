@@ -61,7 +61,6 @@
 |------|------|
 | `summary` | 摘要统计：级别分布、Top Tags、时间范围 |
 | `errors` | 错误分析：E/F 级别分组、异常类型识别 |
-| `performance` | 性能分析：提取耗时数据、统计 P95/P99 |
 | `crashes` | 崩溃分析：Crash/ANR/Exception 识别 |
 | `keywords` | 关键词提取：错误码、组件名、异常名 |
 | `custom` | 自定义正则匹配 |
@@ -71,7 +70,6 @@
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `save_path` | string | 保存路径（指定后写入文件） |
-| `raw_files` | bool | 是否直接拉取原始文件（不解析） |
 
 ---
 
@@ -145,19 +143,7 @@
 }
 ```
 
-### 7. 拉取原始文件
-
-```json
-{
-  "name": "logs_query",
-  "arguments": {
-    "raw_files": true,
-    "save_path": "/tmp/hilog_backup"
-  }
-}
-```
-
-### 8. 保存日志快照
+### 7. 保存日志快照
 
 ```json
 {
@@ -173,8 +159,6 @@
 ---
 
 ## 返回结构
-
-### 正常模式
 
 ```json
 {
@@ -197,17 +181,6 @@
 }
 ```
 
-### raw_files 模式
-
-```json
-{
-  "success": true,
-  "device_id": "device_001",
-  "files": ["hilog_001.gz", "hilog_002.gz"],
-  "total_size": 102400
-}
-```
-
 ---
 
 ## 设计说明
@@ -222,7 +195,3 @@
 
 - `start_time` 在 10 分钟内 → 实时缓冲区（hilog -t）
 - `start_time` 超过 10 分钟 → 历史落盘文件（需要 hilogtool 解密）
-
-### raw_files 模式
-
-当需要离线分析或备份时使用，直接拉取 `/data/log/hilog/` 下的原始文件和 dict 解密文件。

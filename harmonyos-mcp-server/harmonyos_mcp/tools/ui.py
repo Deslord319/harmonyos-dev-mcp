@@ -471,3 +471,39 @@ async def screenshot_element(
     )
     
     return result
+
+
+@mcp_tool(category="ui")
+@ToolBase.handle_tool_error('DRAG_ERROR')
+@ToolBase.with_device()
+async def drag(
+    device_id: Optional[str] = None,
+    from_x: Optional[int] = None,
+    from_y: Optional[int] = None,
+    to_x: Optional[int] = None,
+    to_y: Optional[int] = None,
+    speed: int = 600
+) -> dict:
+    """
+    拖拽操作
+
+    Args:
+        device_id: 设备ID，如果为None则使用第一个设备
+        from_x: 起点X坐标
+        from_y: 起点Y坐标
+        to_x: 终点X坐标
+        to_y: 终点Y坐标
+        speed: 拖拽速度 (200-40000, 默认600)
+
+    Returns:
+        操作结果
+    """
+    if not all(v is not None for v in [from_x, from_y, to_x, to_y]):
+        return {
+            'success': False,
+            'error': '必须提供完整的坐标(from_x, from_y, to_x, to_y)',
+            'error_code': 'MISSING_PARAMS'
+        }
+
+    ui_ops = get_ui_operations()
+    return await asyncio.to_thread(ui_ops.drag, device_id, from_x, from_y, to_x, to_y, speed)
