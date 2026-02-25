@@ -397,12 +397,12 @@ async def screenshot(
     """
     hdc = get_hdc()
     
-    # 如果未指定保存路径，自动生成
+    # 如果未指定保存路径，自动生成（使用用户目录下的固定路径）
     if not local_path:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        screenshots_dir = './screenshots'
+        screenshots_dir = os.path.join(os.path.expanduser('~'), 'harmonyos-screenshots')
         os.makedirs(screenshots_dir, exist_ok=True)
-        local_path = os.path.join(screenshots_dir, f'screenshot_{timestamp}.png')
+        local_path = os.path.join(screenshots_dir, f'screenshot_{timestamp}.jpeg')
     
     result = await asyncio.to_thread(
         hdc.take_screenshot,
@@ -449,12 +449,12 @@ async def screenshot_element(
     """
     hdc = get_hdc()
     
-    # 如果未指定保存路径，自动生成
+    # 如果未指定保存路径，自动生成（使用用户目录下的固定路径）
     if not local_path:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        screenshots_dir = './screenshots'
+        screenshots_dir = os.path.join(os.path.expanduser('~'), 'harmonyos-screenshots')
         os.makedirs(screenshots_dir, exist_ok=True)
-        local_path = os.path.join(screenshots_dir, f'element_{timestamp}.png')
+        local_path = os.path.join(screenshots_dir, f'element_{timestamp}.jpeg')
     
     bounds = {
         'left': left,

@@ -140,15 +140,29 @@ async def query_package(
     if info_type == 'abilities':
         result = await asyncio.to_thread(hdc.get_package_info, device_id, bundle_name)
         if result.get('success'):
+            # 转换 abilities 格式，只保留 AbilityInfo 需要的字段
+            raw_abilities = result.get('abilities', [])
+            abilities = [
+                {'name': a.get('name', ''), 'module': a.get('module', ''), 'type': a.get('type', '')}
+                for a in raw_abilities
+            ]
+            # 转换 modules 格式，从 [{'name': 'entry'}] 转为 ['entry']
+            raw_modules = result.get('modules', [])
+            modules = [m.get('name', m) if isinstance(m, dict) else m for m in raw_modules]
+            # 转换 main_ability 格式
+            raw_main = result.get('main_ability')
+            main_ability = None
+            if raw_main:
+                main_ability = {'name': raw_main.get('name', ''), 'module': raw_main.get('module', ''), 'type': raw_main.get('type', '')}
             return {
                 'success': True,
                 'device_id': device_id,
                 'info_type': 'abilities',
                 'bundle_name': bundle_name,
-                'abilities': result.get('abilities', []),
-                'modules': result.get('modules', []),
-                'main_ability': result.get('main_ability'),
-                'ability_count': len(result.get('abilities', []))
+                'abilities': abilities,
+                'modules': modules,
+                'main_ability': main_ability,
+                'ability_count': len(abilities)
             }
         else:
             return {

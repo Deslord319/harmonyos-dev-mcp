@@ -42,32 +42,35 @@ class HdcDevice:
         """
         logger.debug(f"获取设备 {device_id} 的详细信息")
         
-        # 需要获取的属性
+        # HarmonyOS 使用 param get 命令（而非 Android 的 getprop）
         props = {
-            'model': 'ro.product.model',
-            'brand': 'ro.product.brand', 
-            'device': 'ro.product.device',
-            'os_version': 'hw_sc.build.os.version',
-            'api_version': 'hw_sc.build.os.apiversion',
-            'sdk_version': 'const.ohos.apiversion',
-            'build_type': 'ro.build.type',
+            'model': 'const.product.model',
+            'device_name': 'const.product.name',
+            'os_version': 'const.ohos.fullname',
+            'api_version': 'const.ohos.apiversion',
         }
         
         info = {'device_id': device_id}
         
         for key, prop in props.items():
-            result = self.execute_shell(device_id, f'getprop {prop}')
-            if result['success'] and result['stdout'].strip():
-                info[key] = result['stdout'].strip()
+            result = self.execute_shell(device_id, f'param get {prop}')
+            if result['success']:
+                stdout = result['stdout'].strip()
+                # 检查是否为错误响应（HarmonyOS 错误格式：Get parameter "xxx" fail!）
+                if stdout and 'fail' not in stdout.lower() and 'errNum' not in stdout:
+                    info[key] = stdout
         
-        # 获取屏幕分辨率
-        wm_result = self.execute_shell(device_id, 'wm size')
+        # 获取屏幕分辨率（从 WindowManagerService 解析）
+        wm_result = self.execute_shell(device_id, 'hidumper -s WindowManagerService -a \'-a\'')
         if wm_result['success']:
-            # 输出格式: "Physical size: 1080x2340"
             output = wm_result['stdout']
-            if 'Physical size:' in output:
-                size_str = output.split('Physical size:')[-1].strip()
-                info['screen_size'] = size_str
+            # 解析格式: [ x    y    w    h    ]
+            # 查找第一个窗口的分辨率信息
+            import re
+            match = re.search(r'\[\s*\d+\s+\d+\s+(\d+)\s+(\d+)\s*\]', output)
+            if match:
+                width, height = match.groups()
+                info['screen_size'] = f'{width}x{height}'
         
         return info
 

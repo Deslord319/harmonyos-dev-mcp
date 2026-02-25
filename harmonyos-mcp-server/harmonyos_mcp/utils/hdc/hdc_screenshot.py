@@ -37,9 +37,9 @@ class HdcScreenshot:
         """
         logger.info(f"对设备 {device_id} 进行截图")
 
-        # 设备上的临时文件路径
+        # 设备上的临时文件路径（HarmonyOS snapshot_display 只支持 .jpeg 后缀）
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        remote_path = f"/data/local/tmp/screenshot_{timestamp}.png"
+        remote_path = f"/data/local/tmp/screenshot_{timestamp}.jpeg"
 
         try:
             # 1. 在设备上执行截图命令

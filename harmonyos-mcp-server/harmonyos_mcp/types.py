@@ -27,9 +27,19 @@ class DeviceResult(BaseResult):
 # 设备管理类型
 # ============================================================================
 
+class DeviceInfo(TypedDict, total=False):
+    """设备信息"""
+    device_id: str
+    model: str
+    device_name: str
+    os_version: str
+    api_version: str
+    screen_size: str
+
+
 class ListDevicesResult(BaseResult):
     """list_devices 返回类型"""
-    devices: List[str]
+    devices: List[DeviceInfo]
     count: int
 
 
