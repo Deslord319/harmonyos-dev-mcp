@@ -120,15 +120,36 @@ class CrashParser:
         return info
 
     @classmethod
+    def _parse_backtrace_line(cls, line: str) -> Optional[CrashBacktrace]:
+        m = re.match(
+            r'^#\d+\s+pc\s+([0-9a-fA-F]+)\s+([^\s(]+)\((.+)\)$',
+            line.strip()
+        )
+        if not m:
+            return None
+
+        pc = m.group(1)
+        lib = m.group(2)
+        func_with_offset = m.group(3)
+
+        func_name = None
+        offset = None
+
+        offset_match = re.search(r'\+(\d+)$', func_with_offset)
+        if offset_match:
+            offset = offset_match.group(1)
+            func_name = func_with_offset[:offset_match.start()]
+        else:
+            func_name = func_with_offset
+
+        return CrashBacktrace(pc=pc, lib=lib, func=func_name, offset=offset)
+
+    @classmethod
     def _parse_fault_thread(cls, content: str) -> Optional[CrashThread]:
         in_fault = False
         tid = None
         name = None
         backtrace = []
-
-        backtrace_pattern = re.compile(
-            r'^#(?P<frame>\d+)\s+pc\s+(?P<pc>[0-9a-fA-F]+)\s+(?P<lib>[^\s]+)(?:\((?P<func>[^\)]+)\))?'
-        )
 
         for line in content.split('\n'):
             if line.startswith('Fault thread info:'):
@@ -145,25 +166,10 @@ class CrashParser:
                         pass
                     if ',' in line and 'Name:' in line:
                         name = line.split('Name:')[1].strip()
-                else:
-                    m = backtrace_pattern.match(line.strip())
-                    if m:
-                        func_str = m.group('func') or ''
-                        func_name = None
-                        offset = None
-                        if func_str:
-                            if '+' in func_str:
-                                parts = func_str.rsplit('+', 1)
-                                func_name = parts[0]
-                                offset = parts[1] if len(parts) > 1 else None
-                            else:
-                                func_name = func_str
-                        backtrace.append(CrashBacktrace(
-                            pc=m.group('pc'),
-                            lib=m.group('lib'),
-                            func=func_name,
-                            offset=offset
-                        ))
+                elif line.strip().startswith('#'):
+                    bt = cls._parse_backtrace_line(line)
+                    if bt:
+                        backtrace.append(bt)
 
         if tid or backtrace:
             return CrashThread(tid=tid or 0, name=name or '', backtrace=backtrace)
