@@ -15,6 +15,7 @@ from ...types import LogsQueryResult
 from ...tools.base import ToolBase
 from ...tools.registry import mcp_tool
 from .parser import LogParser, FilterStats
+from .crash_parser import CrashParser
 from .time_utils import (
     _parse_time_expr,
     _build_time_range,
@@ -23,9 +24,10 @@ from .time_utils import (
 )
 from .historian import fetch_historical_logs, _check_and_cleanup_cache
 
+CRASH_LOG_DIR = "/data/log/faultlog/faultlogger"
+
 
 def _save_logs(output_path, device_id, entries, filters, analysis_result) -> dict:
-    """将日志保存到文件"""
     if not output_path:
         output_path = f"./hm_logs/hilog_snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 
@@ -75,16 +77,59 @@ def _clean_dict(d: dict) -> dict:
     return {k: v for k, v in d.items() if v is not None}
 
 
+def _fetch_crash_info(
+    hdc, device_id: str, package_name: Optional[str],
+    start_time: Optional[datetime], end_time: Optional[datetime]
+) -> Optional[dict]:
+    if not package_name:
+        return None
+
+    try:
+        result = hdc.execute_shell(device_id, f'ls {CRASH_LOG_DIR}')
+        if not result['success']:
+            return None
+
+        files = result.get('stdout', '').strip().split('\n')
+        matched = CrashParser.match_crash_files(
+            files, package_name, start_time, end_time
+        )
+
+        if not matched:
+            return None
+
+        latest = matched[0]
+        remote_path = f"{CRASH_LOG_DIR}/{latest['filename']}"
+
+        local_dir = os.path.join(os.path.expanduser('~'), 'harmonyos-crash')
+        os.makedirs(local_dir, exist_ok=True)
+        local_path = os.path.join(local_dir, latest['filename'])
+
+        pull_result = hdc.pull_file(device_id, remote_path, local_path)
+        if not pull_result:
+            return {'type': latest['type'], 'file': latest['filename'], 'error': '拉取失败'}
+
+        with open(local_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+
+        crash_info = CrashParser.parse(content, latest['filename'])
+        if crash_info:
+            return CrashParser.to_dict(crash_info)
+
+        return {'type': latest['type'], 'file': latest['filename']}
+
+    except Exception as e:
+        logger.error(f"获取崩溃日志失败: {e}")
+        return None
+
+
 def _query_impl(
     device_id=None, logs=None, input_file=None, input_files=None,
     lines=100, level=None, tag=None, tag_search=None, keyword=None,
     domain=None, pid=None, package_name=None, start_time=None,
     end_time=None, seconds=None, analysis_type="summary",
     custom_regex=None, save_path=None, time_expr=None,
-    include_diagnostics=False,
+    include_diagnostics=False, include_crash=False,
 ):
-    """logs_query 的同步实现"""
-    
     _check_and_cleanup_cache()
 
     if time_expr and not start_time and not end_time and not seconds:
@@ -106,6 +151,7 @@ def _query_impl(
         _device_id = device_id
         source = 'direct'
         extra: dict = {}
+        hdc = None
 
         if logs:
             raw_lines = logs
@@ -252,6 +298,13 @@ def _query_impl(
             result['file_size'] = saved['file_size']
             result['file_size_human'] = saved['file_size_human']
 
+        if include_crash and hdc and _device_id and package_name:
+            start_dt = time_range.get('start') if time_range else None
+            end_dt = time_range.get('end') if time_range else None
+            crash_info = _fetch_crash_info(hdc, _device_id, package_name, start_dt, end_dt)
+            if crash_info:
+                result['crash_info'] = crash_info
+
         return result
 
     except Exception as e:
@@ -285,6 +338,7 @@ async def logs_query(
     save_path: Optional[str] = None,
     time_expr: Optional[str] = None,
     include_diagnostics: bool = False,
+    include_crash: bool = False,
 ) -> LogsQueryResult:
     """
     统一日志查询工具 - 拉取 / 解析 / 过滤 / 分析 / 保存 一体化
@@ -310,6 +364,7 @@ async def logs_query(
         save_path: 保存路径
         time_expr: 自然语言时间表达式（如"最近10分钟"）
         include_diagnostics: 返回诊断统计信息（默认 False）
+        include_crash: 是否包含崩溃日志（根据包名+时间匹配，默认 False）
 
     Returns:
         查询结果字典
@@ -324,4 +379,5 @@ async def logs_query(
         seconds=seconds, analysis_type=analysis_type, custom_regex=custom_regex,
         save_path=save_path, time_expr=time_expr,
         include_diagnostics=include_diagnostics,
+        include_crash=include_crash,
     )

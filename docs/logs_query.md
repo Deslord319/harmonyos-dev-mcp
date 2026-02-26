@@ -12,6 +12,7 @@
 - 多种结构化分析
 - 保存日志快照
 - 诊断统计信息
+- 崩溃日志查询（根据包名+时间自动匹配）
 
 ---
 
@@ -72,6 +73,7 @@
 |------|------|------|
 | `save_path` | string | 保存路径（指定后写入文件） |
 | `include_diagnostics` | bool | 返回诊断统计信息（默认 false） |
+| `include_crash` | bool | 是否包含崩溃日志（默认 false） |
 
 ---
 
@@ -130,7 +132,21 @@
 }
 ```
 
-### 6. 获取诊断信息
+### 6. 查询日志 + 崩溃日志
+
+```json
+{
+  "name": "logs_query",
+  "arguments": {
+    "package_name": "com.example.app",
+    "start_time": "19:00:00",
+    "end_time": "19:30:00",
+    "include_crash": true
+  }
+}
+```
+
+### 7. 获取诊断信息
 
 ```json
 {
@@ -142,7 +158,7 @@
 }
 ```
 
-### 7. 时间范围查询
+### 8. 时间范围查询
 
 ```json
 {
@@ -155,7 +171,7 @@
 }
 ```
 
-### 8. 自然语言时间表达式
+### 9. 自然语言时间表达式
 
 ```json
 {
@@ -167,7 +183,7 @@
 }
 ```
 
-### 9. 分析本地文件
+### 10. 分析本地文件
 
 ```json
 {
@@ -205,6 +221,31 @@
 }
 ```
 
+### 包含崩溃日志（include_crash=true）
+
+```json
+{
+  "success": true,
+  "logs": [...],
+  "crash_info": {
+    "type": "cppcrash",
+    "file": "cppcrash-com.example.app-20020146-20251223192956865.log",
+    "timestamp": "2025-12-23T19:29:56.865000",
+    "module_name": "com.example.app",
+    "reason": "Signal:SIGSEGV(SEGV_MAPERR)@0x0000000100000058",
+    "summary": "原因: Signal:SIGSEGV(SEGV_MAPERR)@0x0000000100000058 | 位置: QSocketNotifier::setEnabled(bool) (libQt5Core.so)",
+    "fault_thread": {
+      "tid": 42195,
+      "name": ".example.app",
+      "backtrace": [
+        {"pc": "00000000004fa408", "lib": "libQt5Core.so", "func": "QSocketNotifier::setEnabled(bool)", "offset": "24"},
+        {"pc": "0000000000511fe0", "lib": "libQt5Core.so", "func": "QEventDispatcherUNIXPrivate::markPendingSocketNotifiers()", "offset": "960"}
+      ]
+    }
+  }
+}
+```
+
 ### 包含诊断信息（include_diagnostics=true）
 
 ```json
@@ -230,6 +271,21 @@
   }
 }
 ```
+
+---
+
+## 崩溃日志匹配逻辑
+
+当 `include_crash=true` 时，自动根据以下条件匹配崩溃日志：
+
+1. **路径**: `/data/log/faultlog/faultlogger/`
+2. **文件名格式**: `{type}-{package}-{uid}-{timestamp}.log`
+   - `type`: cppcrash / jscrash / appfreeze
+   - `package`: 应用包名
+   - `timestamp`: 崩溃时间
+3. **匹配条件**:
+   - 包名匹配
+   - 时间范围匹配（如果指定了 start_time/end_time）
 
 ---
 
