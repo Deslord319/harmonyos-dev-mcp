@@ -10,12 +10,12 @@
 
 | 类别 | 功能 | 工具数 |
 |------|------|--------|
-| 通用 | 设备管理、包管理 | 2 |
+| 通用 | 设备管理、包管理、日志查询 | 3 |
 | 鸿蒙打包编译 | 编译、安装、运行、卸载应用 | 4 |
 | UI 测试 | UI 树感知、元素查找、点击/输入/滑动、截图 | 9 |
 | 三方库编译 | WSL 检查、克隆仓库、分析构建系统、交叉编译 | 8 |
 
-**共计 23 个 MCP 工具**
+**共计 26 个 MCP 工具**
 
 ---
 
@@ -218,42 +218,51 @@ mcpServers:
 | 工具名 | 描述 |
 |--------|------|
 | list_devices | 列出所有连接的 HarmonyOS 设备和模拟器 |
-| query_package | 统一包查询（列出包/获取 Abilities/获取主 Ability） |
+| query_package | 统一的包查询工具（包列表/Abilities/权限等） |
+| logs_query | 统一日志查询工具（拉取/解析/过滤/分析） |
+
+> 工具详细参数见：[logs_query](docs/tools/logs_query.md)、[query_package](docs/tools/query_package.md)
 
 ### 二、鸿蒙打包编译 (Build)
 
 | 工具名 | 描述 |
 |--------|------|
-| build_app | 构建 HarmonyOS 应用 |
-| install_app | 安装应用到设备 |
-| run_app | 运行应用 |
+| build_app | 构建 HarmonyOS 应用（debug/release） |
+| install_app | 安装 HAP 包到设备 |
+| run_app | 运行应用（支持自动检测主 Ability） |
 | uninstall_app | 卸载应用 |
 
 ### 三、UI 测试 (UI Test)
 
 | 工具名 | 描述 |
 |--------|------|
-| get_ui_tree | 获取应用的 UI 组件树 |
-| list_windows | 列出设备上的所有窗口 |
-| find_element | 在 UI 树中查找元素 |
-| click_element | 点击屏幕上的元素 |
-| long_press_element | 长按屏幕上的元素 |
-| swipe | 滑动操作 |
+| screenshot | 设备屏幕截图 |
+| screenshot_element | 指定元素区域截图 |
+| click_element | 点击/双击元素（支持坐标或文本查找） |
+| long_press_element | 长按元素 |
 | input_text | 在输入框中输入文本 |
-| press_key | 模拟按键操作 |
-| screenshot | 对设备屏幕进行截图 |
-| screenshot_element | 对指定元素区域进行截图 |
+| swipe | 滑动操作（支持方向或坐标） |
+| drag | 拖拽操作 |
+| press_key | 模拟按键（Home/Back/Enter 等） |
+| find_element | 在 UI 树中查找元素 |
 
-### 四、三方库编译 (Compile)
+### 四、UI 树 (UI Tree)
 
 | 工具名 | 描述 |
 |--------|------|
-| check_wsl | 检查 WSL 环境是否可用 |
-| check_harmonyos_compiler_tools | 检查 HarmonyOS 编译工具 |
-| clone_library | 拉取三方库代码仓库 |
-| analyze_build_system | 分析项目构建系统类型 |
-| read_build_files | 读取构建系统文件 |
-| write_compile_script | 生成编译脚本 |
+| get_ui_tree | 获取应用的 UI 组件树 |
+| list_windows | 列出设备上的所有窗口 |
+
+### 五、三方库编译 (Compile)
+
+| 工具名 | 描述 |
+|--------|------|
+| check_wsl | 检查 WSL 环境可用性（Windows 交叉编译） |
+| check_harmonyos_compiler_tools | 检查 HarmonyOS Command Line Tools |
+| clone_library | 拉取三方库代码仓库（支持浅克隆） |
+| analyze_build_system | 分析构建系统类型（CMake/Makefile 等） |
+| read_build_files | 读取构建系统文件供 AI 分析 |
+| write_compile_script | 写入 AI 生成的编译脚本 |
 | execute_compile_script | 执行编译脚本 |
 | verify_so_output | 验证编译输出的 .so 文件 |
 
@@ -265,7 +274,7 @@ mcpServers:
 mcp_ho_dev/
 ├── harmonyos_mcp/           # MCP 服务器核心
 │   ├── tools/               # MCP 工具模块
-│   │   ├── general.py       # 通用（设备+包管理）
+│   │   ├── general.py       # 通用（设备+包管理+日志）
 │   │   ├── log/             # 日志模块
 │   │   │   ├── parser.py    # 日志解析器
 │   │   │   ├── time_utils.py # 时间工具
@@ -281,7 +290,8 @@ mcp_ho_dev/
 │   │   └── ...
 │   └── server.py            # FastMCP 服务器
 ├── docs/tools/              # 工具文档
-│   └── logs_query.md
+│   ├── logs_query.md
+│   └── query_package.md
 ├── tests/                   # 测试用例
 ├── pyproject.toml          # 项目配置
 └── README.md
