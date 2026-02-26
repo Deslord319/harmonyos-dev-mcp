@@ -221,7 +221,7 @@ mcpServers:
 | query_package | 统一的包查询工具（包列表/Abilities/权限等） |
 | logs_query | 统一日志查询工具（拉取/解析/过滤/分析） |
 
-> 工具详细参数见：[logs_query](docs/tools/logs_query.md)、[query_package](docs/tools/query_package.md)
+> 工具详细参数见：[logs_query](docs/logs_query.md)、[query_package](docs/query_package.md)
 
 ### 二、鸿蒙打包编译 (Build)
 
@@ -288,7 +288,7 @@ mcp_ho_dev/
 │   │   ├── wrappers/        # 各种包装器
 │   │   └── ...
 │   └── server.py            # FastMCP 服务器
-├── docs/tools/              # 工具文档
+├── docs/                    # 工具文档
 │   ├── logs_query.md
 │   └── query_package.md
 ├── tests/                   # 测试用例
