@@ -82,7 +82,6 @@ async def click_element(
     Returns:
         操作结果
     """
-    # 参数冲突检测：坐标和查找条件不能同时提供
     has_coords = x is not None and y is not None
     has_search = text or element_type
     if has_coords and has_search:
@@ -95,14 +94,12 @@ async def click_element(
 
     ui_ops = get_ui_operations()
 
-    # 如果提供了坐标，直接点击
     if has_coords:
         if double_click:
             return await asyncio.to_thread(ui_ops.double_click, device_id, x, y)
         else:
             return await asyncio.to_thread(ui_ops.click, device_id, x, y)
 
-    # 如果提供了text或element_type，先查找元素
     if has_search:
         ok, coords = await _resolve_element_coords(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
         if not ok:
@@ -149,11 +146,9 @@ async def long_press_element(
     """
     ui_ops = get_ui_operations()
 
-    # 如果提供了坐标，直接长按
     if x is not None and y is not None:
         return await asyncio.to_thread(ui_ops.long_click, device_id, x, y)
 
-    # 查找元素
     if text or element_type:
         ok, coords = await _resolve_element_coords(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
         if not ok:
@@ -205,11 +200,9 @@ async def swipe(
 
     ui_ops = get_ui_operations()
 
-    # 如果提供了方向，使用方向滑动
     if direction:
         return await asyncio.to_thread(ui_ops.swipe_direction, device_id, direction, speed)
 
-    # 如果提供了坐标，使用坐标滑动
     if all(v is not None for v in [from_x, from_y, to_x, to_y]):
         return await asyncio.to_thread(ui_ops.swipe, device_id, from_x, from_y, to_x, to_y, speed)
 
@@ -264,11 +257,9 @@ async def input_text(
 
     ui_ops = get_ui_operations()
 
-    # 如果提供了坐标，直接输入
     if x is not None and y is not None:
         return await asyncio.to_thread(ui_ops.input_text, device_id, x, y, text)
 
-    # 查找元素
     if element_text or element_type:
         ok, coords = await _resolve_element_coords(device_id, text=element_text, element_type=element_type, bundle_name=bundle_name)
         if not ok:
@@ -348,7 +339,6 @@ async def find_element(
         text=text, element_type=element_type, element_id=element_id, bundle_name=bundle_name
     )
     
-    # 确保必需字段存在
     if 'elements' not in result:
         result['elements'] = []
     if 'count' not in result:
@@ -364,15 +354,23 @@ async def find_element(
 async def screenshot(
     device_id: Optional[str] = None,
     local_path: Optional[str] = None,
-    display_id: int = 0
+    display_id: int = 0,
+    left: Optional[int] = None,
+    top: Optional[int] = None,
+    right: Optional[int] = None,
+    bottom: Optional[int] = None
 ) -> ScreenshotResult:
     """
-    对设备屏幕进行截图
+    对设备屏幕进行截图（支持全屏截图和区域截图）
 
     Args:
         device_id: 设备ID，如果为None则使用第一个设备
-        local_path: 本地保存路径，如果为None则自动生成路径（./screenshots/screenshot_时间戳.png）
+        local_path: 本地保存路径，如果为None则自动生成路径
         display_id: 显示器ID，默认为主屏幕(0)
+        left: 裁剪区域左边界 X 坐标（可选）
+        top: 裁剪区域上边界 Y 坐标（可选）
+        right: 裁剪区域右边界 X 坐标（可选）
+        bottom: 裁剪区域下边界 Y 坐标（可选）
 
     Returns:
         包含截图结果的字典:
@@ -380,83 +378,40 @@ async def screenshot(
         - local_path: 本地文件路径
         - file_size: 文件大小（字节）
         - device_id: 设备ID
+        - bounds: 裁剪区域边界（仅区域截图时返回）
     """
     hdc = get_hdc()
-    
-    # 如果未指定保存路径，自动生成（使用用户目录下的固定路径）
+
     if not local_path:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         screenshots_dir = os.path.join(os.path.expanduser('~'), 'harmonyos-screenshots')
         os.makedirs(screenshots_dir, exist_ok=True)
-        local_path = os.path.join(screenshots_dir, f'screenshot_{timestamp}.jpeg')
-    
-    result = await asyncio.to_thread(
-        hdc.take_screenshot,
-        device_id,
-        local_path,
-        display_id
-    )
-    
-    return result
+        suffix = 'element' if left is not None else 'screenshot'
+        local_path = os.path.join(screenshots_dir, f'{suffix}_{timestamp}.jpeg')
 
-
-@mcp_tool(category="ui")
-@ToolBase.handle_tool_error('ELEMENT_SCREENSHOT_ERROR')
-@ToolBase.with_device()
-@ToolBase.validate_params(local_path=['path'])
-async def screenshot_element(
-    device_id: Optional[str] = None,
-    local_path: Optional[str] = None,
-    left: int = 0,
-    top: int = 0,
-    right: int = 0,
-    bottom: int = 0
-) -> ElementScreenshotResult:
-    """
-    对指定元素区域进行截图
-
-    先进行全屏截图，然后裁剪指定区域。需要安装 Pillow 库才能裁剪，
-    否则返回全屏截图。
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        local_path: 本地保存路径，如果为None则自动生成
-        left: 元素左边界 X 坐标
-        top: 元素上边界 Y 坐标
-        right: 元素右边界 X 坐标
-        bottom: 元素下边界 Y 坐标
-
-    Returns:
-        包含截图结果的字典:
-        - success: 是否成功
-        - local_path: 本地文件路径
-        - file_size: 文件大小（字节）
-        - bounds: 裁剪区域边界
-    """
-    hdc = get_hdc()
-    
-    # 如果未指定保存路径，自动生成（使用用户目录下的固定路径）
-    if not local_path:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        screenshots_dir = os.path.join(os.path.expanduser('~'), 'harmonyos-screenshots')
-        os.makedirs(screenshots_dir, exist_ok=True)
-        local_path = os.path.join(screenshots_dir, f'element_{timestamp}.jpeg')
-    
-    bounds = {
-        'left': left,
-        'top': top,
-        'right': right,
-        'bottom': bottom
-    }
-    
-    result = await asyncio.to_thread(
-        hdc.take_element_screenshot,
-        device_id,
-        local_path,
-        bounds
-    )
-    
-    return result
+    if left is not None and top is not None and right is not None and bottom is not None:
+        bounds = {
+            'left': left,
+            'top': top,
+            'right': right,
+            'bottom': bottom
+        }
+        result = await asyncio.to_thread(
+            hdc.take_element_screenshot,
+            device_id,
+            local_path,
+            bounds
+        )
+        result['bounds'] = bounds
+        return result
+    else:
+        result = await asyncio.to_thread(
+            hdc.take_screenshot,
+            device_id,
+            local_path,
+            display_id
+        )
+        return result
 
 
 @mcp_tool(category="ui")
