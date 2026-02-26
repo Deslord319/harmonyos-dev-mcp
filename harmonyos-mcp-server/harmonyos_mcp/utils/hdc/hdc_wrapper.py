@@ -52,7 +52,6 @@ class HdcWrapper(
         - pull_file(): 从设备拉取文件
         - list_hilog_files(): 列出 hilog 文件
         - pull_hilog_files(): 拉取 hilog 文件
-        - hilog_receive(): 获取所有 hilog 和 dict 文件
         - get_realtime_logs(): 获取实时日志
     
     UI 操作:

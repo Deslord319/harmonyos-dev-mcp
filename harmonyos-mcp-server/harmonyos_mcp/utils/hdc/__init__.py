@@ -5,9 +5,7 @@ hdc 命令行工具封装子包
 """
 
 from .hdc_wrapper import HdcWrapper
-from .hdc_base import HdcBase
 
 __all__ = [
     "HdcWrapper",
-    "HdcBase",
 ]

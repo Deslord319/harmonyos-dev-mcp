@@ -4,7 +4,7 @@
 管理服务实例的生命周期，支持单例模式和测试时的 mock 注入。
 使用实例级状态，避免类级别可变属性的 Python 反模式。
 """
-from typing import TypeVar, Type, Dict, Optional, Any, Callable
+from typing import TypeVar, Type, Dict, Any, Callable
 from loguru import logger
 
 T = TypeVar('T')
@@ -114,16 +114,6 @@ class _Container:
         logger.debug(f"手动注册服务实例: {service_type.__name__}")
         self._instances[service_type] = instance
     
-    def register_factory(self, service_type: Type[T], factory: Callable) -> None:
-        """
-        注册服务工厂函数
-        
-        Args:
-            service_type: 服务类型
-            factory: 工厂函数，无参数，返回服务实例
-        """
-        self._factories[service_type] = factory
-    
     def reset(self) -> None:
         """
         重置容器（用于测试清理）
@@ -133,29 +123,6 @@ class _Container:
         logger.debug("重置依赖注入容器")
         self._instances.clear()
         self._factories.clear()
-    
-    def has(self, service_type: Type) -> bool:
-        """
-        检查是否已有实例
-        
-        Args:
-            service_type: 服务类型
-            
-        Returns:
-            是否存在实例
-        """
-        return service_type in self._instances
-    
-    def remove(self, service_type: Type) -> None:
-        """
-        移除指定服务实例
-        
-        Args:
-            service_type: 服务类型
-        """
-        if service_type in self._instances:
-            del self._instances[service_type]
-            logger.debug(f"移除服务实例: {service_type.__name__}")
 
 
 # ============================================================================
@@ -195,9 +162,3 @@ def get_hilogtool():
     """获取 HilogtoolWrapper 实例"""
     from .utils.wrappers.hilogtool_wrapper import HilogtoolWrapper
     return Container.get(HilogtoolWrapper)
-
-
-def get_hvigor():
-    """获取 HvigorWrapper 实例"""
-    from .utils.wrappers.hvigor_wrapper import HvigorWrapper
-    return Container.get(HvigorWrapper)

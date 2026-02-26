@@ -4,7 +4,6 @@ UI 树工具
 提供 UI 组件树获取和窗口列表查询功能。
 """
 import asyncio
-import copy
 from typing import Optional
 from loguru import logger
 
@@ -91,15 +90,12 @@ async def get_ui_tree(
     parser = UITreeParser()
     parsed_tree = parser.parse(ui_tree_result['ui_tree'])
 
-    # 深拷贝避免修改原对象
-    safe_tree = copy.deepcopy(parsed_tree)
-
     return {
         'success': True,
         'device_id': device_id,
         'window_id': target_window_id,
-        'ui_tree': safe_tree,
-        'node_count': safe_tree.get('count', 0) if isinstance(safe_tree, dict) else 0
+        'ui_tree': parsed_tree,
+        'node_count': parsed_tree.get('count', 0) if isinstance(parsed_tree, dict) else 0
     }
 
 

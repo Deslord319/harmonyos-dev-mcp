@@ -4,16 +4,13 @@
 提供所有工具函数的公共方法，消除重复代码。
 支持 async/sync 双模式装饰器，兼容 FastMCP 异步事件循环。
 """
-import asyncio
 import functools
 import inspect
 import os
-import re
 from typing import Optional, Tuple, Union
 from loguru import logger
 
 from ..container import get_hdc
-from ..exceptions import DeviceNotFoundError
 
 
 class ToolBase:
@@ -68,25 +65,6 @@ class ToolBase:
             }
     
     @staticmethod
-    def ensure_device(device_id: Optional[str] = None) -> str:
-        """
-        确保获取到设备ID，否则抛出异常
-        
-        Args:
-            device_id: 指定的设备ID
-            
-        Returns:
-            有效的设备ID
-            
-        Raises:
-            DeviceNotFoundError: 没有找到设备时
-        """
-        ok, result = ToolBase.get_device_id(device_id)
-        if not ok:
-            raise DeviceNotFoundError()
-        return result
-    
-    @staticmethod
     def wrap_error(error: Exception, error_code: str = None) -> dict:
         """
         包装异常为标准错误响应
@@ -111,22 +89,6 @@ class ToolBase:
             result['error_code'] = error.code
         
         return result
-    
-    @staticmethod
-    def success_result(**kwargs) -> dict:
-        """
-        创建成功响应
-        
-        Args:
-            **kwargs: 额外的响应字段
-            
-        Returns:
-            成功响应字典
-        """
-        return {
-            'success': True,
-            **kwargs
-        }
     
     @staticmethod
     def format_duration(seconds: float) -> str:

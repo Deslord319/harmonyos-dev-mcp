@@ -43,26 +43,16 @@ async def list_devices() -> ListDevicesResult:
     }
 
 
-# query_package 的默认错误字段
-_QUERY_PACKAGE_ERROR_DEFAULTS = {
-    'info_type': 'list',
-    'packages': [],
-    'count': 0,
-    'bundle_name': '',
-    'abilities': [],
-    'modules': [],
-    'main_ability': None,
-    'ability_count': 0,
-    'ability_name': '',
-    'module_name': '',
-    'requested_permissions': [],
-    'permission_count': 0
-}
+# query_package 按 info_type 的错误默认字段
+_LIST_ERROR_DEFAULTS = {'packages': [], 'count': 0}
+_ABILITIES_ERROR_DEFAULTS = {'abilities': [], 'modules': [], 'main_ability': None, 'ability_count': 0}
+_MAIN_ABILITY_ERROR_DEFAULTS = {'ability_name': '', 'module_name': ''}
+_PERMISSIONS_ERROR_DEFAULTS = {'requested_permissions': [], 'permission_count': 0}
 
 
 @mcp_tool(category="general")
-@ToolBase.handle_tool_error('QUERY_PACKAGE_ERROR', **_QUERY_PACKAGE_ERROR_DEFAULTS)
-@ToolBase.with_device(**_QUERY_PACKAGE_ERROR_DEFAULTS)
+@ToolBase.handle_tool_error('QUERY_PACKAGE_ERROR', info_type='list', **_LIST_ERROR_DEFAULTS)
+@ToolBase.with_device(info_type='list', **_LIST_ERROR_DEFAULTS)
 async def query_package(
     device_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
@@ -117,7 +107,6 @@ async def query_package(
             'error_code': 'MISSING_BUNDLE_NAME',
             'device_id': device_id,
             'info_type': info_type,
-            **{k: v for k, v in _QUERY_PACKAGE_ERROR_DEFAULTS.items() if k not in ('info_type',)}
         }
     
     # 如果指定了 bundle_name 但 info_type 是 list，自动切换到 abilities
@@ -172,10 +161,7 @@ async def query_package(
                 'device_id': device_id,
                 'info_type': 'abilities',
                 'bundle_name': bundle_name,
-                'abilities': [],
-                'modules': [],
-                'main_ability': None,
-                'ability_count': 0
+                **_ABILITIES_ERROR_DEFAULTS
             }
     
     # === main_ability 模式：仅获取主 Ability ===

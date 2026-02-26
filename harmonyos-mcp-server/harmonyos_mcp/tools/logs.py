@@ -8,7 +8,7 @@ import asyncio
 import os
 import re
 import zipfile
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -38,17 +38,6 @@ class LogEntry:
     tid: Optional[int] = None
     message: str = ""
     raw_line: str = ""
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'level': self.level,
-            'tag': self.tag,
-            'pid': self.pid,
-            'tid': self.tid,
-            'message': self.message,
-            'raw_line': self.raw_line,
-        }
 
 
 # ============================================================================
@@ -259,6 +248,8 @@ class LogParser:
             if pkg_lower:
                 if pkg_lower not in entry.raw_line.lower():
                     continue
+            if cls._is_noise(entry):
+                continue
             result.append(entry)
         return result
 
@@ -514,12 +505,6 @@ def _format_file_size(size: int) -> str:
     if size < 1024 * 1024:
         return f"{size / 1024:.1f} KB"
     return f"{size / 1024 / 1024:.1f} MB"
-
-
-def _extract_evidence_lines(entries: List[LogEntry], analysis_type: str) -> List[str]:
-    """提取证据行（用于审计）"""
-    # summary 和 custom 模式不需要单独的证据行
-    return []
 
 
 def _pull_dict_files(hdc, device: str, local_dir: str) -> Optional[str]:
@@ -890,7 +875,6 @@ def _query_impl(
 
         # ── 分析 ─────────────────────────────────────────────────
         analysis_result = LogParser.analyze(filtered, analysis_type, custom_regex)
-        evidence = _extract_evidence_lines(filtered, analysis_type)
 
         # ── 保存 ─────────────────────────────────────────────────
         saved = None
@@ -908,7 +892,6 @@ def _query_impl(
             'filters_applied': _clean_dict(filters),
             'analysis_type': analysis_type,
             'analysis': analysis_result,
-            'evidence_lines': evidence,
             'total_entries_analyzed': len(filtered),
         }
         result.update(extra)

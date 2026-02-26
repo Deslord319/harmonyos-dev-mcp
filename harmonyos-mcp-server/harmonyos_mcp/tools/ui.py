@@ -6,13 +6,53 @@ UI 操作工具
 import asyncio
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple, Union
 from loguru import logger
 
 from ..container import get_hdc, get_ui_operations
-from ..types import ClickResult, SwipeResult, InputTextResult, PressKeyResult, FindElementResult
+from ..types import (
+    ClickResult, LongPressResult, DragResult, SwipeResult, InputTextResult,
+    PressKeyResult, FindElementResult, ScreenshotResult, ElementScreenshotResult
+)
 from .base import ToolBase
 from .registry import mcp_tool
+
+
+async def _resolve_element_coords(
+    device_id: str,
+    text: Optional[str] = None,
+    element_type: Optional[str] = None,
+    bundle_name: Optional[str] = None,
+) -> Tuple[bool, Union[Tuple[int, int], dict]]:
+    """
+    通过文本/类型查找元素并返回中心坐标
+    
+    Returns:
+        (True, (x, y)) 成功时
+        (False, error_dict) 失败时
+    """
+    ui_ops = get_ui_operations()
+    result = await asyncio.to_thread(
+        ui_ops.find_element, device_id,
+        text=text, element_type=element_type, bundle_name=bundle_name
+    )
+    if not result['success']:
+        return False, result
+    if not result['elements']:
+        return False, {
+            'success': False,
+            'error': f'未找到匹配的元素: text={text}, type={element_type}',
+            'error_code': 'ELEMENT_NOT_FOUND'
+        }
+
+    element = result['elements'][0]
+    if 'x' not in element or 'y' not in element:
+        return False, {
+            'success': False,
+            'error': f'元素没有有效的坐标信息: {element}',
+            'error_code': 'INVALID_ELEMENT_COORDS'
+        }
+    return True, (element['x'], element['y'])
 
 
 @mcp_tool(category="ui")
@@ -53,7 +93,6 @@ async def click_element(
             'x': x, 'y': y
         }
 
-    default_result = {'x': x or 0, 'y': y or 0}
     ui_ops = get_ui_operations()
 
     # 如果提供了坐标，直接点击
@@ -65,40 +104,21 @@ async def click_element(
 
     # 如果提供了text或element_type，先查找元素
     if has_search:
-        result = await asyncio.to_thread(
-            ui_ops.find_element, device_id, text=text, element_type=element_type, bundle_name=bundle_name
-        )
-        if not result['success']:
-            result.update(default_result)
-            return result
-        if not result['elements']:
-            return {
-                'success': False,
-                'error': f'未找到匹配的元素: text={text}, type={element_type}',
-                'error_code': 'ELEMENT_NOT_FOUND',
-                **default_result
-            }
-
-        # 使用第一个匹配的元素
-        element = result['elements'][0]
-        if 'x' not in element or 'y' not in element:
-            return {
-                'success': False,
-                'error': f'元素没有有效的坐标信息: {element}',
-                'error_code': 'INVALID_ELEMENT_COORDS',
-                **default_result
-            }
-
+        ok, coords = await _resolve_element_coords(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
+        if not ok:
+            coords.update({'x': x or 0, 'y': y or 0})
+            return coords
+        ex, ey = coords
         if double_click:
-            return await asyncio.to_thread(ui_ops.double_click, device_id, element['x'], element['y'])
+            return await asyncio.to_thread(ui_ops.double_click, device_id, ex, ey)
         else:
-            return await asyncio.to_thread(ui_ops.click, device_id, element['x'], element['y'])
+            return await asyncio.to_thread(ui_ops.click, device_id, ex, ey)
 
     return {
         'success': False,
         'error': '必须提供坐标(x, y)或查找条件(text/element_type)',
         'error_code': 'MISSING_PARAMS',
-        **default_result
+        'x': x or 0, 'y': y or 0
     }
 
 
@@ -112,7 +132,7 @@ async def long_press_element(
     text: Optional[str] = None,
     element_type: Optional[str] = None,
     bundle_name: Optional[str] = None
-) -> dict:
+) -> LongPressResult:
     """
     长按屏幕上的元素
 
@@ -135,27 +155,11 @@ async def long_press_element(
 
     # 查找元素
     if text or element_type:
-        result = await asyncio.to_thread(
-            ui_ops.find_element, device_id, text=text, element_type=element_type, bundle_name=bundle_name
-        )
-        if not result['success']:
-            return result
-        if not result['elements']:
-            return {
-                'success': False,
-                'error': '未找到匹配的元素',
-                'error_code': 'ELEMENT_NOT_FOUND'
-            }
-
-        element = result['elements'][0]
-        if 'x' not in element or 'y' not in element:
-            return {
-                'success': False,
-                'error': '元素没有有效的坐标信息',
-                'error_code': 'INVALID_ELEMENT_COORDS'
-            }
-
-        return await asyncio.to_thread(ui_ops.long_click, device_id, element['x'], element['y'])
+        ok, coords = await _resolve_element_coords(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
+        if not ok:
+            return coords
+        ex, ey = coords
+        return await asyncio.to_thread(ui_ops.long_click, device_id, ex, ey)
 
     return {
         'success': False,
@@ -266,30 +270,12 @@ async def input_text(
 
     # 查找元素
     if element_text or element_type:
-        result = await asyncio.to_thread(
-            ui_ops.find_element, device_id, text=element_text, element_type=element_type, bundle_name=bundle_name
-        )
-        if not result['success']:
-            result.update(default_result)
-            return result
-        if not result['elements']:
-            return {
-                'success': False,
-                'error': '未找到匹配的输入框',
-                'error_code': 'ELEMENT_NOT_FOUND',
-                **default_result
-            }
-
-        element = result['elements'][0]
-        if 'x' not in element or 'y' not in element:
-            return {
-                'success': False,
-                'error': '元素没有有效的坐标信息',
-                'error_code': 'INVALID_ELEMENT_COORDS',
-                **default_result
-            }
-
-        return await asyncio.to_thread(ui_ops.input_text, device_id, element['x'], element['y'], text)
+        ok, coords = await _resolve_element_coords(device_id, text=element_text, element_type=element_type, bundle_name=bundle_name)
+        if not ok:
+            coords.update(default_result)
+            return coords
+        ex, ey = coords
+        return await asyncio.to_thread(ui_ops.input_text, device_id, ex, ey, text)
 
     return {
         'success': False,
@@ -379,7 +365,7 @@ async def screenshot(
     device_id: Optional[str] = None,
     local_path: Optional[str] = None,
     display_id: int = 0
-) -> dict:
+) -> ScreenshotResult:
     """
     对设备屏幕进行截图
 
@@ -425,7 +411,7 @@ async def screenshot_element(
     top: int = 0,
     right: int = 0,
     bottom: int = 0
-) -> dict:
+) -> ElementScreenshotResult:
     """
     对指定元素区域进行截图
 
@@ -483,7 +469,7 @@ async def drag(
     to_x: Optional[int] = None,
     to_y: Optional[int] = None,
     speed: int = 600
-) -> dict:
+) -> DragResult:
     """
     拖拽操作
 

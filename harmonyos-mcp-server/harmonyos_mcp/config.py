@@ -277,22 +277,3 @@ class LogSecurityConfig:
         if timeout is None:
             return cls.DEFAULT_TIMEOUT
         return min(max(timeout, 1), cls.MAX_TIMEOUT)
-    
-    @classmethod
-    def sanitize_filename(cls, filename: str) -> str:
-        """
-        清理文件名（移除危险字符）
-        
-        Args:
-            filename: 原始文件名
-            
-        Returns:
-            安全的文件名
-        """
-        # 移除路径分隔符和特殊字符
-        dangerous_chars = ['/', '\\', '..', ':', '*', '?', '"', '<', '>', '|']
-        safe_name = filename
-        for char in dangerous_chars:
-            safe_name = safe_name.replace(char, '_')
-        return safe_name
-

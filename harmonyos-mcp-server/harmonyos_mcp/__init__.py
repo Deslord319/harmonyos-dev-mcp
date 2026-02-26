@@ -18,17 +18,15 @@ __author__ = "HarmonyOS MCP Team"
 from .server import mcp, main
 
 # 依赖注入
-from .container import Container, get_hdc, get_compile_manager, get_ui_operations, get_hilogtool, get_hvigor
+from .container import Container, get_hdc, get_compile_manager, get_ui_operations, get_hilogtool
 
 # 异常
 from .exceptions import (
     HarmonyOSMCPError,
-    DeviceNotFoundError,
-    DeviceConnectionError,
-    CommandTimeoutError,
-    BuildFailedError,
-    AppNotFoundError,
-    ElementNotFoundError,
+    DeviceError,
+    CommandError,
+    BuildError,
+    UIError,
 )
 
 # 配置
@@ -45,16 +43,13 @@ __all__ = [
     "get_compile_manager",
     "get_ui_operations",
     "get_hilogtool",
-    "get_hvigor",
     # 配置
     "Config",
     "LogSecurityConfig",
     # 异常
     "HarmonyOSMCPError",
-    "DeviceNotFoundError",
-    "DeviceConnectionError",
-    "CommandTimeoutError",
-    "BuildFailedError",
-    "AppNotFoundError",
-    "ElementNotFoundError",
+    "DeviceError",
+    "CommandError",
+    "BuildError",
+    "UIError",
 ]

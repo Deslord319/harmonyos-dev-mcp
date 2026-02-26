@@ -17,6 +17,7 @@ from .registry import mcp_tool
 
 
 @mcp_tool(category="build")
+@ToolBase.handle_tool_error('BUILD_ERROR', hap_path=None, duration=0)
 async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
     """
     构建HarmonyOS应用
@@ -34,31 +35,24 @@ async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult
     """
     start_time = time.time()
 
-    try:
-        hvigor = HvigorWrapper(project_path)
-        result = await asyncio.to_thread(hvigor.build_hap, build_mode=build_mode)
-        elapsed = time.time() - start_time
+    hvigor = HvigorWrapper(project_path)
+    result = await asyncio.to_thread(hvigor.build_hap, build_mode=build_mode)
+    elapsed = time.time() - start_time
 
-        response: BuildResult = {
-            'success': result['success'],
-            'hap_path': result.get('hap_path'),
-            'message': f"构建{'成功' if result['success'] else '失败'}，耗时: {ToolBase.format_duration(elapsed)}",
-            'duration': elapsed
-        }
+    response: BuildResult = {
+        'success': result['success'],
+        'hap_path': result.get('hap_path'),
+        'message': f"构建{'成功' if result['success'] else '失败'}，耗时: {ToolBase.format_duration(elapsed)}",
+        'duration': elapsed
+    }
 
-        # 构建失败时提取错误信息
-        if not result['success']:
-            error_msg = _extract_build_error(project_path)
-            if error_msg:
-                response['error'] = error_msg
+    # 构建失败时提取错误信息
+    if not result['success']:
+        error_msg = _extract_build_error(project_path)
+        if error_msg:
+            response['error'] = error_msg
 
-        return response
-
-    except Exception as e:
-        elapsed = time.time() - start_time
-        result = ToolBase.wrap_error(e, 'BUILD_ERROR')
-        result['duration'] = elapsed
-        return result
+    return response
 
 
 def _extract_build_error(project_path: str) -> Optional[str]:

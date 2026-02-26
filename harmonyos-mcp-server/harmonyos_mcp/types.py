@@ -4,7 +4,6 @@
 定义所有工具函数的输入输出类型，提供完整的类型提示支持。
 """
 from typing import TypedDict, Optional, List, Literal, Any
-from dataclasses import dataclass
 
 
 # ============================================================================
@@ -167,6 +166,20 @@ class ClickResult(BaseResult):
     y: int
 
 
+class LongPressResult(BaseResult):
+    """长按操作返回类型"""
+    x: int
+    y: int
+
+
+class DragResult(BaseResult):
+    """拖拽操作返回类型"""
+    from_x: int
+    from_y: int
+    to_x: int
+    to_y: int
+
+
 class SwipeResult(BaseResult):
     """滑动操作返回类型"""
     from_x: int
@@ -245,14 +258,6 @@ class LogsFilterConfig(TypedDict, total=False):
     time_range: Optional[dict]
 
 
-class LogsSummary(TypedDict, total=False):
-    """日志摘要"""
-    level_stats: dict
-    time_range: Optional[dict]
-    top_tags: List[str]
-    error_count: int
-
-
 class LogsQueryResult(BaseResult, total=False):
     """logs_query 返回类型（统一日志查询结果）"""
     device_id: str
@@ -263,7 +268,6 @@ class LogsQueryResult(BaseResult, total=False):
     filters_applied: LogsFilterConfig
     analysis_type: str
     analysis: dict
-    evidence_lines: List[str]
     total_entries_analyzed: int
     # 保存模式字段
     saved_path: str

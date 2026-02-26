@@ -12,10 +12,8 @@
 """
 import sys
 import os
-import glob
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Tuple
 from loguru import logger
 
 from ..config import Config
@@ -165,47 +163,4 @@ def get_log_dir_size_mb() -> float:
         f.stat().st_size for f in _LOG_DIR.glob("*") if f.is_file()
     )
     return total_size / (1024 * 1024)
-
-
-def get_log_stats() -> dict:
-    """
-    获取日志统计信息
-    
-    Returns:
-        包含日志统计的字典
-    """
-    if not _LOG_DIR.exists():
-        return {
-            'log_dir': str(_LOG_DIR),
-            'exists': False,
-            'file_count': 0,
-            'total_size_mb': 0,
-            'oldest_file': None,
-            'newest_file': None,
-        }
-    
-    log_files = list(_LOG_DIR.glob("*.log*"))
-    
-    if not log_files:
-        return {
-            'log_dir': str(_LOG_DIR),
-            'exists': True,
-            'file_count': 0,
-            'total_size_mb': 0,
-            'oldest_file': None,
-            'newest_file': None,
-        }
-    
-    log_files_sorted = sorted(log_files, key=lambda f: f.stat().st_mtime)
-    
-    return {
-        'log_dir': str(_LOG_DIR),
-        'exists': True,
-        'file_count': len(log_files),
-        'total_size_mb': round(get_log_dir_size_mb(), 2),
-        'oldest_file': log_files_sorted[0].name if log_files_sorted else None,
-        'newest_file': log_files_sorted[-1].name if log_files_sorted else None,
-        'max_size_mb': LOG_MAX_DIR_SIZE_MB,
-        'retention_days': int(LOG_RETENTION.split()[0]),
-    }
 

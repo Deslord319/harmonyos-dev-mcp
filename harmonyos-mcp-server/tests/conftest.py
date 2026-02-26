@@ -85,11 +85,6 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
     }
     mock.get_realtime_logs.return_value = "01-31 10:00:00.123  1234  1234 I MyTag: Test log"
     mock.get_app_pid.return_value = 1234
-    mock.hilog_receive.return_value = {
-        'success': True,
-        'files': ['hilog_001.gz'],
-        'total_size': 1024
-    }
     
     # 注入到容器
     Container.register(HdcWrapper, mock)
