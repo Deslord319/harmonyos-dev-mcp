@@ -239,6 +239,25 @@ class LogSecurityConfig:
     # 最大超时（秒）
     MAX_TIMEOUT: int = int(os.getenv('LOG_MAX_TIMEOUT', '300'))
     
+    # ========================================================================
+    # 日志查询配置
+    # ========================================================================
+    
+    # 日志拉取倍数（实际拉取 lines * multiplier 行，用于过滤后仍有足够结果）
+    FETCH_MULTIPLIER: int = int(os.getenv('LOG_FETCH_MULTIPLIER', '5'))
+    
+    # 噪音过滤开关（true/false）
+    ENABLE_NOISE_FILTER: bool = os.getenv('LOG_ENABLE_NOISE_FILTER', 'true').lower() == 'true'
+    
+    # 自动清理天数（超过此天数的 hilog_files 目录将被清理）
+    AUTO_CLEANUP_DAYS: int = int(os.getenv('LOG_AUTO_CLEANUP_DAYS', '7'))
+    
+    # 最大缓存目录大小（MB），超过后触发清理
+    MAX_CACHE_SIZE_MB: int = int(os.getenv('LOG_MAX_CACHE_SIZE_MB', '500'))
+    
+    # 时间解析策略：'strict'（严格模式，未来时间报错）或 'auto'（自动推断）
+    TIME_PARSE_STRATEGY: str = os.getenv('LOG_TIME_PARSE_STRATEGY', 'auto')
+
     @classmethod
     def validate_save_path(cls, path: str) -> tuple:
         """
