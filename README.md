@@ -1,4 +1,4 @@
-﻿# HarmonyOS MCP Server
+# HarmonyOS MCP Server
 
 一个为 HarmonyOS 应用开发设计的模型上下文协议 (MCP) 服务器，实现 AI 辅助开发的端到端自动化。
 
@@ -262,33 +262,32 @@ mcpServers:
 
 ---
 
-## 项目路线图
-
-详见 [TASKS.md](TASKS.md)
-
----
-
 ## 项目结构
 
 ```
 mcp_ho_dev/
-├── harmonyos_mcp/
-│   ├── tools/                # MCP 工具模块
-│   │   ├── general.py        # 通用（设备+包管理）
-│   │   ├── logs.py           # 鸿蒙日志分析
-│   │   ├── build.py          # 鸿蒙打包编译
-│   │   ├── ui.py             # UI 测试（操作+截图）
-│   │   ├── ui_tree.py        # UI 测试（树+窗口）
-│   │   └── compile.py        # 三方库编译
-│   ├── utils/                # 工具类
-│   │   ├── hdc_wrapper.py    # hdc 命令封装
-│   │   ├── hvigor_wrapper.py # hvigor 构建封装
+├── harmonyos_mcp/           # MCP 服务器核心
+│   ├── tools/               # MCP 工具模块
+│   │   ├── general.py       # 通用（设备+包管理）
+│   │   ├── log/             # 日志模块
+│   │   │   ├── parser.py    # 日志解析器
+│   │   │   ├── time_utils.py # 时间工具
+│   │   │   ├── historian.py # 历史日志
+│   │   │   └── query.py     # 主查询入口
+│   │   ├── build.py         # 鸿蒙打包编译
+│   │   ├── ui.py            # UI 测试（操作+截图）
+│   │   ├── ui_tree.py       # UI 测试（树+窗口）
+│   │   └── compile.py       # 三方库编译
+│   ├── utils/               # 工具类
+│   │   ├── hdc/             # hdc 命令封装
+│   │   ├── wrappers/        # 各种包装器
 │   │   └── ...
-│   └── ...
-├── docs/tools/               # 工具文档
-│   ├── query_package.md
+│   └── server.py            # FastMCP 服务器
+├── docs/tools/              # 工具文档
 │   └── logs_query.md
-└── tests/                    # 测试用例
+├── tests/                   # 测试用例
+├── pyproject.toml          # 项目配置
+└── README.md
 ```
 
 ---
