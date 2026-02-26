@@ -8,11 +8,11 @@ from typing import Optional, List
 
 from loguru import logger
 
-from ....container import get_hdc
-from ....config import LogSecurityConfig
-from ....types import LogsQueryResult
-from ....tools.base import ToolBase
-from ....tools.registry import mcp_tool
+from ...container import get_hdc
+from ...config import LogSecurityConfig
+from ...types import LogsQueryResult
+from ...tools.base import ToolBase
+from ...tools.registry import mcp_tool
 from .parser import LogParser
 from .time_utils import (
     _parse_time_expr,
@@ -256,36 +256,6 @@ async def logs_query(
 ) -> LogsQueryResult:
     """
     统一日志查询工具 - 拉取 / 解析 / 过滤 / 分析 / 保存 一体化
-
-    数据来源（按优先级）:
-    1. logs 参数直接传入日志行列表
-    2. input_file / input_files 指定本地文件
-    3. 从设备获取（自动判断实时缓冲区 or 历史落盘文件）
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        logs: 日志行列表（直接传入则跳过设备获取）
-        input_file: 本地日志文件路径（单文件）
-        input_files: 本地日志文件路径列表（多文件，合并分析）
-        lines: 最大返回行数（默认100，最大50000）
-        level: 日志级别过滤 (D/I/W/E/F)，返回该级别及以上
-        tag: Tag 过滤（模糊匹配）
-        keyword: 关键字过滤（在日志内容中搜索）
-        pid: 进程ID过滤
-        package_name: 应用包名过滤（如 com.example.myapplication），自动获取应用PID
-        start_time: 开始时间（格式：HH:MM:SS 或 YYYY-MM-DD HH:MM:SS）
-        end_time: 结束时间（格式：HH:MM:SS 或 YYYY-MM-DD HH:MM:SS）
-        seconds: 获取最近N秒内的日志（与start_time/end_time互斥）
-        analysis_type: 分析类型
-            - summary: 摘要统计（级别分布、Top Tags、时间范围）
-            - custom: 自定义正则匹配
-        custom_regex: 自定义正则表达式（仅 analysis_type=custom 时使用）
-        save_path: 保存路径（指定后将日志快照写入文件）
-        time_expr: 自然语言时间表达式（如"昨天上午"、"最近5分钟"、"前天晚上"），
-                   优先级低于 start_time/end_time/seconds
-
-    Returns:
-        统一查询结果，包含日志内容、过滤信息、分析结果和保存路径
     """
     import asyncio
     return await asyncio.to_thread(

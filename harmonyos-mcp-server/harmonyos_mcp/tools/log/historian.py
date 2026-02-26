@@ -10,8 +10,8 @@ from typing import Optional, List
 
 from loguru import logger
 
-from ....container import get_hdc, get_hilogtool
-from ....config import LogSecurityConfig
+from ...container import get_hdc, get_hilogtool
+from ...config import LogSecurityConfig
 
 
 def _pull_dict_files(hdc, device: str, local_dir: str) -> Optional[str]:
