@@ -4,6 +4,7 @@
 提供统一的日志查询入口
 """
 import os
+from datetime import datetime
 from typing import Optional, List
 
 from loguru import logger
@@ -13,7 +14,7 @@ from ...config import LogSecurityConfig
 from ...types import LogsQueryResult
 from ...tools.base import ToolBase
 from ...tools.registry import mcp_tool
-from .parser import LogParser
+from .parser import LogParser, FilterStats
 from .time_utils import (
     _parse_time_expr,
     _build_time_range,
@@ -36,7 +37,6 @@ def _save_logs(output_path, device_id, entries, filters, analysis_result) -> dic
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-    from datetime import datetime
     with open(result_path, 'w', encoding='utf-8') as f:
         f.write("=" * 80 + "\n")
         f.write("HarmonyOS 日志快照\n")
@@ -77,10 +77,11 @@ def _clean_dict(d: dict) -> dict:
 
 def _query_impl(
     device_id=None, logs=None, input_file=None, input_files=None,
-    lines=100, level=None, tag=None, keyword=None, pid=None,
-    package_name=None, start_time=None, end_time=None, seconds=None,
-    analysis_type="summary", custom_regex=None, save_path=None,
-    time_expr=None,
+    lines=100, level=None, tag=None, tag_search=None, keyword=None,
+    domain=None, pid=None, package_name=None, start_time=None,
+    end_time=None, seconds=None, analysis_type="summary",
+    custom_regex=None, save_path=None, time_expr=None,
+    disable_noise_filter=False, include_diagnostics=False,
 ):
     """logs_query 的同步实现"""
     
@@ -94,7 +95,8 @@ def _query_impl(
             logger.info(f"time_expr '{time_expr}' -> {start_time} ~ {end_time}")
 
     filters = _clean_dict({
-        'level': level, 'tag': tag, 'keyword': keyword, 'pid': pid,
+        'level': level, 'tag': tag, 'tag_search': tag_search,
+        'keyword': keyword, 'domain': domain, 'pid': pid,
         'package_name': package_name, 'seconds': seconds,
         'start_time': start_time, 'end_time': end_time,
     })
@@ -188,11 +190,20 @@ def _query_impl(
 
         time_range = _build_time_range(seconds, start_time, end_time)
         pkg_filter = package_name if (package_name and source != 'realtime_buffer') else None
-        filtered = LogParser.filter_entries(
-            entries, level=level, tag=tag, keyword=keyword,
-            time_range=time_range, pid=pid, seconds=seconds,
-            package_name=pkg_filter,
+
+        filter_result = LogParser.filter_entries(
+            entries, level=level, tag=tag, tag_search=tag_search,
+            keyword=keyword, domain=domain, time_range=time_range,
+            pid=pid, seconds=seconds, package_name=pkg_filter,
+            disable_noise_filter=disable_noise_filter,
+            collect_stats=include_diagnostics,
         )
+
+        if include_diagnostics and isinstance(filter_result, tuple):
+            filtered, stats = filter_result
+        else:
+            filtered = filter_result
+            stats = None
 
         max_n = min(lines, LogSecurityConfig.MAX_LOG_LINES)
         truncated = len(filtered) > max_n
@@ -217,6 +228,25 @@ def _query_impl(
             'total_entries_analyzed': len(filtered),
         }
         result.update(extra)
+
+        if include_diagnostics and stats:
+            result['diagnostics'] = {
+                'total_scanned': stats.total_scanned,
+                'parse_success': sum(1 for e in entries if e.level),
+                'parse_failed': sum(1 for e in entries if not e.level),
+                'filter_stats': {
+                    'level_filtered': stats.level_filtered,
+                    'tag_filtered': stats.tag_filtered,
+                    'tag_search_filtered': stats.tag_search_filtered,
+                    'keyword_filtered': stats.keyword_filtered,
+                    'domain_filtered': stats.domain_filtered,
+                    'pid_filtered': stats.pid_filtered,
+                    'time_filtered': stats.time_filtered,
+                    'package_filtered': stats.package_filtered,
+                    'noise_filtered': stats.noise_filtered,
+                    'passed': stats.passed,
+                },
+            }
 
         if saved and saved['success']:
             result['saved_path'] = saved['saved_path']
@@ -243,7 +273,9 @@ async def logs_query(
     lines: int = 100,
     level: Optional[str] = None,
     tag: Optional[str] = None,
+    tag_search: Optional[str] = None,
     keyword: Optional[str] = None,
+    domain: Optional[str] = None,
     pid: Optional[int] = None,
     package_name: Optional[str] = None,
     start_time: Optional[str] = None,
@@ -253,17 +285,47 @@ async def logs_query(
     custom_regex: Optional[str] = None,
     save_path: Optional[str] = None,
     time_expr: Optional[str] = None,
+    disable_noise_filter: bool = False,
+    include_diagnostics: bool = False,
 ) -> LogsQueryResult:
     """
     统一日志查询工具 - 拉取 / 解析 / 过滤 / 分析 / 保存 一体化
+
+    Args:
+        device_id: 设备ID，为空时使用第一个设备
+        logs: 直接传入日志行列表（优先级最高）
+        input_file: 本地日志文件路径
+        input_files: 多个本地文件路径
+        lines: 最大返回行数（默认100，上限50000）
+        level: 日志级别过滤：D/I/W/E/F
+        tag: TAG 过滤（匹配解析后的 tag 字段）
+        tag_search: TAG 搜索（在原始行中搜索，不依赖解析）
+        keyword: 关键字过滤（在原始行中搜索）
+        domain: hilog domain 过滤（支持 0x0006 或 C00006 格式）
+        pid: 进程 ID 过滤
+        package_name: 应用包名过滤
+        start_time: 开始时间
+        end_time: 结束时间
+        seconds: 最近 N 秒
+        analysis_type: 分析类型（summary/custom）
+        custom_regex: 自定义正则分析
+        save_path: 保存路径
+        time_expr: 自然语言时间表达式（如"最近10分钟"）
+        disable_noise_filter: 禁用噪音过滤（默认 False）
+        include_diagnostics: 返回诊断统计信息（默认 False）
+
+    Returns:
+        查询结果字典
     """
     import asyncio
     return await asyncio.to_thread(
         _query_impl,
         device_id=device_id, logs=logs, input_file=input_file,
         input_files=input_files, lines=lines, level=level, tag=tag,
-        keyword=keyword, pid=pid, package_name=package_name,
-        start_time=start_time, end_time=end_time, seconds=seconds,
-        analysis_type=analysis_type, custom_regex=custom_regex,
+        tag_search=tag_search, keyword=keyword, domain=domain, pid=pid,
+        package_name=package_name, start_time=start_time, end_time=end_time,
+        seconds=seconds, analysis_type=analysis_type, custom_regex=custom_regex,
         save_path=save_path, time_expr=time_expr,
+        disable_noise_filter=disable_noise_filter,
+        include_diagnostics=include_diagnostics,
     )

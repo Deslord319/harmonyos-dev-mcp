@@ -11,6 +11,7 @@
 - 分析本地日志文件
 - 多种结构化分析
 - 保存日志快照
+- 诊断统计信息
 
 ---
 
@@ -33,10 +34,13 @@
 |------|------|--------|------|
 | `lines` | int | 100 | 最大返回行数（上限 50000） |
 | `level` | string | null | 日志级别过滤：D/I/W/E/F |
-| `tag` | string | null | Tag 过滤（模糊匹配） |
-| `keyword` | string | null | 关键字过滤 |
+| `tag` | string | null | Tag 过滤（匹配解析后的 tag 字段） |
+| `tag_search` | string | null | Tag 搜索（在原始行中搜索，不依赖解析） |
+| `keyword` | string | null | 关键字过滤（在原始行中搜索） |
+| `domain` | string | null | hilog domain 过滤（支持 0x0006 或 C00006 格式） |
 | `pid` | int | null | 进程 ID 过滤 |
 | `package_name` | string | null | 应用包名过滤（自动获取 PID） |
+| `disable_noise_filter` | bool | false | 禁用噪音过滤 |
 
 ### 时间参数
 
@@ -45,6 +49,7 @@
 | `start_time` | string | 开始时间（HH:MM:SS 或 YYYY-MM-DD HH:MM:SS） |
 | `end_time` | string | 结束时间 |
 | `seconds` | int | 最近 N 秒（与 start_time/end_time 互斥） |
+| `time_expr` | string | 自然语言时间表达式（如"最近10分钟"、"昨天下午"） |
 
 > 当 `start_time` 超过 10 分钟前，自动切换到历史文件读取模式
 
@@ -60,9 +65,6 @@
 | 类型 | 说明 |
 |------|------|
 | `summary` | 摘要统计：级别分布、Top Tags、时间范围 |
-| `errors` | 错误分析：E/F 级别分组、异常类型识别 |
-| `crashes` | 崩溃分析：Crash/ANR/Exception 识别 |
-| `keywords` | 关键词提取：错误码、组件名、异常名 |
 | `custom` | 自定义正则匹配 |
 
 ### 输出参数
@@ -70,6 +72,7 @@
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `save_path` | string | 保存路径（指定后写入文件） |
+| `include_diagnostics` | bool | 返回诊断统计信息（默认 false） |
 
 ---
 
@@ -88,8 +91,7 @@
   "name": "logs_query",
   "arguments": {
     "level": "E",
-    "lines": 500,
-    "analysis_type": "errors"
+    "lines": 500
   }
 }
 ```
@@ -100,13 +102,60 @@
 {
   "name": "logs_query",
   "arguments": {
-    "package_name": "com.example.myapp",
-    "analysis_type": "crashes"
+    "package_name": "com.example.myapp"
   }
 }
 ```
 
-### 4. 时间范围查询
+### 4. 搜索特定 TAG（推荐使用 tag_search）
+
+```json
+{
+  "name": "logs_query",
+  "arguments": {
+    "tag_search": "LogAuditService",
+    "lines": 100
+  }
+}
+```
+
+### 5. 按 domain 过滤
+
+```json
+{
+  "name": "logs_query",
+  "arguments": {
+    "domain": "0x0006",
+    "lines": 100
+  }
+}
+```
+
+### 6. 禁用噪音过滤
+
+```json
+{
+  "name": "logs_query",
+  "arguments": {
+    "keyword": "subscribe failed",
+    "disable_noise_filter": true
+  }
+}
+```
+
+### 7. 获取诊断信息
+
+```json
+{
+  "name": "logs_query",
+  "arguments": {
+    "package_name": "com.example.app",
+    "include_diagnostics": true
+  }
+}
+```
+
+### 8. 时间范围查询
 
 ```json
 {
@@ -119,39 +168,25 @@
 }
 ```
 
-### 5. 最近 5 分钟日志
+### 9. 自然语言时间表达式
 
 ```json
 {
   "name": "logs_query",
   "arguments": {
-    "seconds": 300,
-    "keyword": "crash"
+    "time_expr": "最近10分钟",
+    "level": "E"
   }
 }
 ```
 
-### 6. 分析本地文件
+### 10. 分析本地文件
 
 ```json
 {
   "name": "logs_query",
   "arguments": {
-    "input_file": "/path/to/hilog.txt",
-    "analysis_type": "keywords"
-  }
-}
-```
-
-### 7. 保存日志快照
-
-```json
-{
-  "name": "logs_query",
-  "arguments": {
-    "package_name": "com.example.app",
-    "lines": 2000,
-    "save_path": "./crash_logs.txt"
+    "input_file": "/path/to/hilog.txt"
   }
 }
 ```
@@ -159,6 +194,8 @@
 ---
 
 ## 返回结构
+
+### 基本返回
 
 ```json
 {
@@ -172,14 +209,51 @@
   "analysis_type": "summary",
   "analysis": {
     "total_lines": 100,
+    "parsed_lines": 95,
     "level_stats": {"E": 50, "W": 30, "I": 20},
     "top_tags": [{"tag": "MyApp", "count": 45}],
     "time_range": {"start": "...", "end": "..."}
   },
-  "evidence_lines": ["..."],
   "total_entries_analyzed": 100
 }
 ```
+
+### 包含诊断信息（include_diagnostics=true）
+
+```json
+{
+  "success": true,
+  "logs": [...],
+  "diagnostics": {
+    "total_scanned": 10000,
+    "parse_success": 8500,
+    "parse_failed": 1500,
+    "filter_stats": {
+      "level_filtered": 100,
+      "tag_filtered": 50,
+      "tag_search_filtered": 0,
+      "keyword_filtered": 200,
+      "domain_filtered": 0,
+      "pid_filtered": 0,
+      "time_filtered": 0,
+      "package_filtered": 0,
+      "noise_filtered": 300,
+      "passed": 100
+    }
+  }
+}
+```
+
+---
+
+## tag vs tag_search
+
+| 参数 | 说明 | 适用场景 |
+|------|------|----------|
+| `tag` | 匹配解析后的 entry.tag 字段 | 日志格式标准，解析成功 |
+| `tag_search` | 在原始行中搜索 TAG | 日志格式不标准，解析失败 |
+
+**推荐**：优先使用 `tag_search`，因为它不依赖解析结果。
 
 ---
 
@@ -195,3 +269,14 @@
 
 - `start_time` 在 10 分钟内 → 实时缓冲区（hilog -t）
 - `start_time` 超过 10 分钟 → 历史落盘文件（需要 hilogtool 解密）
+
+### keyword 搜索优化
+
+keyword 现在搜索整个原始行（raw_line），确保不会因为解析失败而遗漏日志。
+
+### domain 格式
+
+支持多种格式：
+- `0x0006` → 转换为 `C00006`
+- `C00006` → 直接使用
+- `0006` → 转换为 `C00006`

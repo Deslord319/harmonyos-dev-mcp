@@ -5,7 +5,7 @@
 """
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
@@ -22,6 +22,22 @@ class LogEntry:
     tid: Optional[int] = None
     message: str = ""
     raw_line: str = ""
+
+
+@dataclass
+class FilterStats:
+    """过滤统计"""
+    total_scanned: int = 0
+    level_filtered: int = 0
+    tag_filtered: int = 0
+    tag_search_filtered: int = 0
+    keyword_filtered: int = 0
+    domain_filtered: int = 0
+    pid_filtered: int = 0
+    time_filtered: int = 0
+    package_filtered: int = 0
+    noise_filtered: int = 0
+    passed: int = 0
 
 
 class LogParser:
@@ -87,6 +103,19 @@ class LogParser:
         if not level:
             return None
         return cls.LEVEL_NAME_MAP.get(level.strip().upper())
+
+    @classmethod
+    def normalize_domain(cls, domain: str) -> str:
+        if not domain:
+            return ""
+        d = domain.upper().replace('0X', '').replace('X', '')
+        if len(d) == 4:
+            return f"C{d}"
+        elif len(d) == 5 and d.startswith('C'):
+            return d
+        elif len(d) == 6:
+            return d
+        return f"C{d.zfill(4)}"
 
     @classmethod
     def parse_line(cls, line: str, year: int = None) -> LogEntry:
@@ -158,20 +187,27 @@ class LogParser:
         entries: List[LogEntry],
         level: Optional[str] = None,
         tag: Optional[str] = None,
+        tag_search: Optional[str] = None,
         keyword: Optional[str] = None,
+        domain: Optional[str] = None,
         time_range: Optional[Dict] = None,
         pid: Optional[int] = None,
         seconds: Optional[int] = None,
         package_name: Optional[str] = None,
-    ) -> List[LogEntry]:
+        disable_noise_filter: bool = False,
+        collect_stats: bool = False,
+    ) -> tuple:
+        stats = FilterStats() if collect_stats else None
         min_p = None
         if level:
             normalized = cls.normalize_level(level)
             min_p = cls.PRIO_MAP.get(normalized, 0) if normalized else 0
 
         tag_lower = tag.lower() if tag else None
+        tag_search_lower = tag_search.lower() if tag_search else None
         kw_lower = keyword.lower() if keyword else None
         pkg_lower = package_name.lower() if package_name else None
+        domain_norm = cls.normalize_domain(domain) if domain else None
 
         start_dt = end_dt = None
         if time_range:
@@ -184,33 +220,79 @@ class LogParser:
 
         result = []
         for entry in entries:
+            if collect_stats:
+                stats.total_scanned += 1
+
             if min_p is not None:
                 if not entry.level or cls.PRIO_MAP.get(entry.level.upper(), 0) < min_p:
+                    if collect_stats:
+                        stats.level_filtered += 1
                     continue
+
             if tag_lower:
                 if not entry.tag or tag_lower not in entry.tag.lower():
+                    if collect_stats:
+                        stats.tag_filtered += 1
                     continue
+
+            if tag_search_lower:
+                if tag_search_lower not in entry.raw_line.lower():
+                    if collect_stats:
+                        stats.tag_search_filtered += 1
+                    continue
+
             if kw_lower:
-                if kw_lower not in entry.message.lower() and kw_lower not in entry.raw_line.lower():
+                if kw_lower not in entry.raw_line.lower():
+                    if collect_stats:
+                        stats.keyword_filtered += 1
                     continue
+
+            if domain_norm:
+                if domain_norm not in entry.raw_line.upper():
+                    if collect_stats:
+                        stats.domain_filtered += 1
+                    continue
+
             if pid:
                 if entry.pid != pid:
+                    if collect_stats:
+                        stats.pid_filtered += 1
                     continue
+
             if start_dt:
                 if not entry.timestamp or entry.timestamp < start_dt:
+                    if collect_stats:
+                        stats.time_filtered += 1
                     continue
             if end_dt:
                 if not entry.timestamp or entry.timestamp > end_dt:
+                    if collect_stats:
+                        stats.time_filtered += 1
                     continue
             if cutoff:
                 if not entry.timestamp or entry.timestamp < cutoff:
+                    if collect_stats:
+                        stats.time_filtered += 1
                     continue
+
             if pkg_lower:
                 if pkg_lower not in entry.raw_line.lower():
+                    if collect_stats:
+                        stats.package_filtered += 1
                     continue
-            if LogSecurityConfig.ENABLE_NOISE_FILTER and cls._is_noise(entry):
-                continue
+
+            if not disable_noise_filter and LogSecurityConfig.ENABLE_NOISE_FILTER:
+                if cls._is_noise(entry):
+                    if collect_stats:
+                        stats.noise_filtered += 1
+                    continue
+
+            if collect_stats:
+                stats.passed += 1
             result.append(entry)
+
+        if collect_stats:
+            return result, stats
         return result
 
     @classmethod

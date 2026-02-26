@@ -10,7 +10,7 @@
 - query: 主查询入口
 """
 
-from .parser import LogParser, LogEntry
+from .parser import LogParser, LogEntry, FilterStats
 from .query import logs_query
 
-__all__ = ['LogParser', 'LogEntry', 'logs_query']
+__all__ = ['LogParser', 'LogEntry', 'FilterStats', 'logs_query']
