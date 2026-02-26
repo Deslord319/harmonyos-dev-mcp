@@ -75,29 +75,29 @@ class _Container:
         
         if service_type == HdcWrapper:
             instance = HdcWrapper()
-            logger.info("HdcWrapper 初始化成功")
+            logger.debug("HdcWrapper 初始化成功")
             return instance
             
         elif service_type == CompileLibraryManager:
             instance = CompileLibraryManager()
-            logger.info("CompileLibraryManager 初始化成功")
+            logger.debug("CompileLibraryManager 初始化成功")
             return instance
             
         elif service_type == UiTestWrapper:
             # UiTestWrapper 依赖 HdcWrapper
             hdc = self.get(HdcWrapper)
             instance = UiTestWrapper(hdc)
-            logger.info("UiTestWrapper 初始化成功")
+            logger.debug("UiTestWrapper 初始化成功")
             return instance
             
         elif service_type == HilogtoolWrapper:
             instance = HilogtoolWrapper()
-            logger.info("HilogtoolWrapper 初始化成功")
+            logger.debug("HilogtoolWrapper 初始化成功")
             return instance
             
         elif service_type == HvigorWrapper:
             instance = HvigorWrapper()
-            logger.info("HvigorWrapper 初始化成功")
+            logger.debug("HvigorWrapper 初始化成功")
             return instance
             
         else:

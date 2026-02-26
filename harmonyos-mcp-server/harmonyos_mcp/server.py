@@ -1,10 +1,7 @@
 """
 HarmonyOS MCP Server 主入口
 
-重构后的精简版本，将业务逻辑拆分到 tools/ 模块中。
-使用 tools/registry.py 的自动注册机制替代手动逐一注册。
 """
-import sys
 from fastmcp import FastMCP
 from loguru import logger
 
@@ -58,29 +55,15 @@ def main():
 
     # 验证 hdc 可用
     from .container import get_hdc
-    from .exceptions import HDCNotFoundError
 
     try:
         hdc = get_hdc()
         devices = hdc.list_devices()
         logger.info(f"检测到 {len(devices)} 个设备")
-    except HDCNotFoundError as e:
-        logger.warning(str(e))
     except Exception as e:
         logger.warning(f"设备检测失败: {e}")
 
-    import asyncio
-    from mcp.server.stdio import stdio_server
-
-    async def run():
-        async with stdio_server() as (read_stream, write_stream):
-            await mcp.run(
-                read_stream,
-                write_stream,
-                mcp.create_initialization_options(),
-            )
-
-    asyncio.run(run())
+    mcp.run()
 
 
 if __name__ == "__main__":

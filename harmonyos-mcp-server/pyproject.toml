@@ -32,7 +32,7 @@ classifiers = [
     "Topic :: Software Development :: Testing",
 ]
 dependencies = [
-    "fastmcp>=0.1.0",
+    "fastmcp>=3.0.0",
     "requests>=2.31.0",
     "json5>=0.9.14",
     "psutil>=5.9.0",
