@@ -63,7 +63,7 @@ pip install hatchling build
 
 #### 2. 构建 wheel 包
 
-在 harmonyos-mcp-server/ 目录下执行：
+在项目根目录下执行：
 
 ```bash
 python -m build
@@ -221,7 +221,7 @@ mcpServers:
 | query_package | 统一包查询（列出包/获取 Abilities/获取主 Ability） |
 | logs_query | 统一日志查询（拉取/解析/过滤/分析/保存一体化） |
 
-> 工具详细参数见：[query_package](harmonyos-mcp-server/docs/tools/query_package.md) | [logs_query](harmonyos-mcp-server/docs/tools/logs_query.md)
+> 工具详细参数见：[logs_query](docs/tools/logs_query.md)
 
 ### 二、鸿蒙打包编译 (Build)
 
@@ -264,14 +264,14 @@ mcpServers:
 
 ## 项目路线图
 
-详见 [harmonyos-mcp-server/TASKS.md](harmonyos-mcp-server/TASKS.md)
+详见 [TASKS.md](TASKS.md)
 
 ---
 
 ## 项目结构
 
 ```
-harmonyos-mcp-server/
+mcp_ho_dev/
 ├── harmonyos_mcp/
 │   ├── tools/                # MCP 工具模块
 │   │   ├── general.py        # 通用（设备+包管理）
