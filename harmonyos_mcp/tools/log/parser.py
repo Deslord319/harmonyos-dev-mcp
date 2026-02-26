@@ -92,10 +92,6 @@ class LogParser:
         re.compile(r'\bhealthd\b', re.IGNORECASE),
         re.compile(r'\bchatty\b.*\bidentical\b', re.IGNORECASE),
         re.compile(r'ServiceManager:\s*Waiting for service'),
-        re.compile(r'\bsuspend\b|\bresume\b', re.IGNORECASE),
-        re.compile(r'\bWatchdog\b', re.IGNORECASE),
-        re.compile(r'\bGC\b.*(?:pause|heap|allocation)', re.IGNORECASE),
-        re.compile(r'\bChoreographer\b', re.IGNORECASE),
     ]
 
     @classmethod
@@ -194,7 +190,6 @@ class LogParser:
         pid: Optional[int] = None,
         seconds: Optional[int] = None,
         package_name: Optional[str] = None,
-        disable_noise_filter: bool = False,
         collect_stats: bool = False,
     ) -> tuple:
         stats = FilterStats() if collect_stats else None
@@ -281,7 +276,7 @@ class LogParser:
                         stats.package_filtered += 1
                     continue
 
-            if not disable_noise_filter and LogSecurityConfig.ENABLE_NOISE_FILTER:
+            if LogSecurityConfig.ENABLE_NOISE_FILTER:
                 if cls._is_noise(entry):
                     if collect_stats:
                         stats.noise_filtered += 1

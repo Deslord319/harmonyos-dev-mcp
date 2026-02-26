@@ -40,7 +40,6 @@
 | `domain` | string | null | hilog domain 过滤（支持 0x0006 或 C00006 格式） |
 | `pid` | int | null | 进程 ID 过滤 |
 | `package_name` | string | null | 应用包名过滤（自动获取 PID） |
-| `disable_noise_filter` | bool | false | 禁用噪音过滤 |
 
 ### 时间参数
 
@@ -131,19 +130,7 @@
 }
 ```
 
-### 6. 禁用噪音过滤
-
-```json
-{
-  "name": "logs_query",
-  "arguments": {
-    "keyword": "subscribe failed",
-    "disable_noise_filter": true
-  }
-}
-```
-
-### 7. 获取诊断信息
+### 6. 获取诊断信息
 
 ```json
 {
@@ -155,7 +142,7 @@
 }
 ```
 
-### 8. 时间范围查询
+### 7. 时间范围查询
 
 ```json
 {
@@ -168,7 +155,7 @@
 }
 ```
 
-### 9. 自然语言时间表达式
+### 8. 自然语言时间表达式
 
 ```json
 {
@@ -180,7 +167,7 @@
 }
 ```
 
-### 10. 分析本地文件
+### 9. 分析本地文件
 
 ```json
 {
@@ -254,6 +241,22 @@
 | `tag_search` | 在原始行中搜索 TAG | 日志格式不标准，解析失败 |
 
 **推荐**：优先使用 `tag_search`，因为它不依赖解析结果。
+
+---
+
+## 噪音过滤
+
+自动过滤以下系统噪音日志：
+
+| 模式 | 说明 |
+|------|------|
+| `/sys/power/last_sr` | 电源状态文件读取 |
+| `XCollie.*last_sr` | XCollie 相关 |
+| `Failed to read file: /sys/` | 系统文件读取失败 |
+| `logd.*prune` | 日志守护进程裁剪 |
+| `healthd` | 健康守护进程 |
+| `chatty.*identical` | 重复日志压缩提示 |
+| `ServiceManager: Waiting for service` | 服务等待 |
 
 ---
 

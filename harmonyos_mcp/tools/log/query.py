@@ -81,7 +81,7 @@ def _query_impl(
     domain=None, pid=None, package_name=None, start_time=None,
     end_time=None, seconds=None, analysis_type="summary",
     custom_regex=None, save_path=None, time_expr=None,
-    disable_noise_filter=False, include_diagnostics=False,
+    include_diagnostics=False,
 ):
     """logs_query 的同步实现"""
     
@@ -195,7 +195,6 @@ def _query_impl(
             entries, level=level, tag=tag, tag_search=tag_search,
             keyword=keyword, domain=domain, time_range=time_range,
             pid=pid, seconds=seconds, package_name=pkg_filter,
-            disable_noise_filter=disable_noise_filter,
             collect_stats=include_diagnostics,
         )
 
@@ -285,7 +284,6 @@ async def logs_query(
     custom_regex: Optional[str] = None,
     save_path: Optional[str] = None,
     time_expr: Optional[str] = None,
-    disable_noise_filter: bool = False,
     include_diagnostics: bool = False,
 ) -> LogsQueryResult:
     """
@@ -311,7 +309,6 @@ async def logs_query(
         custom_regex: 自定义正则分析
         save_path: 保存路径
         time_expr: 自然语言时间表达式（如"最近10分钟"）
-        disable_noise_filter: 禁用噪音过滤（默认 False）
         include_diagnostics: 返回诊断统计信息（默认 False）
 
     Returns:
@@ -326,6 +323,5 @@ async def logs_query(
         package_name=package_name, start_time=start_time, end_time=end_time,
         seconds=seconds, analysis_type=analysis_type, custom_regex=custom_regex,
         save_path=save_path, time_expr=time_expr,
-        disable_noise_filter=disable_noise_filter,
         include_diagnostics=include_diagnostics,
     )
