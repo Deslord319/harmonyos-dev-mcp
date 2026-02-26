@@ -24,7 +24,8 @@ def _register_tools():
     3. 遍历注册表，将所有工具注册到 FastMCP 服务器
     """
     # 导入工具模块（触发 @mcp_tool 装饰器注册）
-    from .tools import general, build, ui, ui_tree, logs, compile  # noqa: F401
+    from .tools import general, build, ui, ui_tree, compile
+    from .tools.log.query import logs_query
     from .tools.registry import get_registered_tools, get_tool_summary
 
     # 从注册表自动注册到 FastMCP
@@ -48,28 +49,38 @@ mcp = server
 def main():
     """MCP 服务器入口函数"""
     from .utils.logger import setup_logger
-    
+
     # 设置日志（仅在实际运行服务时配置，测试时不触发）
     setup_logger()
-    
-    # 初始化配置
+
     Config.ensure_init()
-    
-    # 验证配置
-    if not Config.validate():
-        logger.error("配置验证失败,请检查环境变量")
-        sys.exit(1)
+    logger.info("HarmonyOS MCP Server 启动中...")
 
-    logger.info("HarmonyOS MCP Server 启动")
-    logger.info(f"hdc路径: {Config.HDC_PATH}")
+    # 验证 hdc 可用
+    from .container import get_hdc
+    from .exceptions import HDCNotFoundError
 
-    # 启动MCP服务器（捕获退出信号）
     try:
-        server.run()
-    except KeyboardInterrupt:
-        logger.info("收到退出信号，服务器关闭")
-    except SystemExit:
-        pass
+        hdc = get_hdc()
+        devices = hdc.list_devices()
+        logger.info(f"检测到 {len(devices)} 个设备")
+    except HDCNotFoundError as e:
+        logger.warning(str(e))
+    except Exception as e:
+        logger.warning(f"设备检测失败: {e}")
+
+    import asyncio
+    from mcp.server.stdio import stdio_server
+
+    async def run():
+        async with stdio_server() as (read_stream, write_stream):
+            await mcp.run(
+                read_stream,
+                write_stream,
+                mcp.create_initialization_options(),
+            )
+
+    asyncio.run(run())
 
 
 if __name__ == "__main__":
