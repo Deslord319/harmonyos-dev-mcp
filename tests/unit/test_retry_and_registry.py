@@ -1,19 +1,24 @@
 """
 测试重试装饰器和工具自动注册机制
 """
+
 import time
 import pytest
 from unittest.mock import MagicMock
 
 from harmonyos_mcp.utils.retry import retry, is_transient_hdc_failure
 from harmonyos_mcp.tools.registry import (
-    mcp_tool, get_registered_tools, get_tool_summary, clear_registry
+    mcp_tool,
+    get_registered_tools,
+    get_tool_summary,
+    clear_registry,
 )
 
 
 # ============================================================================
 # 重试装饰器测试
 # ============================================================================
+
 
 class TestRetry:
     """retry 装饰器测试"""
@@ -80,38 +85,30 @@ class TestRetry:
         """should_retry 回调触发重试"""
         call_count = 0
 
-        @retry(
-            max_retries=2,
-            delay=0.01,
-            should_retry=lambda r: not r.get('success')
-        )
+        @retry(max_retries=2, delay=0.01, should_retry=lambda r: not r.get("success"))
         def fail_then_succeed():
             nonlocal call_count
             call_count += 1
             if call_count < 2:
-                return {'success': False, 'error': 'transient'}
-            return {'success': True, 'data': 'ok'}
+                return {"success": False, "error": "transient"}
+            return {"success": True, "data": "ok"}
 
         result = fail_then_succeed()
-        assert result['success'] is True
+        assert result["success"] is True
         assert call_count == 2
 
     def test_should_retry_exhausted(self):
         """should_retry 耗尽重试返回最后结果"""
         call_count = 0
 
-        @retry(
-            max_retries=2,
-            delay=0.01,
-            should_retry=lambda r: not r.get('success')
-        )
+        @retry(max_retries=2, delay=0.01, should_retry=lambda r: not r.get("success"))
         def always_fail_result():
             nonlocal call_count
             call_count += 1
-            return {'success': False, 'error': 'always fail'}
+            return {"success": False, "error": "always fail"}
 
         result = always_fail_result()
-        assert result['success'] is False
+        assert result["success"] is False
         assert call_count == 3  # 1 initial + 2 retries
 
     def test_exponential_backoff(self):
@@ -138,32 +135,38 @@ class TestIsTransientHdcFailure:
     """is_transient_hdc_failure 测试"""
 
     def test_success_result_not_transient(self):
-        assert is_transient_hdc_failure({'success': True}) is False
+        assert is_transient_hdc_failure({"success": True}) is False
 
     def test_timeout_is_transient(self):
-        assert is_transient_hdc_failure({
-            'success': False, 'stderr': '命令执行超时(30秒)'
-        }) is True
+        assert (
+            is_transient_hdc_failure({"success": False, "stderr": "命令执行超时(30秒)"})
+            is True
+        )
 
     def test_connection_refused_is_transient(self):
-        assert is_transient_hdc_failure({
-            'success': False, 'stderr': 'Connect server failed'
-        }) is True
+        assert (
+            is_transient_hdc_failure(
+                {"success": False, "stderr": "Connect server failed"}
+            )
+            is True
+        )
 
     def test_permanent_error_not_transient(self):
-        assert is_transient_hdc_failure({
-            'success': False, 'stderr': 'Invalid command syntax'
-        }) is False
+        assert (
+            is_transient_hdc_failure(
+                {"success": False, "stderr": "Invalid command syntax"}
+            )
+            is False
+        )
 
     def test_empty_stderr_not_transient(self):
-        assert is_transient_hdc_failure({
-            'success': False, 'stderr': ''
-        }) is False
+        assert is_transient_hdc_failure({"success": False, "stderr": ""}) is False
 
 
 # ============================================================================
 # 工具注册机制测试
 # ============================================================================
+
 
 class TestRegistry:
     """tools/registry.py 测试"""
@@ -177,6 +180,7 @@ class TestRegistry:
         """测试后恢复注册表"""
         clear_registry()
         from harmonyos_mcp.tools.registry import _registry
+
         _registry.extend(self._original)
 
     def test_mcp_tool_registers_function(self):
@@ -191,6 +195,7 @@ class TestRegistry:
 
     def test_mcp_tool_preserves_function(self):
         """装饰器不改变函数行为"""
+
         @mcp_tool(category="test")
         def add(a, b):
             return a + b
@@ -253,22 +258,21 @@ class TestRealToolRegistration:
     """验证实际工具模块的注册结果"""
 
     def test_all_tools_registered(self):
-        """确认所有 25 个工具通过 @mcp_tool 注册"""
+        """确认所有 17 个工具通过 @mcp_tool 注册"""
         # 导入工具模块触发注册
-        from harmonyos_mcp.tools import general, build, ui, ui_tree, logs, compile  # noqa: F401
+        from harmonyos_mcp.tools import general, build, ui, ui_tree, logs  # noqa: F401
         from harmonyos_mcp.tools.registry import get_registered_tools, get_tool_summary
 
         tools = get_registered_tools()
         summary = get_tool_summary()
 
-        assert summary["total"] == 25, (
-            f"期望 25 个工具, 实际 {summary['total']}. "
-            f"分类: {summary['categories']}"
+        assert summary["total"] == 17, (
+            f"期望 17 个工具, 实际 {summary['total']}. 分类: {summary['categories']}"
         )
 
     def test_categories_correct(self):
         """验证各分类工具数量正确"""
-        from harmonyos_mcp.tools import general, build, ui, ui_tree, logs, compile  # noqa: F401
+        from harmonyos_mcp.tools import general, build, ui, ui_tree, logs  # noqa: F401
         from harmonyos_mcp.tools.registry import get_tool_summary
 
         summary = get_tool_summary()
@@ -277,7 +281,6 @@ class TestRealToolRegistration:
             "build": 4,
             "ui": 8,
             "ui_tree": 2,
-            "compile": 8,
         }
         assert summary["categories"] == expected, (
             f"分类不匹配. 期望: {expected}, 实际: {summary['categories']}"

@@ -3,6 +3,7 @@ pytest 配置和 fixtures
 
 提供测试用的公共 fixtures 和配置。
 """
+
 import pytest
 from typing import Generator
 from unittest.mock import MagicMock
@@ -31,6 +32,7 @@ def reset_container():
     """每个测试后重置依赖容器"""
     yield
     from harmonyos_mcp.container import Container
+
     Container.reset()
 
 
@@ -38,64 +40,76 @@ def reset_container():
 def mock_hdc() -> Generator[MagicMock, None, None]:
     """
     Mock HdcWrapper
-    
+
     提供默认的返回值，可以在测试中覆盖。
     """
     from harmonyos_mcp.utils.hdc import HdcWrapper
     from harmonyos_mcp.container import Container
-    
+
     mock = MagicMock(spec=HdcWrapper)
-    
+
     # 默认返回值
-    mock.list_devices.return_value = ['device_001', 'device_002']
+    mock.list_devices_with_info.return_value = [
+        {"device_id": "device_001", "model": "Model1"},
+        {"device_id": "device_002", "model": "Model2"},
+    ]
     mock.install_app.return_value = True
     mock.uninstall_app.return_value = True
     mock.get_main_ability.return_value = {
-        'success': True,
-        'ability_name': 'MainAbility',
-        'module_name': 'entry'
+        "success": True,
+        "ability_name": "MainAbility",
+        "module_name": "entry",
     }
     mock.start_app.return_value = {
-        'success': True,
-        'command_success': True,
-        'window_found': True
+        "success": True,
+        "command_success": True,
+        "window_found": True,
     }
     mock.list_packages.return_value = {
-        'success': True,
-        'packages': ['com.example.app1', 'com.example.app2'],
-        'count': 2
+        "success": True,
+        "packages": ["com.example.app1", "com.example.app2"],
+        "count": 2,
     }
     mock.get_package_info.return_value = {
-        'success': True,
-        'abilities': [
-            {'name': 'MainAbility', 'module': 'entry', 'type': 'page'}
-        ],
-        'modules': ['entry'],
-        'main_ability': {'ability_name': 'MainAbility', 'module_name': 'entry'}
+        "success": True,
+        "abilities": [{"name": "MainAbility", "module": "entry", "type": "page"}],
+        "modules": ["entry"],
+        "main_ability": {"ability_name": "MainAbility", "module_name": "entry"},
     }
     mock.get_window_list.return_value = {
-        'success': True,
-        'windows': [
-            {'window_id': 1, 'bundle_name': 'com.example.app', 'is_visible': True}
-        ]
+        "success": True,
+        "windows": [
+            {"window_id": 1, "bundle_name": "com.example.app", "is_visible": True}
+        ],
     }
     mock.get_ui_tree_raw.return_value = {
-        'success': True,
-        'ui_tree': {'type': 'Root', 'children': []}
+        "success": True,
+        "ui_tree": {"type": "Root", "children": []},
     }
-    mock.get_realtime_logs.return_value = "01-31 10:00:00.123  1234  1234 I MyTag: Test log"
+    mock.get_realtime_logs.return_value = (
+        "01-31 10:00:00.123  1234  1234 I MyTag: Test log"
+    )
     mock.get_app_pid.return_value = 1234
-    
+
     # 注入到容器
     Container.register(HdcWrapper, mock)
-    
+
     yield mock
 
 
 @pytest.fixture
 def single_device_mock(mock_hdc: MagicMock) -> MagicMock:
     """模拟单设备场景"""
-    mock_hdc.list_devices.return_value = ['device_001']
+    mock_hdc.list_devices_with_info.return_value = [
+        {"device_id": "device_001", "model": "Model1"}
+    ]
+    return mock_hdc
+
+
+@pytest.fixture
+def no_device_mock(mock_hdc: MagicMock) -> MagicMock:
+    """模拟无设备场景"""
+    mock_hdc.list_devices_with_info.return_value = []
     return mock_hdc
 
 
@@ -111,25 +125,25 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
     """Mock UiTestWrapper"""
     from harmonyos_mcp.utils.wrappers.ui_operations import UiTestWrapper
     from harmonyos_mcp.container import Container
-    
+
     mock = MagicMock(spec=UiTestWrapper)
-    
+
     # 默认返回值
-    mock.click.return_value = {'success': True, 'x': 100, 'y': 200}
-    mock.double_click.return_value = {'success': True, 'x': 100, 'y': 200}
-    mock.long_click.return_value = {'success': True}
-    mock.swipe.return_value = {'success': True}
-    mock.swipe_direction.return_value = {'success': True, 'direction': 'up'}
-    mock.input_text.return_value = {'success': True}
-    mock.press_key.return_value = {'success': True}
+    mock.click.return_value = {"success": True, "x": 100, "y": 200}
+    mock.double_click.return_value = {"success": True, "x": 100, "y": 200}
+    mock.long_click.return_value = {"success": True}
+    mock.swipe.return_value = {"success": True}
+    mock.swipe_direction.return_value = {"success": True, "direction": "up"}
+    mock.input_text.return_value = {"success": True}
+    mock.press_key.return_value = {"success": True}
     mock.find_element.return_value = {
-        'success': True,
-        'elements': [{'x': 100, 'y': 200, 'text': 'Button', 'type': 'Button'}],
-        'count': 1
+        "success": True,
+        "elements": [{"x": 100, "y": 200, "text": "Button", "type": "Button"}],
+        "count": 1,
     }
-    
+
     Container.register(UiTestWrapper, mock)
-    
+
     yield mock
 
 
@@ -138,25 +152,25 @@ def mock_compile_manager() -> Generator[MagicMock, None, None]:
     """Mock CompileLibraryManager"""
     from harmonyos_mcp.utils.wrappers.compile_wrapper import CompileLibraryManager
     from harmonyos_mcp.container import Container
-    
+
     mock = MagicMock(spec=CompileLibraryManager)
-    
+
     # 默认返回值
     mock.clone_library.return_value = {
-        'success': True,
-        'local_path': '/path/to/lib',
-        'version': 'v1.0.0'
+        "success": True,
+        "local_path": "/path/to/lib",
+        "version": "v1.0.0",
     }
     mock.analyze_build_system.return_value = {
-        'success': True,
-        'build_systems': [{'type': 'cmake', 'marker_file': 'CMakeLists.txt'}]
+        "success": True,
+        "build_systems": [{"type": "cmake", "marker_file": "CMakeLists.txt"}],
     }
     mock.verify_so_output.return_value = {
-        'success': True,
-        'so_files': ['libexample.so'],
-        'verified': True
+        "success": True,
+        "so_files": ["libexample.so"],
+        "verified": True,
     }
-    
+
     Container.register(CompileLibraryManager, mock)
-    
+
     yield mock

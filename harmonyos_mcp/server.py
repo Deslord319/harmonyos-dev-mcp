@@ -2,6 +2,7 @@
 HarmonyOS MCP Server 主入口
 
 """
+
 from fastmcp import FastMCP
 from loguru import logger
 
@@ -21,7 +22,7 @@ def _register_tools():
     3. 遍历注册表，将所有工具注册到 FastMCP 服务器
     """
     # 导入工具模块（触发 @mcp_tool 装饰器注册）
-    from .tools import general, build, ui, ui_tree, compile
+    from .tools import general, build, ui, ui_tree
     from .tools.log.query import logs_query
     from .tools.registry import get_registered_tools, get_tool_summary
 
@@ -30,10 +31,7 @@ def _register_tools():
         server.tool()(entry.func)
 
     summary = get_tool_summary()
-    logger.info(
-        f"已注册 {summary['total']} 个 MCP 工具, "
-        f"分类: {summary['categories']}"
-    )
+    logger.info(f"已注册 {summary['total']} 个 MCP 工具, 分类: {summary['categories']}")
 
 
 # 注册工具

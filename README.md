@@ -13,9 +13,34 @@
 | 通用 | 设备管理、包管理、日志查询 | 3 |
 | 鸿蒙打包编译 | 编译、安装、运行、卸载应用 | 4 |
 | UI 测试 | UI 树感知、元素查找、点击/输入/滑动、截图 | 8 |
-| 三方库编译 | WSL 检查、克隆仓库、分析构建系统、交叉编译 | 8 |
+| UI 树 | UI 组件树、窗口列表 | 2 |
 
-**共计 25 个 MCP 工具**
+**共计 17 个 MCP 工具**
+
+---
+
+## 三方库编译（独立 MCP 服务器）
+
+三方库编译功能已拆分为独立的 MCP 服务器 `harmonyos-mcp-compile`，提供 AI 辅助的交叉编译能力。
+
+**功能**：
+- WSL 检查、编译工具检查
+- 代码克隆、构建系统分析
+- 编译脚本生成、执行、验证
+
+**安装**：
+```bash
+pip install harmonyos-mcp-compile
+```
+
+**配置**：
+```yaml
+mcp_servers:
+  harmonyos-compile:
+    command: harmonyos-mcp-compile
+```
+
+**详情**：[mcp_ho_compile](https://github.com/Deslord319/mcp_ho_compile)
 
 ---
 
@@ -73,20 +98,20 @@ python -m build
 
 ```
 dist/
-  harmonyos_mcp-0.3.0-py3-none-any.whl
-  harmonyos_mcp-0.3.0.tar.gz
+  harmonyos_mcp-0.4.0-py3-none-any.whl
+  harmonyos_mcp-0.4.0.tar.gz
 ```
 
 #### 3. 安装 wheel 包
 
 ```bash
-pip install dist/harmonyos_mcp-0.3.0-py3-none-any.whl
+pip install dist/harmonyos_mcp-0.4.0-py3-none-any.whl
 ```
 
 升级安装：
 
 ```bash
-pip install --force-reinstall dist/harmonyos_mcp-0.3.0-py3-none-any.whl
+pip install --force-reinstall dist/harmonyos_mcp-0.4.0-py3-none-any.whl
 ```
 
 #### 4. 验证安装
@@ -252,19 +277,6 @@ mcpServers:
 | get_ui_tree | 获取应用的 UI 组件树 |
 | list_windows | 列出设备上的所有窗口 |
 
-### 五、三方库编译 (Compile)
-
-| 工具名 | 描述 |
-|--------|------|
-| check_wsl | 检查 WSL 环境可用性（Windows 交叉编译） |
-| check_harmonyos_compiler_tools | 检查 HarmonyOS Command Line Tools |
-| clone_library | 拉取三方库代码仓库（支持浅克隆） |
-| analyze_build_system | 分析构建系统类型（CMake/Makefile 等） |
-| read_build_files | 读取构建系统文件供 AI 分析 |
-| write_compile_script | 写入 AI 生成的编译脚本 |
-| execute_compile_script | 执行编译脚本 |
-| verify_so_output | 验证编译输出的 .so 文件 |
-
 ---
 
 ## 项目结构
@@ -281,8 +293,7 @@ mcp_ho_dev/
 │   │   │   └── query.py     # 主查询入口
 │   │   ├── build.py         # 鸿蒙打包编译
 │   │   ├── ui.py            # UI 测试（操作+截图）
-│   │   ├── ui_tree.py       # UI 测试（树+窗口）
-│   │   └── compile.py       # 三方库编译
+│   │   └── ui_tree.py       # UI 测试（树+窗口）
 │   ├── utils/               # 工具类
 │   │   ├── hdc/             # hdc 命令封装
 │   │   ├── wrappers/        # 各种包装器
@@ -290,11 +301,44 @@ mcp_ho_dev/
 │   └── server.py            # FastMCP 服务器
 ├── docs/                    # 工具文档
 │   ├── logs_query.md
+
 │   └── query_package.md
 ├── tests/                   # 测试用例
 ├── pyproject.toml          # 项目配置
 └── README.md
 ```
+
+---
+
+## 版本历史
+
+### v0.4.0 (2025-02-27)
+
+**重大变更**：
+- ✨ 将三方库编译功能拆分为独立 MCP 服务器 `harmonyos-mcp-compile`
+- 📦 主项目工具数量：25 → 17
+- 📝 更新文档和配置示例
+
+**迁移指南**：
+- 三方库编译功能已移至 [mcp_ho_compile](https://github.com/Deslord319/mcp_ho_compile)
+- 如需使用三方库编译功能，请安装 `harmonyos-mcp-compile`
+
+### v0.3.0
+
+- ✨ 添加三方库编译功能（8 个工具）
+- ✨ 添加 UI 树查询功能
+- 🐛 修复日志解析问题
+
+### v0.2.0
+
+- ✨ 添加 UI 测试功能（8 个工具）
+- ✨ 添加日志查询功能
+- 📝 完善文档
+
+### v0.1.0
+
+- 🎉 首次发布
+- ✨ 基础功能（9 个工具）
 
 ---
 
