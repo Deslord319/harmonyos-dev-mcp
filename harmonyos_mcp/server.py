@@ -21,7 +21,7 @@ def _register_tools():
     3. 遍历注册表，将所有工具注册到 FastMCP 服务器
     """
     # 导入工具模块（触发 @mcp_tool 装饰器注册）
-    from .tools import general, build, ui, ui_tree, compile
+    from .tools import general, build, ui, ui_tree
     from .tools.log.query import logs_query
     from .tools.registry import get_registered_tools, get_tool_summary
 

@@ -18,10 +18,10 @@ __author__ = "HarmonyOS MCP Team"
 from .server import mcp, main
 
 # 依赖注入
-from .container import Container, get_hdc, get_compile_manager, get_ui_operations, get_hilogtool
+from .container import Container, get_hdc, get_ui_operations, get_hilogtool
 
-# 异常
-from .exceptions import (
+# 异常（从 common 导入）
+from common.exceptions import (
     HarmonyOSMCPError,
     DeviceError,
     CommandError,
@@ -40,7 +40,6 @@ __all__ = [
     # 依赖注入
     "Container",
     "get_hdc",
-    "get_compile_manager",
     "get_ui_operations",
     "get_hilogtool",
     # 配置

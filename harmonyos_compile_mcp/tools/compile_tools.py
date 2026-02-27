@@ -3,22 +3,28 @@
 
 提供 WSL 检查、库克隆、构建系统分析、脚本执行、输出验证等功能。
 """
+
 import asyncio
 from typing import Optional
 from loguru import logger
 
 from ..container import get_compile_manager
-from ..types import (
-    WslCheckResult, CompilerToolsResult, CloneLibraryResult,
-    AnalyzeBuildResult, ReadBuildFilesResult, WriteScriptResult,
-    ExecuteScriptResult, VerifyOutputResult
+from .types import (
+    WslCheckResult,
+    CompilerToolsResult,
+    CloneLibraryResult,
+    AnalyzeBuildResult,
+    ReadBuildFilesResult,
+    WriteScriptResult,
+    ExecuteScriptResult,
+    VerifyOutputResult,
 )
-from .base import ToolBase
-from .registry import mcp_tool
+from common.tools.base import ToolBase
+from common.tools.registry import mcp_tool
 
 
 @mcp_tool(category="compile")
-@ToolBase.handle_tool_error('WSL_CHECK_ERROR')
+@ToolBase.handle_tool_error("WSL_CHECK_ERROR")
 async def check_wsl() -> WslCheckResult:
     """
     检查当前系统是否可用 WSL 环境（用于 Windows 下的交叉编译）
@@ -31,8 +37,10 @@ async def check_wsl() -> WslCheckResult:
 
 
 @mcp_tool(category="compile")
-@ToolBase.handle_tool_error('COMPILER_TOOLS_CHECK_ERROR')
-async def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandline_tools") -> CompilerToolsResult:
+@ToolBase.handle_tool_error("COMPILER_TOOLS_CHECK_ERROR")
+async def check_harmonyos_compiler_tools(
+    tools_dir: str = "./harmonyos_commandline_tools",
+) -> CompilerToolsResult:
     """
     检查 HarmonyOS Command Line Tools 是否已安装
 
@@ -47,8 +55,10 @@ async def check_harmonyos_compiler_tools(tools_dir: str = "./harmonyos_commandli
 
 
 @mcp_tool(category="compile")
-@ToolBase.handle_tool_error('CLONE_LIBRARY_ERROR')
-async def clone_library(repo_url: str, local_path: str, version: Optional[str] = None) -> CloneLibraryResult:
+@ToolBase.handle_tool_error("CLONE_LIBRARY_ERROR")
+async def clone_library(
+    repo_url: str, local_path: str, version: Optional[str] = None
+) -> CloneLibraryResult:
     """
     拉取三方库代码仓库并切换到指定版本
 
@@ -68,7 +78,7 @@ async def clone_library(repo_url: str, local_path: str, version: Optional[str] =
 
 
 @mcp_tool(category="compile")
-@ToolBase.handle_tool_error('ANALYZE_BUILD_ERROR')
+@ToolBase.handle_tool_error("ANALYZE_BUILD_ERROR")
 async def analyze_build_system(project_dir: str) -> AnalyzeBuildResult:
     """
     分析三方库项目的构建系统类型
@@ -84,7 +94,7 @@ async def analyze_build_system(project_dir: str) -> AnalyzeBuildResult:
 
 
 @mcp_tool(category="compile")
-@ToolBase.handle_tool_error('READ_BUILD_FILES_ERROR')
+@ToolBase.handle_tool_error("READ_BUILD_FILES_ERROR")
 async def read_build_files(project_dir: str) -> ReadBuildFilesResult:
     """
     读取项目的构建系统文件，供远端AI分析
@@ -104,14 +114,17 @@ async def read_build_files(project_dir: str) -> ReadBuildFilesResult:
             "environment": {环境信息}
         }
     """
-    from ..utils.wrappers.compile_wrapper import get_build_file_reader, get_compile_environment
+    from ..utils.compile_wrapper import (
+        get_build_file_reader,
+        get_compile_environment,
+    )
 
     def _read():
         reader = get_build_file_reader()
         env = get_compile_environment()
         result = reader.read_project_files(project_dir)
-        result['success'] = True
-        result['environment'] = env.get_environment_info()
+        result["success"] = True
+        result["environment"] = env.get_environment_info()
         logger.info(f"读取构建文件: {len(result['files'])} 个文件")
         return result
 
@@ -119,8 +132,10 @@ async def read_build_files(project_dir: str) -> ReadBuildFilesResult:
 
 
 @mcp_tool(category="compile")
-@ToolBase.handle_tool_error('WRITE_SCRIPT_ERROR')
-async def write_compile_script(project_dir: str, script_content: str) -> WriteScriptResult:
+@ToolBase.handle_tool_error("WRITE_SCRIPT_ERROR")
+async def write_compile_script(
+    project_dir: str, script_content: str
+) -> WriteScriptResult:
     """
     将AI生成的编译脚本写入文件
 
@@ -135,7 +150,7 @@ async def write_compile_script(project_dir: str, script_content: str) -> WriteSc
             "message": str
         }
     """
-    from ..utils.wrappers.compile_wrapper import get_script_writer
+    from ..utils.compile_wrapper import get_script_writer
 
     def _write():
         writer = get_script_writer()
@@ -145,8 +160,12 @@ async def write_compile_script(project_dir: str, script_content: str) -> WriteSc
 
 
 @mcp_tool(category="compile")
-@ToolBase.handle_tool_error('EXECUTE_SCRIPT_ERROR', exit_code=-1, stdout='', stderr='', duration=0)
-async def execute_compile_script(script_path: str, timeout: int = 1800) -> ExecuteScriptResult:
+@ToolBase.handle_tool_error(
+    "EXECUTE_SCRIPT_ERROR", exit_code=-1, stdout="", stderr="", duration=0
+)
+async def execute_compile_script(
+    script_path: str, timeout: int = 1800
+) -> ExecuteScriptResult:
     """
     执行编译脚本并返回输出
 
@@ -163,7 +182,7 @@ async def execute_compile_script(script_path: str, timeout: int = 1800) -> Execu
             "duration": float
         }
     """
-    from ..utils.wrappers.compile_wrapper import get_script_executor
+    from ..utils.compile_wrapper import get_script_executor
 
     def _execute():
         executor = get_script_executor()
@@ -173,8 +192,10 @@ async def execute_compile_script(script_path: str, timeout: int = 1800) -> Execu
 
 
 @mcp_tool(category="compile")
-@ToolBase.handle_tool_error('VERIFY_SO_ERROR')
-async def verify_so_output(project_dir: str, output_dir: Optional[str] = None) -> VerifyOutputResult:
+@ToolBase.handle_tool_error("VERIFY_SO_ERROR")
+async def verify_so_output(
+    project_dir: str, output_dir: Optional[str] = None
+) -> VerifyOutputResult:
     """
     验证编译输出的 .so 文件
 
@@ -187,7 +208,5 @@ async def verify_so_output(project_dir: str, output_dir: Optional[str] = None) -
     """
     manager = get_compile_manager()
     return await asyncio.to_thread(
-        manager.verify_so_output,
-        project_dir=project_dir,
-        output_dir=output_dir
+        manager.verify_so_output, project_dir=project_dir, output_dir=output_dir
     )
