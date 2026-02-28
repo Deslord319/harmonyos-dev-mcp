@@ -1,166 +1,198 @@
 # HarmonyOS MCP Server
 
-一个为 HarmonyOS 应用开发设计的模型上下文协议 (MCP) 服务器，实现 AI 辅助开发的端到端自动化。
+MCP (Model Context Protocol) 服务器，为 HarmonyOS 应用开发提供 AI 辅助工具。
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
+## 项目结构
 
-## 功能特性
-
-| 类别 | 功能 | 工具数 |
-|------|------|--------|
-| 通用 | 设备管理、包管理、日志查询 | 3 |
-| 鸿蒙打包编译 | 编译、安装、运行、卸载应用 | 4 |
-| UI 测试 | UI 树感知、元素查找、点击/输入/滑动、截图 | 8 |
-| 三方库编译 | WSL 检查、克隆仓库、分析构建系统、交叉编译 | 8 |
-
-**共计 25 个 MCP 工具**
-
----
-
-## 环境要求
-
-| 依赖 | 版本 | 说明 |
-|------|------|------|
-| **Python** | >= 3.10 | FastMCP 要求 |
-| **DevEco Studio** | >= 4.0 | HarmonyOS 开发 IDE |
-| **HarmonyOS 设备** | - | 真机或模拟器 |
-
----
+```
+mcp_ho_dev/
+├── packages/
+│   └── common/
+│       └── src/common/         # 公共模块
+│
+├── services/
+│   ├── harmonyos_mcp/
+│   │   └── src/harmonyos_mcp/  # 主服务（设备管理、UI测试）
+│   │
+│   └── harmonyos_compile_mcp/
+│       └── src/harmonyos_compile_mcp/  # 编译服务
+│
+└── pyproject.toml
+```
 
 ## 快速开始
 
-### 方式一：使用 ho-llm-cli（推荐）
-
-ho-llm-cli 是一个支持 MCP 的 AI CLI 工具，可以直接使用：
+### 开发模式
 
 ```bash
-# 安装 ho-llm-cli
-pip install ho-llm-cli
+# 安装依赖
+uv sync --all-packages
 
-# 启动对话
-poetry run ho-llm-cli chat
+# 启动 harmonyos-mcp 服务
+uv run harmonyos-mcp
+
+# 启动 harmonyos-compile-mcp 服务
+uv run harmonyos-compile-mcp
 ```
 
-在配置文件中添加 MCP 服务器：
-
-```yaml
-# config.yaml
-mcp_servers:
-  harmonyos:
-    command: harmonyos-mcp
-    args: []
-```
-
-### 方式二：直接安装 MCP Server
-
-#### 1. 安装构建工具
+### 构建 wheel 包
 
 ```bash
-pip install hatchling build
+# 构建 harmonyos-mcp
+cd services/harmonyos_mcp
+uv run hatch build
+# 输出: dist/harmonyos_mcp-0.3.0-py3-none-any.whl
+
+# 构建 harmonyos-compile-mcp
+cd ../harmonyos_compile_mcp
+uv run hatch build
+# 输出: dist/harmonyos_compile_mcp-0.1.0-py3-none-any.whl
 ```
 
-#### 2. 构建 wheel 包
-
-在项目根目录下执行：
+### 安装 wheel 包
 
 ```bash
-python -m build
+# 使用 uv 安装
+uv pip install harmonyos_mcp-0.3.0-py3-none-any.whl
+
+# 验证安装
+harmonyos-mcp --help
 ```
 
-构建完成后，wheel 包位于 dist/ 目录：
+## MCP 工具列表
 
+### harmonyos-mcp（17 个工具）
+
+#### 通用工具
+| 工具名 | 描述 |
+|--------|------|
+| list_devices | 列出所有连接的 HarmonyOS 设备 |
+| query_package | 查询包信息（列表/Abilities/权限） |
+| logs_query | 日志查询（拉取/解析/过滤/分析） |
+
+#### 构建部署
+| 工具名 | 描述 |
+|--------|------|
+| build_app | 构建 HarmonyOS 应用 |
+| install_app | 安装 HAP 包到设备 |
+| run_app | 运行应用 |
+| uninstall_app | 卸载应用 |
+
+#### UI 操作
+| 工具名 | 描述 |
+|--------|------|
+| screenshot | 屏幕截图 |
+| click_element | 点击元素 |
+| long_press_element | 长按元素 |
+| input_text | 输入文本 |
+| swipe | 滑动操作 |
+| drag | 拖拽操作 |
+| press_key | 模拟按键 |
+| find_element | 查找元素 |
+
+#### UI 树
+| 工具名 | 描述 |
+|--------|------|
+| get_ui_tree | 获取 UI 组件树 |
+| list_windows | 列出所有窗口 |
+
+### harmonyos-compile-mcp（8 个工具）
+
+| 工具名 | 描述 |
+|--------|------|
+| check_wsl | 检查 WSL 环境 |
+| check_harmonyos_compiler_tools | 检查编译工具链 |
+| clone_library | 克隆三方库 |
+| analyze_build_system | 分析构建系统 |
+| read_build_files | 读取构建文件 |
+| write_compile_script | 写入编译脚本 |
+| execute_compile_script | 执行编译脚本 |
+| verify_so_output | 验证 .so 输出 |
+
+## MCP 客户端配置
+
+### Cursor
+
+在项目根目录创建 `.cursor/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "harmonyos": {
+      "command": "harmonyos-mcp"
+    },
+    "harmonyos-compile": {
+      "command": "harmonyos-compile-mcp"
+    }
+  }
+}
 ```
-dist/
-  harmonyos_mcp-0.3.0-py3-none-any.whl
-  harmonyos_mcp-0.3.0.tar.gz
+
+### Cline (VSCode)
+
+在 VSCode 设置中添加：
+
+```json
+{
+  "cline.mcpServers": {
+    "harmonyos": {
+      "command": "harmonyos-mcp"
+    },
+    "harmonyos-compile": {
+      "command": "harmonyos-compile-mcp"
+    }
+  }
+}
 ```
 
-#### 3. 安装 wheel 包
+### Augment
 
-```bash
-pip install dist/harmonyos_mcp-0.3.0-py3-none-any.whl
-```
-
-升级安装：
-
-```bash
-pip install --force-reinstall dist/harmonyos_mcp-0.3.0-py3-none-any.whl
-```
-
-#### 4. 验证安装
-
-```bash
-# 查看已安装的包
-pip show harmonyos-mcp
-
-# 测试启动（会启动 MCP 服务器）
-harmonyos-mcp
-```
-
----
-
-## 配置 MCP 服务
-
-### ho-llm-cli（推荐）
-
-在项目根目录创建 config.yaml：
-
-```yaml
-llm:
-  provider: dashscope
-  model: qwen3-235b-a22b
-
-mcp_servers:
-  harmonyos:
-    command: harmonyos-mcp
-
-mcp_manager:
-  lazy_load: true
-  idle_timeout: 600
-```
-
-### Augment（VSCode 插件）
-
-1. 打开 VSCode 设置 (Ctrl+,)
-2. 搜索 augment.mcpServers
-3. 点击 "Edit in settings.json"
-4. 添加以下配置：
+在 VSCode settings.json 中添加：
 
 ```json
 {
   "augment.mcpServers": {
-    "harmonyos-tools": {
+    "harmonyos": {
       "command": "harmonyos-mcp"
+    },
+    "harmonyos-compile": {
+      "command": "harmonyos-compile-mcp"
     }
   }
 }
 ```
 
-### Cursor
+### Claude Desktop
 
-在项目根目录创建 .cursor/mcp.json：
+编辑 `~/AppData/Roaming/Claude/claude_desktop_config.json`：
 
 ```json
 {
   "mcpServers": {
-    "harmonyos-tools": {
+    "harmonyos": {
       "command": "harmonyos-mcp"
+    },
+    "harmonyos-compile": {
+      "command": "harmonyos-compile-mcp"
     }
   }
 }
 ```
 
-### Cline（VSCode 插件）
+### Qoder
 
-在 Cline MCP 设置中添加：
+在 Qoder 配置文件中添加：
 
 ```json
 {
-  "mcpServers": {
-    "harmonyos-tools": {
-      "command": "harmonyos-mcp"
+  "mcp_servers": {
+    "harmonyos": {
+      "command": "harmonyos-mcp",
+      "enabled": true
+    },
+    "harmonyos-compile": {
+      "command": "harmonyos-compile-mcp",
+      "enabled": true
     }
   }
 }
@@ -168,135 +200,17 @@ mcp_manager:
 
 ### LibreChat
 
-在 librechat.yaml 中添加：
+在 `librechat.yaml` 中添加：
 
 ```yaml
 mcpServers:
-  harmonyos-tools:
+  harmonyos:
     command: harmonyos-mcp
     timeout: 60000
+  harmonyos-compile:
+    command: harmonyos-compile-mcp
+    timeout: 60000
 ```
-
-### 通用 stdio 方式
-
-所有支持 MCP 的客户端均可通过 stdio 连接：
-
-```json
-{
-  "command": "harmonyos-mcp",
-  "transport": "stdio"
-}
-```
-
-如果 harmonyos-mcp 不在 PATH 中，可使用完整路径：
-
-```json
-{
-  "command": "python",
-  "args": ["-m", "harmonyos_mcp"]
-}
-```
-
----
-
-## 验证配置
-
-在 AI IDE 中输入以下提示词测试：
-
-```
-列出所有连接的 HarmonyOS 设备
-```
-
-如果返回设备列表，说明配置成功。
-
----
-
-## MCP 工具列表
-
-### 一、通用 (General)
-
-| 工具名 | 描述 |
-|--------|------|
-| list_devices | 列出所有连接的 HarmonyOS 设备和模拟器 |
-| query_package | 统一的包查询工具（包列表/Abilities/权限等） |
-| logs_query | 统一日志查询工具（拉取/解析/过滤/分析） |
-
-> 工具详细参数见：[logs_query](docs/logs_query.md)、[query_package](docs/query_package.md)
-
-### 二、鸿蒙打包编译 (Build)
-
-| 工具名 | 描述 |
-|--------|------|
-| build_app | 构建 HarmonyOS 应用（debug/release） |
-| install_app | 安装 HAP 包到设备 |
-| run_app | 运行应用（支持自动检测主 Ability） |
-| uninstall_app | 卸载应用 |
-
-### 三、UI 测试 (UI Test)
-
-| 工具名 | 描述 |
-|--------|------|
-| screenshot | 设备屏幕截图（支持全屏和区域截图） |
-| click_element | 点击/双击元素（支持坐标或文本查找） |
-| long_press_element | 长按元素 |
-| input_text | 在输入框中输入文本 |
-| swipe | 滑动操作（支持方向或坐标） |
-| drag | 拖拽操作 |
-| press_key | 模拟按键（Home/Back/Enter 等） |
-| find_element | 在 UI 树中查找元素 |
-
-### 四、UI 树 (UI Tree)
-
-| 工具名 | 描述 |
-|--------|------|
-| get_ui_tree | 获取应用的 UI 组件树 |
-| list_windows | 列出设备上的所有窗口 |
-
-### 五、三方库编译 (Compile)
-
-| 工具名 | 描述 |
-|--------|------|
-| check_wsl | 检查 WSL 环境可用性（Windows 交叉编译） |
-| check_harmonyos_compiler_tools | 检查 HarmonyOS Command Line Tools |
-| clone_library | 拉取三方库代码仓库（支持浅克隆） |
-| analyze_build_system | 分析构建系统类型（CMake/Makefile 等） |
-| read_build_files | 读取构建系统文件供 AI 分析 |
-| write_compile_script | 写入 AI 生成的编译脚本 |
-| execute_compile_script | 执行编译脚本 |
-| verify_so_output | 验证编译输出的 .so 文件 |
-
----
-
-## 项目结构
-
-```
-mcp_ho_dev/
-├── harmonyos_mcp/           # MCP 服务器核心
-│   ├── tools/               # MCP 工具模块
-│   │   ├── general.py       # 通用（设备+包管理+日志）
-│   │   ├── log/             # 日志模块
-│   │   │   ├── parser.py    # 日志解析器
-│   │   │   ├── time_utils.py # 时间工具
-│   │   │   ├── historian.py # 历史日志
-│   │   │   └── query.py     # 主查询入口
-│   │   ├── build.py         # 鸿蒙打包编译
-│   │   ├── ui.py            # UI 测试（操作+截图）
-│   │   ├── ui_tree.py       # UI 测试（树+窗口）
-│   │   └── compile.py       # 三方库编译
-│   ├── utils/               # 工具类
-│   │   ├── hdc/             # hdc 命令封装
-│   │   ├── wrappers/        # 各种包装器
-│   │   └── ...
-│   └── server.py            # FastMCP 服务器
-├── docs/                    # 工具文档
-│   ├── logs_query.md
-│   └── query_package.md
-├── tests/                   # 测试用例
-├── pyproject.toml          # 项目配置
-└── README.md
-```
-
----
 
 ## 许可证
 

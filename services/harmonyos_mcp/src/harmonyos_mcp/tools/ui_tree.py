@@ -10,8 +10,8 @@ from loguru import logger
 from ..container import get_hdc
 from ..utils.uitree_parser import UITreeParser
 from ..types import UITreeResult, ListWindowsResult
-from .base import ToolBase
-from .registry import mcp_tool
+from .device_base import ToolBase
+from common.tools.registry import mcp_tool
 
 
 @mcp_tool(category="ui_tree")

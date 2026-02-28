@@ -12,8 +12,8 @@ from loguru import logger
 from ...container import get_hdc
 from ...config import LogSecurityConfig
 from ...types import LogsQueryResult
-from ...tools.base import ToolBase
-from ...tools.registry import mcp_tool
+from ..device_base import ToolBase
+from common.tools.registry import mcp_tool
 from .parser import LogParser, FilterStats
 from .crash_parser import CrashParser
 from .time_utils import (

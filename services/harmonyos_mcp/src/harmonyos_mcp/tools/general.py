@@ -9,8 +9,8 @@ from loguru import logger
 
 from ..container import get_hdc
 from ..types import ListDevicesResult, QueryPackageResult
-from .base import ToolBase
-from .registry import mcp_tool
+from .device_base import ToolBase
+from common.tools.registry import mcp_tool
 
 
 @mcp_tool(category="general")

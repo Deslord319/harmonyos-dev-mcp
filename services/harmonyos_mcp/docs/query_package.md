@@ -1,7 +1,5 @@
 # query_package - 统一包查询工具
 
-> 合并原有 `list_packages`、`get_package_abilities`、`get_main_ability`、`get_permissions` 为单一工具
-
 ## 概述
 
 `query_package` 实现统一的包查询功能，支持：

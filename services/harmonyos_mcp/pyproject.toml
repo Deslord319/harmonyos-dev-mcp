@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "harmonyos-mcp"
+version = "0.3.0"
+requires-python = ">=3.10"
+dependencies = ["fastmcp>=3.0.0", "requests>=2.31.0", "json5>=0.9.14", "psutil>=5.9.0", "loguru>=0.7.0", "typing-extensions>=4.8.0"]
+
+[project.scripts]
+harmonyos-mcp = "harmonyos_mcp:main"
+
+[tool.uv.sources]
+harmonyos-mcp-common = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harmonyos_mcp"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"../../packages/common/src/common" = "common"

@@ -5,9 +5,7 @@
 使用 harmonyos_mcp 专属的应用名和配置。
 """
 from common.utils.logger import (
-    setup_logger as _setup_logger,
-    cleanup_old_logs,
-    get_log_dir_size_mb,
+    setup_logger as _setup_logger
 )
 from ..config import Config
 

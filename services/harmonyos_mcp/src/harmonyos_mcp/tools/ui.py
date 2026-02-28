@@ -14,8 +14,8 @@ from ..types import (
     ClickResult, LongPressResult, DragResult, SwipeResult, InputTextResult,
     PressKeyResult, FindElementResult, ScreenshotResult, ElementScreenshotResult
 )
-from .base import ToolBase
-from .registry import mcp_tool
+from .device_base import ToolBase
+from common.tools.registry import mcp_tool
 
 
 async def _resolve_element_coords(
