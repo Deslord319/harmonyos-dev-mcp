@@ -702,12 +702,14 @@ name = "harmonyos-mcp-common"
 version = "0.3.0"
 source = { editable = "packages/common" }
 dependencies = [
+    { name = "fastmcp" },
     { name = "loguru" },
     { name = "typing-extensions" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "fastmcp", specifier = ">=0.1.0" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "typing-extensions", specifier = ">=4.8.0" },
 ]
