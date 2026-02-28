@@ -66,4 +66,7 @@ def run_server(
         except Exception as e:
             logger.warning(f"启动回调失败: {e}")
 
-    server.run()
+    try:
+        server.run()
+    except KeyboardInterrupt:
+        logger.info("服务器已停止")
