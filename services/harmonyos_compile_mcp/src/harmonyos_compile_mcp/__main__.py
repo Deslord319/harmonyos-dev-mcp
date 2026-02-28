@@ -1,4 +1,5 @@
-"""HarmonyOS Compile MCP Server 入口"""
+﻿"""HarmonyOS Compile MCP Server 入口"""
 from .server import main
 
-main()
+if __name__ == "__main__":
+    main()

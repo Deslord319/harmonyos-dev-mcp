@@ -659,6 +659,7 @@ version = "0.1.0"
 source = { editable = "services/harmonyos_compile_mcp" }
 dependencies = [
     { name = "fastmcp" },
+    { name = "harmonyos-mcp-common" },
     { name = "loguru" },
     { name = "typing-extensions" },
 ]
@@ -666,6 +667,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=3.0.0" },
+    { name = "harmonyos-mcp-common", editable = "packages/common" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "typing-extensions", specifier = ">=4.8.0" },
 ]
@@ -676,6 +678,7 @@ version = "0.3.0"
 source = { editable = "services/harmonyos_mcp" }
 dependencies = [
     { name = "fastmcp" },
+    { name = "harmonyos-mcp-common" },
     { name = "json5" },
     { name = "loguru" },
     { name = "psutil" },
@@ -686,6 +689,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=3.0.0" },
+    { name = "harmonyos-mcp-common", editable = "packages/common" },
     { name = "json5", specifier = ">=0.9.14" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "psutil", specifier = ">=5.9.0" },

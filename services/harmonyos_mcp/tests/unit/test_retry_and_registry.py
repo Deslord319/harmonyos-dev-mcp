@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from harmonyos_mcp.utils.retry import retry, is_transient_hdc_failure
-from harmonyos_mcp.tools.registry import (
+from common.tools.registry import (
     mcp_tool, get_registered_tools, get_tool_summary, clear_registry
 )
 
