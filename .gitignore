@@ -52,3 +52,6 @@ htmlcov/
 
 # Misc
 get-pip.py
+
+# AI Tools
+.opencode/
