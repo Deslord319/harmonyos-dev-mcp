@@ -67,21 +67,7 @@ async def click_element(
     double_click: bool = False,
     bundle_name: Optional[str] = None
 ) -> dict:
-    """
-    点击屏幕上的元素
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        x: X坐标（与text/element_type二选一）
-        y: Y坐标（与text/element_type二选一）
-        text: 元素文本（自动查找元素并点击）
-        element_type: 元素类型（如Button、Text等）
-        double_click: 是否双击
-        bundle_name: 应用包名（用于定位窗口，提高查找准确性）
-
-    Returns:
-        操作结果
-    """
+    """点击屏幕元素。可指定坐标(x,y)或查找条件(text/element_type)。double_click: 双击。"""
     has_coords = x is not None and y is not None
     has_search = text or element_type
     if has_coords and has_search:
@@ -130,20 +116,7 @@ async def long_press_element(
     element_type: Optional[str] = None,
     bundle_name: Optional[str] = None
 ) -> LongPressResult:
-    """
-    长按屏幕上的元素
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        x: X坐标
-        y: Y坐标
-        text: 元素文本（自动查找元素并长按）
-        element_type: 元素类型
-        bundle_name: 应用包名（用于定位窗口）
-
-    Returns:
-        操作结果
-    """
+    """长按屏幕元素。可指定坐标(x,y)或查找条件(text/element_type)。"""
     ui_ops = get_ui_operations()
 
     if x is not None and y is not None:
@@ -175,21 +148,7 @@ async def swipe(
     direction: Optional[str] = None,
     speed: int = 600
 ) -> SwipeResult:
-    """
-    滑动操作
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        from_x: 起点X坐标（与direction二选一）
-        from_y: 起点Y坐标
-        to_x: 终点X坐标
-        to_y: 终点Y坐标
-        direction: 滑动方向 (left/right/up/down)，与坐标二选一
-        speed: 滑动速度 (200-40000, 默认600)
-
-    Returns:
-        操作结果
-    """
+    """滑动屏幕。可指定坐标(from_x,from_y,to_x,to_y)或方向(direction: left/right/up/down)。"""
     default_result = {
         'from_x': from_x or 0,
         'from_y': from_y or 0,
@@ -226,21 +185,7 @@ async def input_text(
     element_type: Optional[str] = None,
     bundle_name: Optional[str] = None
 ) -> InputTextResult:
-    """
-    在输入框中输入文本
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        x: 输入框X坐标
-        y: 输入框Y坐标
-        text: 要输入的文本内容
-        element_text: 输入框元素的文本（用于自动查找）
-        element_type: 输入框元素类型（如TextInput）
-        bundle_name: 应用包名（用于定位窗口）
-
-    Returns:
-        操作结果
-    """
+    """在输入框输入文本。text: 要输入的内容，可指定坐标(x,y)或查找条件(element_text/element_type)。"""
     default_result = {
         'text': text or '',
         'x': x or 0,
@@ -280,16 +225,7 @@ async def input_text(
 @ToolBase.handle_tool_error('PRESS_KEY_ERROR', key='')
 @ToolBase.with_device(key='')
 async def press_key(device_id: Optional[str] = None, key: Optional[str] = None) -> PressKeyResult:
-    """
-    模拟按键操作
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        key: 按键名称 (Home/Back/Enter等)
-
-    Returns:
-        操作结果
-    """
+    """模拟按键操作。key: 按键名称(Home/Back/Enter等)。"""
     if not key:
         return {
             'success': False,
@@ -312,19 +248,7 @@ async def find_element(
     element_id: Optional[str] = None,
     bundle_name: Optional[str] = None
 ) -> FindElementResult:
-    """
-    在UI树中查找元素
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        text: 元素文本（模糊匹配）
-        element_type: 元素类型（如Button、Text、Image等）
-        element_id: 元素ID
-        bundle_name: 应用包名（用于定位窗口）
-
-    Returns:
-        匹配的元素列表，包含坐标信息
-    """
+    """在UI树中查找元素。可按text/element_type/element_id查找，返回元素列表及坐标。"""
     if not any([text, element_type, element_id]):
         return {
             'success': False,
@@ -360,26 +284,7 @@ async def screenshot(
     right: Optional[int] = None,
     bottom: Optional[int] = None
 ) -> ScreenshotResult:
-    """
-    对设备屏幕进行截图（支持全屏截图和区域截图）
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        local_path: 本地保存路径，如果为None则自动生成路径
-        display_id: 显示器ID，默认为主屏幕(0)
-        left: 裁剪区域左边界 X 坐标（可选）
-        top: 裁剪区域上边界 Y 坐标（可选）
-        right: 裁剪区域右边界 X 坐标（可选）
-        bottom: 裁剪区域下边界 Y 坐标（可选）
-
-    Returns:
-        包含截图结果的字典:
-        - success: 是否成功
-        - local_path: 本地文件路径
-        - file_size: 文件大小（字节）
-        - device_id: 设备ID
-        - bounds: 裁剪区域边界（仅区域截图时返回）
-    """
+    """截取设备屏幕。local_path: 保存路径(可选)，left/top/right/bottom: 裁剪区域(可选)。"""
     hdc = get_hdc()
 
     if not local_path:
@@ -425,20 +330,7 @@ async def drag(
     to_y: Optional[int] = None,
     speed: int = 600
 ) -> DragResult:
-    """
-    拖拽操作
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        from_x: 起点X坐标
-        from_y: 起点Y坐标
-        to_x: 终点X坐标
-        to_y: 终点Y坐标
-        speed: 拖拽速度 (200-40000, 默认600)
-
-    Returns:
-        操作结果
-    """
+    """拖拽操作。from_x/from_y: 起点坐标，to_x/to_y: 终点坐标，speed: 速度(可选)。"""
     if not all(v is not None for v in [from_x, from_y, to_x, to_y]):
         return {
             'success': False,

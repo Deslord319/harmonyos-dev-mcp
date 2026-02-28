@@ -22,17 +22,7 @@ async def get_ui_tree(
     bundle_name: Optional[str] = None,
     window_id: Optional[int] = None
 ) -> UITreeResult:
-    """
-    获取应用的UI组件树
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        bundle_name: 应用包名（可选，用于自动查找窗口）
-        window_id: 窗口ID（可选，如果指定则直接使用该窗口）
-
-    Returns:
-        UI组件树JSON结构
-    """
+    """获取应用的UI组件树。bundle_name: 应用包名(可选)，window_id: 窗口ID(可选)。"""
     hdc = get_hdc()
 
     # 确定窗口ID
@@ -103,15 +93,7 @@ async def get_ui_tree(
 @ToolBase.handle_tool_error('LIST_WINDOWS_ERROR', windows=[], count=0)
 @ToolBase.with_device(windows=[], count=0)
 async def list_windows(device_id: Optional[str] = None) -> ListWindowsResult:
-    """
-    列出设备上的所有窗口
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-
-    Returns:
-        窗口列表
-    """
+    """列出设备上的所有窗口，返回窗口ID、包名、可见性、边界等信息。"""
     hdc = get_hdc()
     result = await asyncio.to_thread(hdc.get_window_list, device_id)
     

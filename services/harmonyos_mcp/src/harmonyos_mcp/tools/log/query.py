@@ -340,35 +340,7 @@ async def logs_query(
     include_diagnostics: bool = False,
     include_crash: bool = False,
 ) -> LogsQueryResult:
-    """
-    统一日志查询工具 - 拉取 / 解析 / 过滤 / 分析 / 保存 一体化
-
-    Args:
-        device_id: 设备ID，为空时使用第一个设备
-        logs: 直接传入日志行列表（优先级最高）
-        input_file: 本地日志文件路径
-        input_files: 多个本地文件路径
-        lines: 最大返回行数（默认100，上限50000）
-        level: 日志级别过滤：D/I/W/E/F
-        tag: TAG 过滤（匹配解析后的 tag 字段）
-        tag_search: TAG 搜索（在原始行中搜索，不依赖解析）
-        keyword: 关键字过滤（在原始行中搜索）
-        domain: hilog domain 过滤（支持 0x0006 或 C00006 格式）
-        pid: 进程 ID 过滤
-        package_name: 应用包名过滤
-        start_time: 开始时间
-        end_time: 结束时间
-        seconds: 最近 N 秒
-        analysis_type: 分析类型（summary/custom）
-        custom_regex: 自定义正则分析
-        save_path: 保存路径
-        time_expr: 自然语言时间表达式（如"最近10分钟"）
-        include_diagnostics: 返回诊断统计信息（默认 False）
-        include_crash: 是否包含崩溃日志（根据包名+时间匹配，默认 False）
-
-    Returns:
-        查询结果字典
-    """
+    """查询HarmonyOS日志。支持level/tag/keyword/package_name过滤，time_expr自然语言时间(如"最近10分钟")。"""
     import asyncio
     return await asyncio.to_thread(
         _query_impl,

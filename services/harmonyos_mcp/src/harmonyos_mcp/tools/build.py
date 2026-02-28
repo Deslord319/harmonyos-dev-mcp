@@ -19,20 +19,7 @@ from common.tools.registry import mcp_tool
 @mcp_tool(category="build")
 @ToolBase.handle_tool_error('BUILD_ERROR', hap_path=None, duration=0)
 async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
-    """
-    构建HarmonyOS应用
-
-    Args:
-        project_path: 项目路径
-        build_mode: 构建模式 (debug/release)
-
-    Returns:
-        构建结果:
-        - success: 是否成功
-        - hap_path: HAP 包路径
-        - message: 构建消息
-        - duration: 耗时（秒）
-    """
+    """构建HarmonyOS应用，生成HAP包。project_path: 项目路径，build_mode: debug/release。"""
     start_time = time.time()
 
     hvigor = HvigorWrapper(project_path)
@@ -87,19 +74,7 @@ def _extract_build_error(project_path: str) -> Optional[str]:
 @ToolBase.handle_tool_error('INSTALL_ERROR', hap_path='')
 @ToolBase.with_device(hap_path='')
 async def install_app(hap_path: str, device_id: Optional[str] = None) -> InstallResult:
-    """
-    安装应用到设备
-
-    Args:
-        hap_path: HAP包路径
-        device_id: 设备ID,如果为None则使用第一个设备
-
-    Returns:
-        安装结果:
-        - success: 是否成功
-        - device_id: 设备ID
-        - hap_path: HAP包路径
-    """
+    """安装HAP包到设备。hap_path: HAP包路径，device_id: 设备ID（可选）。"""
     hdc = get_hdc()
     success = await asyncio.to_thread(hdc.install_app, device_id, hap_path)
 
@@ -120,26 +95,7 @@ async def run_app(
     module_name: Optional[str] = None,
     auto_detect: bool = True
 ) -> RunAppResult:
-    """
-    运行应用
-
-    Args:
-        bundle_name: 应用包名
-        device_id: 设备ID,如果为None则使用第一个设备
-        ability_name: Ability名称,如果为None且auto_detect=True则自动检测主Ability
-        module_name: 模块名称,如果为None且auto_detect=True则自动检测
-        auto_detect: 是否自动检测主Ability(默认True)
-
-    Returns:
-        运行结果
-
-    Example:
-        # 自动检测主Ability并启动
-        run_app(bundle_name="com.huawei.hmos.settings")
-
-        # 指定Ability启动
-        run_app(bundle_name="com.example.app", ability_name="MainAbility", module_name="entry")
-    """
+    """启动应用。bundle_name: 包名，ability_name/module_name: 入口（可选，默认自动检测）。"""
     hdc = get_hdc()
 
     # 解析 Ability 信息
@@ -236,16 +192,7 @@ def _resolve_ability(hdc, device_id: str, bundle_name: str,
 @ToolBase.handle_tool_error('UNINSTALL_ERROR', bundle_name='')
 @ToolBase.with_device(bundle_name='')
 async def uninstall_app(bundle_name: str, device_id: Optional[str] = None) -> UninstallResult:
-    """
-    卸载应用
-
-    Args:
-        bundle_name: 应用包名
-        device_id: 设备ID,如果为None则使用第一个设备
-
-    Returns:
-        卸载结果
-    """
+    """卸载应用。bundle_name: 应用包名，device_id: 设备ID（可选）。"""
     hdc = get_hdc()
     success = await asyncio.to_thread(hdc.uninstall_app, device_id, bundle_name)
 

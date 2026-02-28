@@ -16,23 +16,7 @@ from common.tools.registry import mcp_tool
 @mcp_tool(category="general")
 @ToolBase.handle_tool_error('DEVICE_LIST_ERROR', devices=[], count=0)
 async def list_devices() -> ListDevicesResult:
-    """
-    列出所有连接的HarmonyOS设备和模拟器
-    
-    默认返回设备详细信息（型号、系统版本、屏幕分辨率等）。
-    
-    Returns:
-        包含设备列表的字典:
-        - success: 是否成功
-        - devices: 设备信息列表，每个设备包含:
-            - device_id: 设备ID
-            - model: 设备型号
-            - brand: 品牌
-            - os_version: 系统版本
-            - api_version: API版本
-            - screen_size: 屏幕分辨率
-        - count: 设备数量
-    """
+    """列出所有连接的HarmonyOS设备和模拟器，返回设备ID、型号、系统版本、屏幕分辨率等信息。"""
     hdc = get_hdc()
     devices = await asyncio.to_thread(hdc.list_devices_with_info)
     
@@ -59,44 +43,7 @@ async def query_package(
     keyword: Optional[str] = None,
     info_type: Literal['list', 'abilities', 'main_ability', 'permissions'] = 'list'
 ) -> QueryPackageResult:
-    """
-    统一的包查询工具（合并 list_packages、get_package_abilities、get_main_ability、get_permissions）
-    
-    根据参数组合执行不同查询：
-    - bundle_name 为空: 列出所有包（可用 keyword 过滤）
-    - bundle_name 非空 + info_type="abilities": 获取所有 Abilities
-    - bundle_name 非空 + info_type="main_ability": 仅获取主 Ability
-    - bundle_name 非空 + info_type="permissions": 获取应用权限列表
-
-    Args:
-        device_id: 设备ID，如果为None则使用第一个设备
-        bundle_name: 应用包名（可选，指定后查询该包的详情）
-        keyword: 关键字过滤（仅在 list 模式下生效）
-        info_type: 查询类型
-            - list: 列出所有包（默认）
-            - abilities: 获取指定包的所有 Abilities
-            - main_ability: 获取指定包的主入口 Ability
-            - permissions: 获取指定包的权限列表
-
-    Returns:
-        根据 info_type 返回不同结构的结果字典
-
-    Example:
-        # 列出所有包
-        query_package()
-        
-        # 搜索包含 "settings" 的包
-        query_package(keyword="settings")
-        
-        # 获取指定包的所有 Abilities
-        query_package(bundle_name="com.huawei.hmos.settings", info_type="abilities")
-        
-        # 获取指定包的主 Ability
-        query_package(bundle_name="com.huawei.hmos.settings", info_type="main_ability")
-        
-        # 获取指定包的权限列表
-        query_package(bundle_name="com.huawei.hmos.settings", info_type="permissions")
-    """
+    """查询HarmonyOS应用包信息。info_type: list(列出所有包)、abilities(获取Abilities)、main_ability(主入口)、permissions(权限列表)。"""
     hdc = get_hdc()
     
     # 参数校验：需要 bundle_name 的查询类型
