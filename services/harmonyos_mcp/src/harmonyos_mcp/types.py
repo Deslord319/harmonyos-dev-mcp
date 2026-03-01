@@ -54,10 +54,22 @@ class ElementScreenshotResult(DeviceResult):
 # 构建部署类型
 # ============================================================================
 
+class BuildError(TypedDict, total=False):
+    """构建错误详情"""
+    file: Optional[str]       # 错误文件路径（相对于项目根目录）
+    line: int                 # 行号
+    column: int               # 列号
+    message: str              # 错误消息
+    type: str                 # 错误类型: type/syntax/missing/module/permission/config/compile/build
+    source: str               # 错误来源: stdout/stderr/build.log
+
+
 class BuildResult(BaseResult):
     """build_app 返回类型"""
     hap_path: Optional[str]
     duration: Optional[float]
+    errors: Optional[List[BuildError]]   # 结构化错误列表（最多15条）
+    error_count: Optional[int]            # 总错误数量
 
 
 class InstallResult(DeviceResult):
