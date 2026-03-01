@@ -173,20 +173,25 @@ class HvigorWrapper:
         return candidates[0]
 
     def _find_java_home(self) -> Optional[Path]:
+        java_exe = "java.exe" if platform.system() == "Windows" else "java"
+
         env_java_home = os.getenv("JAVA_HOME")
         if env_java_home:
             candidate = Path(env_java_home).expanduser()
-            if (candidate / "bin" / "java").exists():
+            if (candidate / "bin" / java_exe).exists():
                 return candidate
 
         candidates = [
+            # Windows/Linux: JBR directly under DevEco
             self.deveco_path / "jbr",
+            # Linux: JBR with Home subdirectory
             self.deveco_path / "jbr" / "Contents" / "Home",
+            # macOS: JBR inside Contents
             self.deveco_path / "Contents" / "jbr",
             self.deveco_path / "Contents" / "jbr" / "Contents" / "Home",
         ]
         for candidate in candidates:
-            if (candidate / "bin" / "java").exists():
+            if (candidate / "bin" / java_exe).exists():
                 return candidate
         return None
 

@@ -1,5 +1,6 @@
 from pathlib import Path
 from subprocess import CompletedProcess
+import platform
 
 from harmonyos_mcp.config import Config
 from harmonyos_mcp.utils.wrappers.hvigor_wrapper import HvigorWrapper
@@ -111,3 +112,73 @@ class TestHvigorWrapper:
         assert captured["env"]["DEVECO_SDK_HOME"] == str(deveco / "Contents" / "sdk")
         assert captured["env"]["HVIGOR_USER_HOME"] == str(project / ".hvigor" / "mcp-user-home")
         assert captured["env"]["JAVA_HOME"] == str(deveco / "Contents" / "jbr" / "Contents" / "Home")
+
+    def test_windows_layout_is_detected(self, tmp_path, monkeypatch):
+        """Test Windows DevEco layout: JBR directly under DevEco with java.exe"""
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        # Windows layout: no Contents/ directory
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+
+        # Mock platform.system() to return "Windows"
+        monkeypatch.setattr(
+            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        wrapper = HvigorWrapper(str(project))
+
+        assert wrapper.node_exe == node
+        assert wrapper.hvigorw_js == hvigor
+        assert wrapper.sdk_root == deveco / "sdk"
+        assert wrapper.java_home == deveco / "jbr"
+
+    def test_linux_layout_is_detected(self, tmp_path, monkeypatch):
+        """Test Linux DevEco layout: similar to Windows but without .exe"""
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        # Linux layout: similar to Windows, no Contents/ directory
+        deveco = tmp_path / "DevEco-Studio"
+        node = deveco / "tools" / "node" / "bin" / "node"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java"
+
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+
+        # Mock platform.system() to return "Linux"
+        monkeypatch.setattr(
+            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Linux"
+        )
+
+        wrapper = HvigorWrapper(str(project))
+
+        assert wrapper.node_exe == node
+        assert wrapper.hvigorw_js == hvigor
+        assert wrapper.sdk_root == deveco / "sdk"
+        assert wrapper.java_home == deveco / "jbr"
