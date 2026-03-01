@@ -134,9 +134,9 @@ def _parse_errors_from_text(text: str, source: str) -> List[Dict[str, Any]]:
         ),
     ]
 
-    # ArkTS WARN/ERROR 多行格式单独处理
+    # ArkTS ERROR 多行格式单独处理（忽略 WARN）
     arkts_pattern = re.compile(
-        r'ArkTS:(ERROR|WARN)\s+File:\s*(.+?\.(?:ts|ets|js)):(\d+):(\d+)',
+        r'ArkTS:ERROR\s+File:\s*(.+?\.(?:ts|ets|js)):(\d+):(\d+)',
         re.IGNORECASE
     )
 
@@ -150,7 +150,7 @@ def _parse_errors_from_text(text: str, source: str) -> List[Dict[str, Any]]:
         # 先尝试匹配 ArkTS 多行格式
         arkts_match = arkts_pattern.search(line)
         if arkts_match:
-            level, file_path, line_num, col = arkts_match.groups()
+            file_path, line_num, col = arkts_match.groups()
             # 查找下一行的消息
             message = ''
             if i + 1 < len(lines):
