@@ -98,38 +98,93 @@ def _parse_errors_from_text(text: str, source: str) -> List[Dict[str, Any]]:
     从文本中解析结构化错误信息
 
     支持多种格式：
+    - ArkTS 编译器: Error Message: xxx At File: path:line:column
+    - ArkTS WARN/ERROR (多行): ArkTS:WARN File: path:line:column \\n message
     - TypeScript: src/main/ets/pages/Index.ets(10,5): error TS2304: Cannot find name 'foo'.
-    - ArkTS: ArkTS:ERROR File: src/main/ets/pages/Index.ets:10:5
     - 通用: ERROR: src/main/ets/pages/Index.ets:10:5 - Error message
-    - Gradle风格: * What went wrong: ... followed by error details
     """
     errors = []
+    seen = set()  # 去重
+
+    # 预处理：将多行错误合并为单行
+    # ArkTS 错误格式通常是：
+    # Error Message: xxx
+    # At File: path:line:column
+    text = re.sub(r'\n\s*At File:', ' At File:', text)
+
+    # 移除 ANSI 颜色码
+    text = re.sub(r'\x1b\[[0-9;]*m', '', text)
+
     lines = text.split('\n')
 
-    # 错误模式匹配
+    # 错误模式匹配（按优先级排序）
     patterns = [
+        # ArkTS 编译器格式: Error Message: xxx At File: path:line:column
+        re.compile(
+            r'Error Message:\s*(.+?)\s*At File:\s*(.+?\.(?:ts|ets|js)):?(\d+):?(\d+)',
+            re.IGNORECASE
+        ),
         # TypeScript/ArkTS 格式: file(line,col): error CODE: message
-        re.compile(r'^(.+?\.(?:ts|ets|js))\((\d+),(\d+)\):\s*(?:error|ERROR)\s*(?:\w+)?\s*:\s*(.+)$'),
-        # ArkTS 格式: ArkTS:ERROR File: path:line:column
-        re.compile(r'^ArkTS:ERROR\s+File:\s*(.+?\.(?:ts|ets|js)):(\d+):(\d+)\s*[-:]?\s*(.*)$'),
-        # 通用格式: ERROR: path:line:column - message 或 Error: path:line:column: message
-        re.compile(r'^(?:ERROR|Error)\s*[:：]?\s*(.+?\.(?:ts|ets|js|json5?)):(\d+)(?::(\d+))?\s*[-:]?\s*(.+)$'),
-        # 编译错误: file:line: error: message
-        re.compile(r'^(.+?\.(?:ts|ets|js)):(\d+):\d+:\s*(?:error|ERROR)\s*:\s*(.+)$'),
+        re.compile(
+            r'^(.+?\.(?:ts|ets|js))\((\d+),(\d+)\):\s*(?:error|ERROR)\s*(?:\w+)?\s*:\s*(.+)$'
+        ),
+        # 通用格式: ERROR: path:line:column - message
+        re.compile(
+            r'^(?:ERROR|Error)\s*[:：]?\s*(.+?\.(?:ts|ets|js|json5?)):(\d+)(?::(\d+))?\s*[-:]?\s*(.+)$'
+        ),
     ]
 
-    for i, line in enumerate(lines):
-        line = line.strip()
+    # ArkTS WARN/ERROR 多行格式单独处理
+    arkts_pattern = re.compile(
+        r'ArkTS:(ERROR|WARN)\s+File:\s*(.+?\.(?:ts|ets|js)):(\d+):(\d+)',
+        re.IGNORECASE
+    )
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
         if not line:
+            i += 1
             continue
 
-        # 尝试匹配各种格式
+        # 先尝试匹配 ArkTS 多行格式
+        arkts_match = arkts_pattern.search(line)
+        if arkts_match:
+            level, file_path, line_num, col = arkts_match.groups()
+            # 查找下一行的消息
+            message = ''
+            if i + 1 < len(lines):
+                next_line = lines[i + 1].strip()
+                # 消息通常以单引号开头，或者不是另一个错误/警告
+                if next_line and not arkts_pattern.search(next_line):
+                    message = next_line.strip().strip("'\"")
+                    i += 1  # 跳过下一行
+
+            error_key = (file_path.strip(), line_num, message[:50] if message else '')
+            if error_key not in seen:
+                seen.add(error_key)
+                errors.append({
+                    'file': _normalize_path(file_path.strip()),
+                    'line': int(line_num) if line_num else 0,
+                    'column': int(col) if col else 0,
+                    'message': message,
+                    'type': _classify_error(message),
+                    'source': source
+                })
+            i += 1
+            continue
+
+        # 尝试匹配其他格式
+        matched = False
         for pattern in patterns:
-            match = pattern.match(line)
+            match = pattern.search(line)
             if match:
                 groups = match.groups()
-                # 根据匹配组数确定字段
-                if len(groups) == 4:
+
+                # 根据模式确定字段
+                if 'Error Message:' in line and 'At File:' in line:
+                    message, file_path, line_num, col = groups[0], groups[1], groups[2], groups[3]
+                elif len(groups) == 4:
                     file_path, line_num, col, message = groups
                 elif len(groups) == 3:
                     file_path, line_num, message = groups
@@ -137,22 +192,24 @@ def _parse_errors_from_text(text: str, source: str) -> List[Dict[str, Any]]:
                 else:
                     continue
 
-                error = {
-                    'file': _normalize_path(file_path.strip()),
-                    'line': int(line_num) if line_num else 0,
-                    'column': int(col) if col else 0,
-                    'message': message.strip() if message else '',
-                    'type': _classify_error(message.strip() if message else ''),
-                    'source': source
-                }
-                errors.append(error)
+                error_key = (file_path.strip(), line_num, message[:50] if message else '')
+                if error_key not in seen:
+                    seen.add(error_key)
+                    errors.append({
+                        'file': _normalize_path(file_path.strip()),
+                        'line': int(line_num) if line_num else 0,
+                        'column': int(col) if col and col.isdigit() else 0,
+                        'message': message.strip() if message else '',
+                        'type': _classify_error(message.strip() if message else ''),
+                        'source': source
+                    })
+                matched = True
                 break
 
         # 捕获没有文件位置的严重错误
-        if not any(p.match(line) for p in patterns):
-            if any(kw in line.upper() for kw in ['FATAL', 'FAILED', 'BUILD FAILED', 'COMPILATION FAILED']):
-                # 提取有意义的错误消息
-                clean_msg = re.sub(r'^\s*[-*]\s*', '', line).strip()
+        if not matched:
+            if any(kw in line.upper() for kw in ['FATAL', 'BUILD FAILED', 'COMPILATION FAILED']):
+                clean_msg = re.sub(r'^\s*[-*]?\s*', '', line).strip()
                 if clean_msg and len(clean_msg) > 5:
                     errors.append({
                         'file': None,
@@ -162,6 +219,8 @@ def _parse_errors_from_text(text: str, source: str) -> List[Dict[str, Any]]:
                         'type': 'build',
                         'source': source
                     })
+
+        i += 1
 
     return errors
 
