@@ -113,6 +113,41 @@ class TestHvigorWrapper:
         assert captured["env"]["HVIGOR_USER_HOME"] == str(project / ".hvigor" / "mcp-user-home")
         assert captured["env"]["JAVA_HOME"] == str(deveco / "Contents" / "jbr" / "Contents" / "Home")
 
+    def test_execute_command_marks_build_failed_output_as_failure(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco-Studio.app"
+        node = deveco / "Contents" / "tools" / "node" / "bin" / "node"
+        hvigor = deveco / "Contents" / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "Contents" / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "Contents" / "jbr" / "Contents" / "Home" / "bin" / "java"
+
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            return CompletedProcess(
+                cmd,
+                0,
+                stdout="COMPILE RESULT:FAIL {ERROR:5}",
+                stderr="> hvigor ERROR: BUILD FAILED in 2 s 600 ms",
+            )
+
+        monkeypatch.setattr("harmonyos_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build_hap()
+
+        assert result["success"] is False
+
     def test_windows_layout_is_detected(self, tmp_path, monkeypatch):
         """Test Windows DevEco layout: JBR directly under DevEco with java.exe"""
         project = tmp_path / "MyApplication"

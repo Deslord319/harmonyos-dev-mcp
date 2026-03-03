@@ -61,6 +61,59 @@ class Config(ConfigBase):
         return None
 
     @classmethod
+    def _get_deveco_search_paths(cls) -> List[Path]:
+        """Return likely DevEco Studio install locations for the current platform."""
+        system = platform.system()
+        home = Path.home()
+        candidates: List[Path] = []
+
+        env_hint = os.getenv("DevEco Studio")
+        if env_hint:
+            raw_hint = env_hint.split(";" if system == "Windows" else ":")[0].strip()
+            if raw_hint:
+                hint_path = Path(raw_hint).expanduser()
+                if hint_path.name.lower() == "bin":
+                    hint_path = hint_path.parent
+                candidates.append(hint_path)
+
+        if system == "Darwin":
+            candidates.extend([
+                Path("/Applications/DevEco-Studio.app"),
+                Path("/Applications/DevEco Studio.app"),
+                home / "Applications" / "DevEco-Studio.app",
+                home / "Applications" / "DevEco Studio.app",
+            ])
+        elif system == "Windows":
+            local_app_data = Path(os.getenv("LOCALAPPDATA", home / "AppData" / "Local"))
+            program_files = Path(os.getenv("ProgramFiles", r"C:\Program Files"))
+            program_files_x86 = Path(os.getenv("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+            candidates.extend([
+                local_app_data / "Programs" / "DevEco Studio",
+                program_files / "DevEco Studio",
+                program_files_x86 / "DevEco Studio",
+            ])
+        else:
+            candidates.extend([
+                Path("/opt/DevEco-Studio"),
+                Path("/opt/DevEco Studio"),
+                home / "DevEco-Studio",
+                home / "DevEco Studio",
+                home / ".local" / "share" / "DevEco-Studio",
+            ])
+
+        seen = set()
+        unique_candidates: List[Path] = []
+        for candidate in candidates:
+            normalized = candidate.expanduser()
+            key = str(normalized)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_candidates.append(normalized)
+
+        return unique_candidates
+
+    @classmethod
     def init(cls):
         super().init()
         system = platform.system()

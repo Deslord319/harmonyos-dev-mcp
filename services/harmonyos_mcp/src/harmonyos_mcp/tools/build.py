@@ -6,7 +6,6 @@
 import asyncio
 import re
 import time
-from pathlib import Path
 from typing import Optional, List, Dict, Any
 from loguru import logger
 
@@ -18,7 +17,6 @@ from common.tools.registry import mcp_tool
 
 # 错误提取配置
 MAX_ERRORS = 15  # 最大返回错误数量
-ERROR_CONTEXT_LINES = 1  # 每个错误前后额外上下文行数
 
 
 @mcp_tool(category="build")
@@ -35,27 +33,28 @@ async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult
         'success': result['success'],
         'hap_path': result.get('hap_path'),
         'message': f"构建{'成功' if result['success'] else '失败'}，耗时: {ToolBase.format_duration(elapsed)}",
-        'duration': elapsed
+        'duration': elapsed,
+        'errors': [],
+        'error_count': 0,
     }
 
     # 构建失败时提取错误信息
     if not result['success']:
-        errors = _extract_build_errors(project_path, result)
-        if errors:
-            response['errors'] = errors[:MAX_ERRORS]
-            response['error_count'] = len(errors)
-            # 提供简短的摘要
-            response['error'] = _summarize_errors(errors)
+        errors = _extract_build_errors(result)
+        response['errors'] = errors[:MAX_ERRORS]
+        response['error_count'] = len(errors)
+        detailed_error = _extract_detailed_error_output(result)
+        if detailed_error:
+            response['error'] = detailed_error
 
     return response
 
 
-def _extract_build_errors(project_path: str, build_result: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _extract_build_errors(build_result: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    从多个来源提取结构化的错误信息
+    从本次构建进程输出提取结构化错误信息
 
     Args:
-        project_path: 项目路径
         build_result: hvigorw 构建结果（包含 stdout, stderr）
 
     Returns:
@@ -81,14 +80,6 @@ def _extract_build_errors(project_path: str, build_result: Dict[str, Any]) -> Li
             if error_key not in seen_errors:
                 seen_errors.add(error_key)
                 all_errors.append(error)
-
-    # 3. 从构建日志提取错误
-    log_errors = _extract_errors_from_build_log(project_path)
-    for error in log_errors:
-        error_key = (error.get('file', ''), error.get('line', 0), error.get('message', '')[:50])
-        if error_key not in seen_errors:
-            seen_errors.add(error_key)
-            all_errors.append(error)
 
     return all_errors
 
@@ -206,43 +197,16 @@ def _parse_errors_from_text(text: str, source: str) -> List[Dict[str, Any]]:
                 matched = True
                 break
 
-        # 捕获没有文件位置的严重错误
-        if not matched:
-            if any(kw in line.upper() for kw in ['FATAL', 'BUILD FAILED', 'COMPILATION FAILED']):
-                clean_msg = re.sub(r'^\s*[-*]?\s*', '', line).strip()
-                if clean_msg and len(clean_msg) > 5:
-                    errors.append({
-                        'file': None,
-                        'line': 0,
-                        'column': 0,
-                        'message': clean_msg,
-                        'type': 'build',
-                        'source': source
-                    })
-
         i += 1
 
     return errors
-
-
-def _extract_errors_from_build_log(project_path: str) -> List[Dict[str, Any]]:
-    """
-    从构建日志文件提取错误信息
-    """
-    errors = []
-    try:
-        log_file = Path(project_path) / '.hvigor' / 'outputs' / 'build-logs' / 'build.log'
-        if not log_file.exists():
-            return errors
-
-        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-
-        errors = _parse_errors_from_text(content, 'build.log')
-    except Exception as e:
-        logger.debug(f"读取构建日志失败: {e}")
-
-    return errors
+def _extract_detailed_error_output(build_result: Dict[str, Any]) -> str:
+    """返回本次构建的原始详细失败输出。"""
+    stderr = (build_result.get('stderr') or '').strip()
+    stdout = (build_result.get('stdout') or '').strip()
+    if stderr and stdout:
+        return f"{stderr}\n{stdout}"
+    return stderr or stdout
 
 
 def _normalize_path(path: str) -> str:

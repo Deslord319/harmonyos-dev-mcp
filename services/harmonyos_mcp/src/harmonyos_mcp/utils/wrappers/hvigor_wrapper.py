@@ -279,11 +279,15 @@ class HvigorWrapper:
                 close_fds=True
             )
 
+            command_success = result.returncode == 0 and not self._has_build_failure_output(
+                result.stdout, result.stderr
+            )
+
             return {
                 'returncode': result.returncode,
                 'stdout': result.stdout,
                 'stderr': result.stderr,
-                'success': result.returncode == 0
+                'success': command_success
             }
         except subprocess.TimeoutExpired:
             # 超时了，记录错误
@@ -302,6 +306,11 @@ class HvigorWrapper:
                 'stderr': str(e),
                 'success': False
             }
+
+    @staticmethod
+    def _has_build_failure_output(stdout: str, stderr: str) -> bool:
+        combined = f"{stdout}\n{stderr}".upper()
+        return 'BUILD FAILED' in combined or 'COMPILE RESULT:FAIL' in combined
 
     def _kill_process_tree(self, pid: int):
         """

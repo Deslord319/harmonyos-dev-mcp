@@ -1,6 +1,7 @@
 ﻿"""
 构建部署工具单元测试
 """
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -27,6 +28,8 @@ class TestBuildApp:
         assert result['hap_path'] == '/path/to/output.hap'
         assert '成功' in result['message']
         assert 'duration' in result
+        assert result['errors'] == []
+        assert result['error_count'] == 0
 
     @patch('harmonyos_mcp.tools.build.HvigorWrapper')
     @pytest.mark.asyncio
@@ -35,13 +38,16 @@ class TestBuildApp:
         from harmonyos_mcp.tools import build
 
         mock_hvigor = MagicMock()
-        mock_hvigor.build_hap.return_value = {'success': False}
+        mock_hvigor.build_hap.return_value = {'success': False, 'stderr': 'compiler exited with code 1'}
         mock_hvigor_cls.return_value = mock_hvigor
 
         result = await build.build_app('/path/to/project')
 
         assert result['success'] is False
         assert '失败' in result['message']
+        assert result['errors'] == []
+        assert result['error_count'] == 0
+        assert result['error'] == 'compiler exited with code 1'
 
     @patch('harmonyos_mcp.tools.build.HvigorWrapper')
     @pytest.mark.asyncio
@@ -56,6 +62,32 @@ class TestBuildApp:
         await build.build_app('/path/to/project', build_mode='release')
 
         mock_hvigor.build_hap.assert_called_once_with(build_mode='release')
+
+    @patch('harmonyos_mcp.tools.build.HvigorWrapper')
+    @pytest.mark.asyncio
+    async def test_build_failure_uses_current_process_output_only(self, mock_hvigor_cls):
+        """失败时仅解析本次 hvigor 进程输出"""
+        from harmonyos_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build_hap.return_value = {
+            'success': False,
+            'stderr': (
+                "1 ERROR: 10505001 ArkTS Compiler Error\n"
+                "Error Message: ';' expected. At File: "
+                "/path/to/SnakeGameBoard.ets:116:20\n"
+                "> hvigor ERROR: BUILD FAILED in 2 s 582 ms\n"
+            )
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        result = await build.build_app('/path/to/project')
+
+        assert result['error_count'] == 1
+        assert result['errors'][0]['line'] == 116
+        assert result['errors'][0]['message'] == "';' expected."
+        assert "Error Message: ';' expected." in result['error']
+        assert '> hvigor ERROR: BUILD FAILED in 2 s 582 ms' in result['error']
 
 
 class TestInstallApp:
