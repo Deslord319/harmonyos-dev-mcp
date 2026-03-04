@@ -6,6 +6,7 @@ HarmonyOS MCP 配置管理
 import os
 import platform
 import shutil
+import re
 from pathlib import Path
 from typing import Optional, List
 from loguru import logger
@@ -28,6 +29,89 @@ class Config(ConfigBase):
     UI_TREE_TIMEOUT: int = 10
     BUILD_TIMEOUT: int = 600
     INSTALL_TIMEOUT: int = 120
+
+    @staticmethod
+    def _normalize_sdk_root(path: Path) -> Optional[Path]:
+        """Normalize a candidate SDK path to the root directory expected by hvigor."""
+        if not path.exists():
+            return None
+
+        # sdk root: contains version subdirectories such as default/sdk-pkg.json
+        if any(child.is_dir() and (child / "sdk-pkg.json").exists() for child in path.iterdir()):
+            return path
+
+        # version directory: e.g. .../sdk/default
+        if (path / "sdk-pkg.json").exists():
+            return path.parent
+
+        return None
+
+    @staticmethod
+    def _read_local_properties_path(project_path: Path, key: str) -> Optional[str]:
+        local_props = project_path / "local.properties"
+        if not local_props.exists():
+            return None
+
+        pattern = re.compile(rf"^{re.escape(key)}=(.*)$")
+        with local_props.open("r", encoding="utf-8", errors="ignore") as file:
+            for line in file:
+                match = pattern.match(line.strip())
+                if match:
+                    return match.group(1).strip().replace("\\\\", "\\")
+        return None
+
+    @classmethod
+    def _get_deveco_search_paths(cls) -> List[Path]:
+        """Return likely DevEco Studio install locations for the current platform."""
+        system = platform.system()
+        home = Path.home()
+        candidates: List[Path] = []
+
+        env_hint = os.getenv("DevEco Studio")
+        if env_hint:
+            raw_hint = env_hint.split(";" if system == "Windows" else ":")[0].strip()
+            if raw_hint:
+                hint_path = Path(raw_hint).expanduser()
+                if hint_path.name.lower() == "bin":
+                    hint_path = hint_path.parent
+                candidates.append(hint_path)
+
+        if system == "Darwin":
+            candidates.extend([
+                Path("/Applications/DevEco-Studio.app"),
+                Path("/Applications/DevEco Studio.app"),
+                home / "Applications" / "DevEco-Studio.app",
+                home / "Applications" / "DevEco Studio.app",
+            ])
+        elif system == "Windows":
+            local_app_data = Path(os.getenv("LOCALAPPDATA", home / "AppData" / "Local"))
+            program_files = Path(os.getenv("ProgramFiles", r"C:\Program Files"))
+            program_files_x86 = Path(os.getenv("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+            candidates.extend([
+                local_app_data / "Programs" / "DevEco Studio",
+                program_files / "DevEco Studio",
+                program_files_x86 / "DevEco Studio",
+            ])
+        else:
+            candidates.extend([
+                Path("/opt/DevEco-Studio"),
+                Path("/opt/DevEco Studio"),
+                home / "DevEco-Studio",
+                home / "DevEco Studio",
+                home / ".local" / "share" / "DevEco-Studio",
+            ])
+
+        seen = set()
+        unique_candidates: List[Path] = []
+        for candidate in candidates:
+            normalized = candidate.expanduser()
+            key = str(normalized)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_candidates.append(normalized)
+
+        return unique_candidates
 
     @classmethod
     def init(cls):
@@ -60,16 +144,22 @@ class Config(ConfigBase):
             candidates = []
             if cls.DEVECO_STUDIO_PATH:
                 deveco = Path(cls.DEVECO_STUDIO_PATH)
-                candidates.extend([deveco / "sdk", deveco.parent / "sdk"])
+                candidates.extend([
+                    deveco / "sdk",
+                    deveco / "Contents" / "sdk",
+                    deveco.parent / "sdk",
+                ])
             user_home = Path.home()
             candidates.extend([
                 user_home / "HarmonyOS" / "sdk",
+                user_home / "harmonyos" / "sdk",
                 user_home / "AppData" / "Local" / "HarmonyOS" / "Sdk",
                 user_home / "AppData" / "Local" / "Huawei" / "Sdk",
             ])
             for c in candidates:
-                if c.exists():
-                    cls.HARMONYOS_SDK_PATH = str(c)
+                normalized = cls._normalize_sdk_root(c)
+                if normalized:
+                    cls.HARMONYOS_SDK_PATH = str(normalized)
                     break
 
         if not cls.HDC_PATH and cls.HARMONYOS_SDK_PATH:
@@ -89,13 +179,25 @@ class Config(ConfigBase):
         if cls.DEVECO_STUDIO_PATH:
             deveco = Path(cls.DEVECO_STUDIO_PATH)
             node_name = "node.exe" if system == "Windows" else "node"
-            node_path = deveco / "tools" / "node" / node_name
-            if node_path.exists():
-                cls.NODE_PATH = str(node_path)
+            node_candidates = [
+                deveco / "tools" / "node" / node_name,
+                deveco / "tools" / "node" / "bin" / node_name,
+                deveco / "Contents" / "tools" / "node" / node_name,
+                deveco / "Contents" / "tools" / "node" / "bin" / node_name,
+            ]
+            for node_path in node_candidates:
+                if node_path.exists():
+                    cls.NODE_PATH = str(node_path)
+                    break
 
-            hvigor_path = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
-            if hvigor_path.exists():
-                cls.HVIGOR_PATH = str(hvigor_path)
+            hvigor_candidates = [
+                deveco / "tools" / "hvigor" / "bin" / "hvigorw.js",
+                deveco / "Contents" / "tools" / "hvigor" / "bin" / "hvigorw.js",
+            ]
+            for hvigor_path in hvigor_candidates:
+                if hvigor_path.exists():
+                    cls.HVIGOR_PATH = str(hvigor_path)
+                    break
 
         if not cls.HILOGTOOL_PATH and cls.HARMONYOS_SDK_PATH:
             hilogtool_name = "hilogtool.exe" if system == "Windows" else "hilogtool"

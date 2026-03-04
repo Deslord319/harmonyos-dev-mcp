@@ -38,33 +38,31 @@ class HvigorWrapper:
                 "未找到 DevEco Studio 安装路径。请设置环境变量 DEVECO_STUDIO_PATH 或安装 DevEco Studio"
             )
 
-        # 设置工具路径（优先使用 Config 中已检测的路径）
-        if Config.NODE_PATH and Path(Config.NODE_PATH).exists():
-            self.node_exe = Path(Config.NODE_PATH)
-        else:
-            node_name = "node.exe" if platform.system() == "Windows" else "node"
-            self.node_exe = self.deveco_path / "tools" / "node" / node_name
-
-        if Config.HVIGOR_PATH and Path(Config.HVIGOR_PATH).exists():
-            self.hvigorw_js = Path(Config.HVIGOR_PATH)
-        else:
-            self.hvigorw_js = self.deveco_path / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        self.node_exe = self._find_node_executable()
+        self.hvigorw_js = self._find_hvigor_wrapper()
+        self.sdk_root = self._resolve_sdk_root()
+        self.java_home = self._find_java_home()
+        self.hvigor_user_home = self.project_path / ".hvigor" / "mcp-user-home"
 
         # 验证工具存在
         if not self.node_exe.exists():
             raise ValueError(f"未找到 Node.js: {self.node_exe}")
         if not self.hvigorw_js.exists():
             raise ValueError(f"未找到 hvigorw.js: {self.hvigorw_js}")
+        if not self.sdk_root.exists():
+            raise ValueError(f"未找到 HarmonyOS SDK 根目录: {self.sdk_root}")
+        if self.java_home and not self.java_home.exists():
+            raise ValueError(f"未找到 Java Home: {self.java_home}")
 
         logger.info(f"初始化 HvigorWrapper")
         logger.info(f"  项目路径: {project_path}")
         logger.info(f"  DevEco 路径: {self.deveco_path}")
         logger.info(f"  Node.js: {self.node_exe}")
         logger.info(f"  hvigorw.js: {self.hvigorw_js}")
-
-        # SDK 根路径（sdk/ 目录，包含 default/sdk-pkg.json）
-        # HarmonyOS 项目不读取 local.properties，而是通过 DEVECO_SDK_HOME 环境变量定位 SDK
-        self.sdk_root = self.deveco_path / "sdk"
+        logger.info(f"  SDK 根路径: {self.sdk_root}")
+        if self.java_home:
+            logger.info(f"  JAVA_HOME: {self.java_home}")
+        logger.info(f"  HVIGOR_USER_HOME: {self.hvigor_user_home}")
 
     def _find_deveco_studio(self, custom_path: Optional[str] = None) -> Optional[Path]:
         """
@@ -98,6 +96,103 @@ class HvigorWrapper:
                 logger.info(f"自动检测到 DevEco Studio: {path}")
                 return path
 
+        return None
+
+    @staticmethod
+    def _normalize_sdk_root(candidate: Path) -> Optional[Path]:
+        if not candidate.exists():
+            return None
+
+        if candidate.is_dir() and any(
+            child.is_dir() and (child / "sdk-pkg.json").exists()
+            for child in candidate.iterdir()
+        ):
+            return candidate
+
+        if candidate.is_dir() and (candidate / "sdk-pkg.json").exists():
+            return candidate.parent
+
+        return None
+
+    def _find_node_executable(self) -> Path:
+        if Config.NODE_PATH and Path(Config.NODE_PATH).exists():
+            return Path(Config.NODE_PATH)
+
+        node_name = "node.exe" if platform.system() == "Windows" else "node"
+        candidates = [
+            self.deveco_path / "tools" / "node" / node_name,
+            self.deveco_path / "tools" / "node" / "bin" / node_name,
+            self.deveco_path / "Contents" / "tools" / "node" / node_name,
+            self.deveco_path / "Contents" / "tools" / "node" / "bin" / node_name,
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0]
+
+    def _find_hvigor_wrapper(self) -> Path:
+        if Config.HVIGOR_PATH and Path(Config.HVIGOR_PATH).exists():
+            return Path(Config.HVIGOR_PATH)
+
+        candidates = [
+            self.deveco_path / "tools" / "hvigor" / "bin" / "hvigorw.js",
+            self.deveco_path / "Contents" / "tools" / "hvigor" / "bin" / "hvigorw.js",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0]
+
+    def _resolve_sdk_root(self) -> Path:
+        candidates: List[Path] = []
+
+        for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH", "OHOS_SDK_ROOT"):
+            env_value = os.getenv(env_name)
+            if env_value:
+                candidates.append(Path(env_value).expanduser())
+
+        if Config.HARMONYOS_SDK_PATH:
+            candidates.append(Path(Config.HARMONYOS_SDK_PATH))
+
+        local_sdk_dir = Config._read_local_properties_path(self.project_path, "sdk.dir")
+        if local_sdk_dir:
+            candidates.append(Path(local_sdk_dir).expanduser())
+
+        candidates.extend([
+            self.deveco_path / "sdk",
+            self.deveco_path / "Contents" / "sdk",
+            Path.home() / "HarmonyOS" / "sdk",
+            Path.home() / "harmonyos" / "sdk",
+        ])
+
+        for candidate in candidates:
+            normalized = self._normalize_sdk_root(candidate)
+            if normalized:
+                return normalized
+
+        return candidates[0]
+
+    def _find_java_home(self) -> Optional[Path]:
+        java_exe = "java.exe" if platform.system() == "Windows" else "java"
+
+        env_java_home = os.getenv("JAVA_HOME")
+        if env_java_home:
+            candidate = Path(env_java_home).expanduser()
+            if (candidate / "bin" / java_exe).exists():
+                return candidate
+
+        candidates = [
+            # Windows/Linux: JBR directly under DevEco
+            self.deveco_path / "jbr",
+            # Linux: JBR with Home subdirectory
+            self.deveco_path / "jbr" / "Contents" / "Home",
+            # macOS: JBR inside Contents
+            self.deveco_path / "Contents" / "jbr",
+            self.deveco_path / "Contents" / "jbr" / "Contents" / "Home",
+        ]
+        for candidate in candidates:
+            if (candidate / "bin" / java_exe).exists():
+                return candidate
         return None
 
     def _ensure_local_properties(self):
@@ -175,26 +270,34 @@ class HvigorWrapper:
         #   4. 因此 DEVECO_SDK_HOME 应指向 sdk/ 目录（其下有 default/sdk-pkg.json）
         env = os.environ.copy()
         env['DEVECO_SDK_HOME'] = str(self.sdk_root)
+        env['HVIGOR_USER_HOME'] = str(self.hvigor_user_home)
+        if self.java_home:
+            env['JAVA_HOME'] = str(self.java_home)
+            env['PATH'] = f"{self.java_home / 'bin'}{os.pathsep}{env.get('PATH', '')}"
+
+        self.hvigor_user_home.mkdir(parents=True, exist_ok=True)
 
         try:
-            # 使用 DEVNULL 丢弃输出，完全避免管道和文件描述符问题
-            # 使用 close_fds=True 确保子进程不继承任何文件描述符
             result = subprocess.run(
                 cmd,
                 cwd=str(self.project_path),
-                stdout=subprocess.DEVNULL,  # 丢弃输出
-                stderr=subprocess.DEVNULL,  # 丢弃错误输出
-                stdin=subprocess.DEVNULL,   # 不接受输入
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
                 timeout=timeout,
                 env=env,
-                close_fds=True  # 关闭所有文件描述符
+                close_fds=True
+            )
+
+            command_success = result.returncode == 0 and not self._has_build_failure_output(
+                result.stdout, result.stderr
             )
 
             return {
                 'returncode': result.returncode,
-                'stdout': '',  # 不返回输出
-                'stderr': '',
-                'success': result.returncode == 0
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'success': command_success
             }
         except subprocess.TimeoutExpired:
             # 超时了，记录错误
@@ -213,6 +316,11 @@ class HvigorWrapper:
                 'stderr': str(e),
                 'success': False
             }
+
+    @staticmethod
+    def _has_build_failure_output(stdout: str, stderr: str) -> bool:
+        combined = f"{stdout}\n{stderr}".upper()
+        return 'BUILD FAILED' in combined or 'COMPILE RESULT:FAIL' in combined
 
     def _kill_process_tree(self, pid: int):
         """
@@ -248,12 +356,12 @@ class HvigorWrapper:
         """
         logger.info("清理构建产物")
         args = [
+            '--no-daemon',
             '--sync',
             '-p', f'product={product}',
             '--analyze=normal',
             '--parallel',
             '--incremental'
-            # 移除 --no-daemon 参数，因为我们使用 DEVNULL 避免了所有 daemon 相关问题
         ]
         result = self._execute_command(args)
 
@@ -278,6 +386,7 @@ class HvigorWrapper:
         logger.info(f"构建HAR包 (模块: {module_name}, 产品: {product})")
 
         args = [
+            '--no-daemon',
             '--mode', 'module',
             '-p', f'product={product}',
             '-p', f'module={module_name}',
@@ -285,7 +394,6 @@ class HvigorWrapper:
             '--analyze=normal',
             '--parallel',
             '--incremental'
-            # 移除 --daemon 参数，避免 subprocess.run() 阻塞等待 daemon 进程
         ]
 
         result = self._execute_command(args)
@@ -314,13 +422,13 @@ class HvigorWrapper:
         logger.info(f"构建HAP包 (模式: {build_mode}, 产品: {product})")
 
         args = [
+            '--no-daemon',
             '--mode', 'module',
             '-p', f'product={product}',
             'assembleHap',
             '--analyze=normal',
             '--parallel',
             '--incremental'
-            # 移除 --daemon 参数，避免 subprocess.run() 阻塞等待 daemon 进程
         ]
 
         result = self._execute_command(args)
@@ -349,12 +457,12 @@ class HvigorWrapper:
         logger.info(f"构建APP包 (模式: {build_mode}, 产品: {product})")
 
         args = [
+            '--no-daemon',
             '-p', f'product={product}',
             'assembleApp',
             '--analyze=normal',
             '--parallel',
             '--incremental'
-            # 移除 --daemon 参数，避免 subprocess.run() 阻塞等待 daemon 进程
         ]
 
         result = self._execute_command(args)
@@ -418,4 +526,3 @@ class HvigorWrapper:
         }
 
         return info
-

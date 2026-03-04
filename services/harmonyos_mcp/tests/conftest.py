@@ -30,8 +30,12 @@ def pytest_configure(config):
 def reset_container():
     """每个测试后重置依赖容器"""
     yield
-    from harmonyos_mcp.container import Container
-    Container.reset()
+    from harmonyos_mcp.container import container
+
+    container.reset()
+    import harmonyos_mcp.container as container_mod
+
+    container_mod._registered = False
 
 
 @pytest.fixture
@@ -42,7 +46,7 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
     提供默认的返回值，可以在测试中覆盖。
     """
     from harmonyos_mcp.utils.hdc import HdcWrapper
-    from harmonyos_mcp.container import Container
+    from harmonyos_mcp.container import container
     
     mock = MagicMock(spec=HdcWrapper)
     
@@ -87,7 +91,7 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
     mock.get_app_pid.return_value = 1234
     
     # 注入到容器
-    Container.register(HdcWrapper, mock)
+    container.register(HdcWrapper, lambda: mock)
     
     yield mock
 
@@ -110,7 +114,7 @@ def no_device_mock(mock_hdc: MagicMock) -> MagicMock:
 def mock_ui_operations() -> Generator[MagicMock, None, None]:
     """Mock UiTestWrapper"""
     from harmonyos_mcp.utils.wrappers.ui_operations import UiTestWrapper
-    from harmonyos_mcp.container import Container
+    from harmonyos_mcp.container import container
     
     mock = MagicMock(spec=UiTestWrapper)
     
@@ -128,6 +132,6 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
         'count': 1
     }
     
-    Container.register(UiTestWrapper, mock)
+    container.register(UiTestWrapper, lambda: mock)
     
     yield mock
