@@ -151,8 +151,18 @@ class HvigorWrapper:
         Returns:
             包含returncode, stdout, stderr的字典
         """
+        # Windows 下 hvigor daemon 会在构建完成后长时间阻塞进程退出，
+        # 直接导致 MCP 调用超时，因此统一禁用 daemon。
+        effective_args = list(args)
+        if (
+            platform.system() == "Windows"
+            and "--no-daemon" not in effective_args
+            and "--daemon" not in effective_args
+        ):
+            effective_args.append("--no-daemon")
+
         # 构建完整命令: node hvigorw.js [args]
-        cmd = [str(self.node_exe), str(self.hvigorw_js)] + args
+        cmd = [str(self.node_exe), str(self.hvigorw_js)] + effective_args
         timeout = timeout or Config.BUILD_TIMEOUT
 
         logger.debug(f"执行构建命令: {' '.join(cmd)}")
