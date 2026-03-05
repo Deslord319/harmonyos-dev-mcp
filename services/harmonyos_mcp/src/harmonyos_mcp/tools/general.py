@@ -1,147 +1,161 @@
-"""
-通用工具
+﻿"""General HarmonyOS MCP tools."""
 
-提供设备管理、包管理等基础功能。
-"""
 import asyncio
-from typing import Optional, Literal
-from loguru import logger
+from typing import Literal, Optional
+
+from common.tools.registry import mcp_tool
 
 from ..container import get_hdc
 from ..types import ListDevicesResult, QueryPackageResult
 from .device_base import ToolBase
-from common.tools.registry import mcp_tool
+from .response import error_result, from_action_result, mcp_response, ok_result
+
+_LIST_ERROR_DEFAULTS = {"packages": [], "count": 0}
+_ABILITIES_ERROR_DEFAULTS = {"abilities": [], "modules": [], "main_ability": None, "ability_count": 0}
+_MAIN_ABILITY_ERROR_DEFAULTS = {"ability_name": "", "module_name": ""}
+_PERMISSIONS_ERROR_DEFAULTS = {"requested_permissions": [], "permission_count": 0}
 
 
 @mcp_tool(category="general")
-@ToolBase.handle_tool_error('DEVICE_LIST_ERROR', devices=[], count=0)
+@mcp_response("list_devices")
+@ToolBase.handle_tool_error("DEVICE_LIST_ERROR", devices=[], count=0)
 async def list_devices() -> ListDevicesResult:
-    """列出所有连接的HarmonyOS设备和模拟器，返回设备ID、型号、系统版本、屏幕分辨率等信息。"""
     hdc = get_hdc()
     devices = await asyncio.to_thread(hdc.list_devices_with_info)
-    
-    return {
-        'success': True,
-        'devices': devices,
-        'count': len(devices)
-    }
-
-
-# query_package 按 info_type 的错误默认字段
-_LIST_ERROR_DEFAULTS = {'packages': [], 'count': 0}
-_ABILITIES_ERROR_DEFAULTS = {'abilities': [], 'modules': [], 'main_ability': None, 'ability_count': 0}
-_MAIN_ABILITY_ERROR_DEFAULTS = {'ability_name': '', 'module_name': ''}
-_PERMISSIONS_ERROR_DEFAULTS = {'requested_permissions': [], 'permission_count': 0}
+    return ok_result({"devices": devices, "count": len(devices)})
 
 
 @mcp_tool(category="general")
-@ToolBase.handle_tool_error('QUERY_PACKAGE_ERROR', info_type='list', **_LIST_ERROR_DEFAULTS)
-@ToolBase.with_device(info_type='list', **_LIST_ERROR_DEFAULTS)
+@mcp_response("query_package")
+@ToolBase.handle_tool_error("QUERY_PACKAGE_ERROR", info_type="list", **_LIST_ERROR_DEFAULTS)
+@ToolBase.with_device(info_type="list", **_LIST_ERROR_DEFAULTS)
 async def query_package(
     device_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
     keyword: Optional[str] = None,
-    info_type: Literal['list', 'abilities', 'main_ability', 'permissions'] = 'list'
+    info_type: Literal["list", "abilities", "main_ability", "permissions"] = "list",
 ) -> QueryPackageResult:
-    """查询HarmonyOS应用包信息。info_type: list(列出所有包)、abilities(获取Abilities)、main_ability(主入口)、permissions(权限列表)。"""
     hdc = get_hdc()
-    
-    # 参数校验：需要 bundle_name 的查询类型
-    if info_type in ('abilities', 'main_ability', 'permissions') and not bundle_name:
-        return {
-            'success': False,
-            'error': f'info_type="{info_type}" 需要指定 bundle_name 参数',
-            'error_code': 'MISSING_BUNDLE_NAME',
-            'device_id': device_id,
-            'info_type': info_type,
-        }
-    
-    # 如果指定了 bundle_name 但 info_type 是 list，自动切换到 abilities
-    if bundle_name and info_type == 'list':
-        info_type = 'abilities'
-    
-    # === list 模式：列出所有包 ===
-    if info_type == 'list':
-        result = await asyncio.to_thread(hdc.list_packages, device_id, keyword)
-        return {
-            'success': result.get('success', True),
-            'device_id': device_id,
-            'info_type': 'list',
-            'packages': result.get('packages', []),
-            'count': result.get('count', len(result.get('packages', []))),
-            'keyword': keyword or ''
-        }
-    
-    # === abilities 模式：获取所有 Abilities ===
-    if info_type == 'abilities':
-        result = await asyncio.to_thread(hdc.get_package_info, device_id, bundle_name)
-        if result.get('success'):
-            # 转换 abilities 格式，只保留 AbilityInfo 需要的字段
-            raw_abilities = result.get('abilities', [])
-            abilities = [
-                {'name': a.get('name', ''), 'module': a.get('module', ''), 'type': a.get('type', '')}
-                for a in raw_abilities
-            ]
-            # 转换 modules 格式，从 [{'name': 'entry'}] 转为 ['entry']
-            raw_modules = result.get('modules', [])
-            modules = [m.get('name', m) if isinstance(m, dict) else m for m in raw_modules]
-            # 转换 main_ability 格式
-            raw_main = result.get('main_ability')
-            main_ability = None
-            if raw_main:
-                main_ability = {'name': raw_main.get('name', ''), 'module': raw_main.get('module', ''), 'type': raw_main.get('type', '')}
-            return {
-                'success': True,
-                'device_id': device_id,
-                'info_type': 'abilities',
-                'bundle_name': bundle_name,
-                'abilities': abilities,
-                'modules': modules,
-                'main_ability': main_ability,
-                'ability_count': len(abilities)
+
+    if info_type in ("abilities", "main_ability", "permissions") and not bundle_name:
+        return error_result(
+            "MISSING_BUNDLE_NAME",
+            f'info_type="{info_type}" requires bundle_name',
+            result={"device_id": device_id, "info_type": info_type},
+        )
+
+    if bundle_name and info_type == "list":
+        info_type = "abilities"
+
+    if info_type == "list":
+        raw = await asyncio.to_thread(hdc.list_packages, device_id, keyword)
+        return from_action_result(
+            raw,
+            default_code="LIST_PACKAGES_ERROR",
+            default_detail="failed to list packages",
+            default_result={
+                "device_id": device_id,
+                "info_type": "list",
+                "packages": raw.get("packages", []) if isinstance(raw, dict) else [],
+                "count": raw.get("count", len(raw.get("packages", []))) if isinstance(raw, dict) else 0,
+                "keyword": keyword or "",
+            },
+        )
+
+    if info_type == "abilities":
+        raw = await asyncio.to_thread(hdc.get_package_info, device_id, bundle_name)
+        if not raw.get("success", False):
+            return error_result(
+                raw.get("error_code", "GET_ABILITIES_ERROR"),
+                raw.get("error", "failed to get abilities"),
+                result={
+                    "device_id": device_id,
+                    "info_type": "abilities",
+                    "bundle_name": bundle_name,
+                    **_ABILITIES_ERROR_DEFAULTS,
+                },
+            )
+
+        raw_abilities = raw.get("abilities", [])
+        abilities = [
+            {"name": a.get("name", ""), "module": a.get("module", ""), "type": a.get("type", "")}
+            for a in raw_abilities
+        ]
+        raw_modules = raw.get("modules", [])
+        modules = [m.get("name", m) if isinstance(m, dict) else m for m in raw_modules]
+        raw_main = raw.get("main_ability")
+        main_ability = None
+        if raw_main:
+            main_ability = {
+                "name": raw_main.get("name", ""),
+                "module": raw_main.get("module", ""),
+                "type": raw_main.get("type", ""),
             }
-        else:
-            return {
-                'success': False,
-                'error': result.get('error', '获取 Abilities 失败'),
-                'error_code': result.get('error_code', 'GET_ABILITIES_ERROR'),
-                'device_id': device_id,
-                'info_type': 'abilities',
-                'bundle_name': bundle_name,
-                **_ABILITIES_ERROR_DEFAULTS
+
+        return ok_result(
+            {
+                "device_id": device_id,
+                "info_type": "abilities",
+                "bundle_name": bundle_name,
+                "abilities": abilities,
+                "modules": modules,
+                "main_ability": main_ability,
+                "ability_count": len(abilities),
             }
-    
-    # === main_ability 模式：仅获取主 Ability ===
-    if info_type == 'main_ability':
-        result = await asyncio.to_thread(hdc.get_main_ability, device_id, bundle_name)
-        return {
-            'success': result.get('success', False),
-            'device_id': device_id,
-            'info_type': 'main_ability',
-            'bundle_name': bundle_name,
-            'ability_name': result.get('ability_name', ''),
-            'module_name': result.get('module_name', ''),
-            'error': result.get('error') if not result.get('success') else None
-        }
-    
-    # === permissions 模式：获取应用权限列表 ===
-    if info_type == 'permissions':
-        result = await asyncio.to_thread(hdc.get_package_permissions, device_id, bundle_name)
-        return {
-            'success': result.get('success', False),
-            'device_id': device_id,
-            'info_type': 'permissions',
-            'bundle_name': bundle_name,
-            'requested_permissions': result.get('requested_permissions', []),
-            'permission_count': result.get('permission_count', 0),
-            'error': result.get('error') if not result.get('success') else None
-        }
-    
-    # 不应到达此处
-    return {
-        'success': False,
-        'error': f'不支持的 info_type: {info_type}',
-        'error_code': 'INVALID_INFO_TYPE',
-        'device_id': device_id,
-        'info_type': info_type
-    }
+        )
+
+    if info_type == "main_ability":
+        raw = await asyncio.to_thread(hdc.get_main_ability, device_id, bundle_name)
+        if not raw.get("success", False):
+            return error_result(
+                raw.get("error_code", "GET_MAIN_ABILITY_ERROR"),
+                raw.get("error", "failed to get main ability"),
+                result={
+                    "device_id": device_id,
+                    "info_type": "main_ability",
+                    "bundle_name": bundle_name,
+                    **_MAIN_ABILITY_ERROR_DEFAULTS,
+                },
+            )
+
+        candidates = raw.get("candidates", [])
+        idx = raw.get("recommended", -1)
+        ability_name = ""
+        module_name = ""
+        if isinstance(candidates, list) and 0 <= idx < len(candidates):
+            picked = candidates[idx]
+            ability_name = picked.get("name", "")
+            module_name = picked.get("module", "")
+
+        return ok_result(
+            {
+                "device_id": device_id,
+                "info_type": "main_ability",
+                "bundle_name": bundle_name,
+                "ability_name": ability_name,
+                "module_name": module_name,
+                "candidates": candidates,
+                "recommended": idx,
+            }
+        )
+
+    if info_type == "permissions":
+        raw = await asyncio.to_thread(hdc.get_package_permissions, device_id, bundle_name)
+        return from_action_result(
+            raw,
+            default_code="GET_PERMISSIONS_ERROR",
+            default_detail="failed to get permissions",
+            default_result={
+                "device_id": device_id,
+                "info_type": "permissions",
+                "bundle_name": bundle_name,
+                "requested_permissions": raw.get("requested_permissions", []) if isinstance(raw, dict) else [],
+                "permission_count": raw.get("permission_count", 0) if isinstance(raw, dict) else 0,
+            },
+        )
+
+    return error_result(
+        "INVALID_INFO_TYPE",
+        f"unsupported info_type: {info_type}",
+        result={"device_id": device_id, "info_type": info_type},
+    )

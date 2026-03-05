@@ -1,12 +1,11 @@
-"""
-异常基类
+﻿"""
+寮傚父鍩虹被
 
-定义 MCP 服务的基础异常。
-"""
+瀹氫箟 MCP 鏈嶅姟鐨勫熀纭€寮傚父銆?"""
 
 
 class MCPError(Exception):
-    """MCP 服务基础异常"""
+    """MCP 鏈嶅姟鍩虹寮傚父"""
 
     def __init__(self, message: str, code: str = "UNKNOWN_ERROR"):
         super().__init__(message)
@@ -15,7 +14,13 @@ class MCPError(Exception):
 
     def to_dict(self) -> dict:
         return {
-            "success": False,
-            "error": self.message,
-            "error_code": self.code,
+            "tool": "unknown",
+            "ok": False,
+            "result": None,
+            "error": {
+                "code": self.code,
+                "detail": self.message,
+            },
+            "meta": {},
         }
+

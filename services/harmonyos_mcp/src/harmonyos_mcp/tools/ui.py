@@ -1,21 +1,26 @@
-"""
-UI 操作工具
+﻿"""UI automation tools."""
 
-提供点击、滑动、输入、按键、截图等 UI 自动化操作。
-"""
 import asyncio
 import os
 from datetime import datetime
 from typing import Optional, Tuple, Union
-from loguru import logger
+
+from common.tools.registry import mcp_tool
 
 from ..container import get_hdc, get_ui_operations
 from ..types import (
-    ClickResult, LongPressResult, DragResult, SwipeResult, InputTextResult,
-    PressKeyResult, FindElementResult, ScreenshotResult, ElementScreenshotResult
+    ClickResult,
+    DragResult,
+    ElementScreenshotResult,
+    FindElementResult,
+    InputTextResult,
+    LongPressResult,
+    PressKeyResult,
+    ScreenshotResult,
+    SwipeResult,
 )
 from .device_base import ToolBase
-from common.tools.registry import mcp_tool
+from .response import error_result, from_action_result, mcp_response
 
 
 async def _resolve_element_coords(
@@ -24,39 +29,43 @@ async def _resolve_element_coords(
     element_type: Optional[str] = None,
     bundle_name: Optional[str] = None,
 ) -> Tuple[bool, Union[Tuple[int, int], dict]]:
-    """
-    通过文本/类型查找元素并返回中心坐标
-    
-    Returns:
-        (True, (x, y)) 成功时
-        (False, error_dict) 失败时
-    """
     ui_ops = get_ui_operations()
-    result = await asyncio.to_thread(
-        ui_ops.find_element, device_id,
-        text=text, element_type=element_type, bundle_name=bundle_name
+    raw = await asyncio.to_thread(
+        ui_ops.find_element,
+        device_id,
+        text=text,
+        element_type=element_type,
+        bundle_name=bundle_name,
     )
-    if not result['success']:
-        return False, result
-    if not result['elements']:
-        return False, {
-            'success': False,
-            'error': f'未找到匹配的元素: text={text}, type={element_type}',
-            'error_code': 'ELEMENT_NOT_FOUND'
-        }
+    if not raw.get("success", False):
+        return False, from_action_result(
+            raw,
+            default_code="FIND_ELEMENT_ERROR",
+            default_detail="find element failed",
+            default_result={"elements": [], "count": 0},
+        )
 
-    element = result['elements'][0]
-    if 'x' not in element or 'y' not in element:
-        return False, {
-            'success': False,
-            'error': f'元素没有有效的坐标信息: {element}',
-            'error_code': 'INVALID_ELEMENT_COORDS'
-        }
-    return True, (element['x'], element['y'])
+    elements = raw.get("elements", [])
+    if not elements:
+        return False, error_result(
+            "ELEMENT_NOT_FOUND",
+            f"element not found: text={text}, type={element_type}",
+            result={"elements": [], "count": 0},
+        )
+
+    element = elements[0]
+    if "x" not in element or "y" not in element:
+        return False, error_result(
+            "INVALID_ELEMENT_COORDS",
+            f"invalid element coords: {element}",
+            result={"elements": elements, "count": len(elements)},
+        )
+    return True, (element["x"], element["y"])
 
 
 @mcp_tool(category="ui")
-@ToolBase.handle_tool_error('CLICK_ERROR', x=0, y=0)
+@mcp_response("click_element")
+@ToolBase.handle_tool_error("CLICK_ERROR", x=0, y=0)
 @ToolBase.with_device(x=0, y=0)
 async def click_element(
     device_id: Optional[str] = None,
@@ -65,48 +74,52 @@ async def click_element(
     text: Optional[str] = None,
     element_type: Optional[str] = None,
     double_click: bool = False,
-    bundle_name: Optional[str] = None
-) -> dict:
-    """点击屏幕元素。可指定坐标(x,y)或查找条件(text/element_type)。double_click: 双击。"""
+    bundle_name: Optional[str] = None,
+) -> ClickResult:
     has_coords = x is not None and y is not None
-    has_search = text or element_type
+    has_search = bool(text or element_type)
+
     if has_coords and has_search:
-        return {
-            'success': False,
-            'error': '不能同时提供坐标(x, y)和查找条件(text/element_type)，请二选一',
-            'error_code': 'PARAM_CONFLICT',
-            'x': x, 'y': y
-        }
+        return error_result(
+            "PARAM_CONFLICT",
+            "cannot provide both coordinates and search criteria",
+            result={"x": x, "y": y},
+        )
 
     ui_ops = get_ui_operations()
 
     if has_coords:
-        if double_click:
-            return await asyncio.to_thread(ui_ops.double_click, device_id, x, y)
-        else:
-            return await asyncio.to_thread(ui_ops.click, device_id, x, y)
+        raw = await asyncio.to_thread(ui_ops.double_click if double_click else ui_ops.click, device_id, x, y)
+        return from_action_result(
+            raw,
+            default_code="CLICK_ERROR",
+            default_detail="click failed",
+            default_result={"x": x, "y": y},
+        )
 
     if has_search:
         ok, coords = await _resolve_element_coords(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
         if not ok:
-            coords.update({'x': x or 0, 'y': y or 0})
             return coords
         ex, ey = coords
-        if double_click:
-            return await asyncio.to_thread(ui_ops.double_click, device_id, ex, ey)
-        else:
-            return await asyncio.to_thread(ui_ops.click, device_id, ex, ey)
+        raw = await asyncio.to_thread(ui_ops.double_click if double_click else ui_ops.click, device_id, ex, ey)
+        return from_action_result(
+            raw,
+            default_code="CLICK_ERROR",
+            default_detail="click failed",
+            default_result={"x": ex, "y": ey},
+        )
 
-    return {
-        'success': False,
-        'error': '必须提供坐标(x, y)或查找条件(text/element_type)',
-        'error_code': 'MISSING_PARAMS',
-        'x': x or 0, 'y': y or 0
-    }
+    return error_result(
+        "MISSING_PARAMS",
+        "must provide (x,y) or (text/element_type)",
+        result={"x": x or 0, "y": y or 0},
+    )
 
 
 @mcp_tool(category="ui")
-@ToolBase.handle_tool_error('LONG_PRESS_ERROR')
+@mcp_response("long_press_element")
+@ToolBase.handle_tool_error("LONG_PRESS_ERROR")
 @ToolBase.with_device()
 async def long_press_element(
     device_id: Optional[str] = None,
@@ -114,30 +127,38 @@ async def long_press_element(
     y: Optional[int] = None,
     text: Optional[str] = None,
     element_type: Optional[str] = None,
-    bundle_name: Optional[str] = None
+    bundle_name: Optional[str] = None,
 ) -> LongPressResult:
-    """长按屏幕元素。可指定坐标(x,y)或查找条件(text/element_type)。"""
     ui_ops = get_ui_operations()
 
     if x is not None and y is not None:
-        return await asyncio.to_thread(ui_ops.long_click, device_id, x, y)
+        raw = await asyncio.to_thread(ui_ops.long_click, device_id, x, y)
+        return from_action_result(
+            raw,
+            default_code="LONG_PRESS_ERROR",
+            default_detail="long press failed",
+            default_result={"x": x, "y": y},
+        )
 
     if text or element_type:
         ok, coords = await _resolve_element_coords(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
         if not ok:
             return coords
         ex, ey = coords
-        return await asyncio.to_thread(ui_ops.long_click, device_id, ex, ey)
+        raw = await asyncio.to_thread(ui_ops.long_click, device_id, ex, ey)
+        return from_action_result(
+            raw,
+            default_code="LONG_PRESS_ERROR",
+            default_detail="long press failed",
+            default_result={"x": ex, "y": ey},
+        )
 
-    return {
-        'success': False,
-        'error': '必须提供坐标或查找条件',
-        'error_code': 'MISSING_PARAMS'
-    }
+    return error_result("MISSING_PARAMS", "must provide coordinates or search criteria", result={"x": 0, "y": 0})
 
 
 @mcp_tool(category="ui")
-@ToolBase.handle_tool_error('SWIPE_ERROR', from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
+@mcp_response("swipe")
+@ToolBase.handle_tool_error("SWIPE_ERROR", from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
 @ToolBase.with_device(from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
 async def swipe(
     device_id: Optional[str] = None,
@@ -146,36 +167,43 @@ async def swipe(
     to_x: Optional[int] = None,
     to_y: Optional[int] = None,
     direction: Optional[str] = None,
-    speed: int = 600
+    speed: int = 600,
 ) -> SwipeResult:
-    """滑动屏幕。可指定坐标(from_x,from_y,to_x,to_y)或方向(direction: left/right/up/down)。"""
     default_result = {
-        'from_x': from_x or 0,
-        'from_y': from_y or 0,
-        'to_x': to_x or 0,
-        'to_y': to_y or 0,
-        'direction': direction
+        "from_x": from_x or 0,
+        "from_y": from_y or 0,
+        "to_x": to_x or 0,
+        "to_y": to_y or 0,
+        "direction": direction,
     }
 
     ui_ops = get_ui_operations()
 
     if direction:
-        return await asyncio.to_thread(ui_ops.swipe_direction, device_id, direction, speed)
+        raw = await asyncio.to_thread(ui_ops.swipe_direction, device_id, direction, speed)
+        return from_action_result(
+            raw,
+            default_code="SWIPE_ERROR",
+            default_detail="swipe failed",
+            default_result=default_result,
+        )
 
     if all(v is not None for v in [from_x, from_y, to_x, to_y]):
-        return await asyncio.to_thread(ui_ops.swipe, device_id, from_x, from_y, to_x, to_y, speed)
+        raw = await asyncio.to_thread(ui_ops.swipe, device_id, from_x, from_y, to_x, to_y, speed)
+        return from_action_result(
+            raw,
+            default_code="SWIPE_ERROR",
+            default_detail="swipe failed",
+            default_result=default_result,
+        )
 
-    return {
-        'success': False,
-        'error': '必须提供滑动坐标(from_x, from_y, to_x, to_y)或方向(direction)',
-        'error_code': 'MISSING_PARAMS',
-        **default_result
-    }
+    return error_result("MISSING_PARAMS", "must provide swipe coords or direction", result=default_result)
 
 
 @mcp_tool(category="ui")
-@ToolBase.handle_tool_error('INPUT_TEXT_ERROR', text='', x=0, y=0)
-@ToolBase.with_device(text='', x=0, y=0)
+@mcp_response("input_text")
+@ToolBase.handle_tool_error("INPUT_TEXT_ERROR", text="", x=0, y=0)
+@ToolBase.with_device(text="", x=0, y=0)
 async def input_text(
     device_id: Optional[str] = None,
     x: Optional[int] = None,
@@ -183,98 +211,99 @@ async def input_text(
     text: Optional[str] = None,
     element_text: Optional[str] = None,
     element_type: Optional[str] = None,
-    bundle_name: Optional[str] = None
+    bundle_name: Optional[str] = None,
 ) -> InputTextResult:
-    """在输入框输入文本。text: 要输入的内容，可指定坐标(x,y)或查找条件(element_text/element_type)。"""
-    default_result = {
-        'text': text or '',
-        'x': x or 0,
-        'y': y or 0
-    }
+    default_result = {"text": text or "", "x": x or 0, "y": y or 0}
 
     if not text:
-        return {
-            'success': False,
-            'error': '必须提供要输入的文本(text)',
-            'error_code': 'MISSING_TEXT',
-            **default_result
-        }
+        return error_result("MISSING_TEXT", "text is required", result=default_result)
 
     ui_ops = get_ui_operations()
 
     if x is not None and y is not None:
-        return await asyncio.to_thread(ui_ops.input_text, device_id, x, y, text)
+        raw = await asyncio.to_thread(ui_ops.input_text, device_id, x, y, text)
+        return from_action_result(
+            raw,
+            default_code="INPUT_TEXT_ERROR",
+            default_detail="input text failed",
+            default_result=default_result,
+        )
 
     if element_text or element_type:
         ok, coords = await _resolve_element_coords(device_id, text=element_text, element_type=element_type, bundle_name=bundle_name)
         if not ok:
-            coords.update(default_result)
             return coords
         ex, ey = coords
-        return await asyncio.to_thread(ui_ops.input_text, device_id, ex, ey, text)
+        raw = await asyncio.to_thread(ui_ops.input_text, device_id, ex, ey, text)
+        return from_action_result(
+            raw,
+            default_code="INPUT_TEXT_ERROR",
+            default_detail="input text failed",
+            default_result={"text": text, "x": ex, "y": ey},
+        )
 
-    return {
-        'success': False,
-        'error': '必须提供坐标或查找条件',
-        'error_code': 'MISSING_PARAMS',
-        **default_result
-    }
+    return error_result("MISSING_PARAMS", "must provide coordinates or search criteria", result=default_result)
 
 
 @mcp_tool(category="ui")
-@ToolBase.handle_tool_error('PRESS_KEY_ERROR', key='')
-@ToolBase.with_device(key='')
+@mcp_response("press_key")
+@ToolBase.handle_tool_error("PRESS_KEY_ERROR", key="")
+@ToolBase.with_device(key="")
 async def press_key(device_id: Optional[str] = None, key: Optional[str] = None) -> PressKeyResult:
-    """模拟按键操作。key: 按键名称(Home/Back/Enter等)。"""
     if not key:
-        return {
-            'success': False,
-            'error': '必须提供按键名称(key)',
-            'error_code': 'MISSING_KEY',
-            'key': ''
-        }
+        return error_result("MISSING_KEY", "key is required", result={"key": ""})
 
     ui_ops = get_ui_operations()
-    return await asyncio.to_thread(ui_ops.press_key, device_id, key)
+    raw = await asyncio.to_thread(ui_ops.press_key, device_id, key)
+    return from_action_result(
+        raw,
+        default_code="PRESS_KEY_ERROR",
+        default_detail="press key failed",
+        default_result={"key": key},
+    )
 
 
 @mcp_tool(category="ui")
-@ToolBase.handle_tool_error('FIND_ELEMENT_ERROR', elements=[], count=0)
+@mcp_response("find_element")
+@ToolBase.handle_tool_error("FIND_ELEMENT_ERROR", elements=[], count=0)
 @ToolBase.with_device(elements=[], count=0)
 async def find_element(
     device_id: Optional[str] = None,
     text: Optional[str] = None,
     element_type: Optional[str] = None,
     element_id: Optional[str] = None,
-    bundle_name: Optional[str] = None
+    bundle_name: Optional[str] = None,
 ) -> FindElementResult:
-    """在UI树中查找元素。可按text/element_type/element_id查找，返回元素列表及坐标。"""
     if not any([text, element_type, element_id]):
-        return {
-            'success': False,
-            'error': '必须提供至少一个查找条件(text/element_type/element_id)',
-            'error_code': 'MISSING_SEARCH_CRITERIA',
-            'elements': [], 'count': 0
-        }
+        return error_result(
+            "MISSING_SEARCH_CRITERIA",
+            "must provide at least one of text/element_type/element_id",
+            result={"elements": [], "count": 0},
+        )
 
     ui_ops = get_ui_operations()
-    result = await asyncio.to_thread(
-        ui_ops.find_element, device_id,
-        text=text, element_type=element_type, element_id=element_id, bundle_name=bundle_name
+    raw = await asyncio.to_thread(
+        ui_ops.find_element,
+        device_id,
+        text=text,
+        element_type=element_type,
+        element_id=element_id,
+        bundle_name=bundle_name,
     )
-    
-    if 'elements' not in result:
-        result['elements'] = []
-    if 'count' not in result:
-        result['count'] = len(result['elements'])
-    
-    return result
+    base = {"elements": raw.get("elements", []), "count": raw.get("count", len(raw.get("elements", [])))}
+    return from_action_result(
+        raw,
+        default_code="FIND_ELEMENT_ERROR",
+        default_detail="find element failed",
+        default_result=base,
+    )
 
 
 @mcp_tool(category="ui")
-@ToolBase.handle_tool_error('SCREENSHOT_ERROR')
+@mcp_response("screenshot")
+@ToolBase.handle_tool_error("SCREENSHOT_ERROR")
 @ToolBase.with_device()
-@ToolBase.validate_params(local_path=['path'])
+@ToolBase.validate_params(local_path=["path"])
 async def screenshot(
     device_id: Optional[str] = None,
     local_path: Optional[str] = None,
@@ -282,45 +311,38 @@ async def screenshot(
     left: Optional[int] = None,
     top: Optional[int] = None,
     right: Optional[int] = None,
-    bottom: Optional[int] = None
+    bottom: Optional[int] = None,
 ) -> ScreenshotResult:
-    """截取设备屏幕。local_path: 保存路径(可选)，left/top/right/bottom: 裁剪区域(可选)。"""
     hdc = get_hdc()
 
     if not local_path:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        screenshots_dir = os.path.join(os.path.expanduser('~'), 'harmonyos-screenshots')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        screenshots_dir = os.path.join(os.path.expanduser("~"), "harmonyos-screenshots")
         os.makedirs(screenshots_dir, exist_ok=True)
-        suffix = 'element' if left is not None else 'screenshot'
-        local_path = os.path.join(screenshots_dir, f'{suffix}_{timestamp}.jpeg')
+        suffix = "element" if left is not None else "screenshot"
+        local_path = os.path.join(screenshots_dir, f"{suffix}_{timestamp}.jpeg")
 
     if left is not None and top is not None and right is not None and bottom is not None:
-        bounds = {
-            'left': left,
-            'top': top,
-            'right': right,
-            'bottom': bottom
-        }
-        result = await asyncio.to_thread(
-            hdc.take_element_screenshot,
-            device_id,
-            local_path,
-            bounds
+        bounds = {"left": left, "top": top, "right": right, "bottom": bottom}
+        raw = await asyncio.to_thread(hdc.take_element_screenshot, device_id, local_path, bounds)
+        return from_action_result(
+            raw,
+            default_code="SCREENSHOT_ERROR",
+            default_detail="element screenshot failed",
+            default_result={"bounds": bounds},
         )
-        result['bounds'] = bounds
-        return result
-    else:
-        result = await asyncio.to_thread(
-            hdc.take_screenshot,
-            device_id,
-            local_path,
-            display_id
-        )
-        return result
+
+    raw = await asyncio.to_thread(hdc.take_screenshot, device_id, local_path, display_id)
+    return from_action_result(
+        raw,
+        default_code="SCREENSHOT_ERROR",
+        default_detail="screenshot failed",
+    )
 
 
 @mcp_tool(category="ui")
-@ToolBase.handle_tool_error('DRAG_ERROR')
+@mcp_response("drag")
+@ToolBase.handle_tool_error("DRAG_ERROR")
 @ToolBase.with_device()
 async def drag(
     device_id: Optional[str] = None,
@@ -328,15 +350,20 @@ async def drag(
     from_y: Optional[int] = None,
     to_x: Optional[int] = None,
     to_y: Optional[int] = None,
-    speed: int = 600
+    speed: int = 600,
 ) -> DragResult:
-    """拖拽操作。from_x/from_y: 起点坐标，to_x/to_y: 终点坐标，speed: 速度(可选)。"""
     if not all(v is not None for v in [from_x, from_y, to_x, to_y]):
-        return {
-            'success': False,
-            'error': '必须提供完整的坐标(from_x, from_y, to_x, to_y)',
-            'error_code': 'MISSING_PARAMS'
-        }
+        return error_result(
+            "MISSING_PARAMS",
+            "must provide from_x, from_y, to_x, to_y",
+            result={"from_x": from_x or 0, "from_y": from_y or 0, "to_x": to_x or 0, "to_y": to_y or 0},
+        )
 
     ui_ops = get_ui_operations()
-    return await asyncio.to_thread(ui_ops.drag, device_id, from_x, from_y, to_x, to_y, speed)
+    raw = await asyncio.to_thread(ui_ops.drag, device_id, from_x, from_y, to_x, to_y, speed)
+    return from_action_result(
+        raw,
+        default_code="DRAG_ERROR",
+        default_detail="drag failed",
+        default_result={"from_x": from_x, "from_y": from_y, "to_x": to_x, "to_y": to_y},
+    )

@@ -1,415 +1,281 @@
-"""
-构建部署工具
+﻿"""Build/deploy tools for HarmonyOS."""
 
-提供应用构建、安装、运行、卸载等功能。
-"""
 import asyncio
 import re
 import time
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
 
-from ..container import get_hdc
-from ..utils.wrappers.hvigor_wrapper import HvigorWrapper
-from ..types import BuildResult, InstallResult, RunAppResult, UninstallResult
-from .device_base import ToolBase
 from common.tools.registry import mcp_tool
 
-# 错误提取配置
-MAX_ERRORS = 15  # 最大返回错误数量
+from ..container import get_hdc
+from ..types import BuildResult, InstallResult, RunAppResult, UninstallResult
+from ..utils.wrappers.hvigor_wrapper import HvigorWrapper
+from .device_base import ToolBase
+from .response import error_result, from_action_result, mcp_response, ok_result
+
+MAX_ERRORS = 15
 
 
 @mcp_tool(category="build")
-@ToolBase.handle_tool_error('BUILD_ERROR', hap_path=None, duration=0)
+@mcp_response("build_app")
+@ToolBase.handle_tool_error("BUILD_ERROR", hap_path=None, duration=0)
 async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
-    """构建HarmonyOS应用，生成HAP包。project_path: 项目路径，build_mode: debug/release。"""
     start_time = time.time()
-
     hvigor = HvigorWrapper(project_path)
-    result = await asyncio.to_thread(hvigor.build_hap, build_mode=build_mode)
-    elapsed = time.time() - start_time
+    raw = await asyncio.to_thread(hvigor.build_hap, build_mode=build_mode)
+    elapsed = round(time.time() - start_time, 2)
 
-    response: BuildResult = {
-        'success': result['success'],
-        'hap_path': result.get('hap_path'),
-        'message': f"构建{'成功' if result['success'] else '失败'}，耗时: {ToolBase.format_duration(elapsed)}",
-        'duration': elapsed,
-        'errors': [],
-        'error_count': 0,
+    payload: dict = {
+        "hap_path": raw.get("hap_path"),
+        "message": f"build {'success' if raw.get('success') else 'failed'}, duration: {ToolBase.format_duration(elapsed)}",
+        "duration": elapsed,
+        "errors": [],
+        "error_count": 0,
     }
 
-    # 构建失败时提取错误信息
-    if not result['success']:
-        errors = _extract_build_errors(result)
-        response['errors'] = errors[:MAX_ERRORS]
-        response['error_count'] = len(errors)
-        detailed_error = _extract_detailed_error_output(result)
-        if detailed_error:
-            response['error'] = detailed_error
+    if raw.get("success", False):
+        return ok_result(payload)
 
-    return response
+    errors = _extract_build_errors(raw)
+    payload["errors"] = errors[:MAX_ERRORS]
+    payload["error_count"] = len(errors)
+    detail = _extract_detailed_error_output(raw) or "build failed"
+    return error_result(raw.get("error_code", "BUILD_FAILED"), detail, result=None)
 
 
 def _extract_build_errors(build_result: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    从本次构建进程输出提取结构化错误信息
-
-    Args:
-        build_result: hvigorw 构建结果（包含 stdout, stderr）
-
-    Returns:
-        结构化错误列表，每项包含 file, line, column, message, type
-    """
-    all_errors = []
-    seen_errors = set()  # 用于去重
-
-    # 1. 从 stdout 提取错误
-    stdout = build_result.get('stdout', '')
-    if stdout:
-        for error in _parse_errors_from_text(stdout, 'stdout'):
-            error_key = (error.get('file', ''), error.get('line', 0), error.get('message', '')[:50])
-            if error_key not in seen_errors:
-                seen_errors.add(error_key)
-                all_errors.append(error)
-
-    # 2. 从 stderr 提取错误
-    stderr = build_result.get('stderr', '')
-    if stderr:
-        for error in _parse_errors_from_text(stderr, 'stderr'):
-            error_key = (error.get('file', ''), error.get('line', 0), error.get('message', '')[:50])
-            if error_key not in seen_errors:
-                seen_errors.add(error_key)
-                all_errors.append(error)
-
+    all_errors: List[Dict[str, Any]] = []
+    seen = set()
+    for source in ("stdout", "stderr"):
+        text = build_result.get(source, "")
+        if not text:
+            continue
+        for err in _parse_errors_from_text(text, source):
+            key = (err.get("file", ""), err.get("line", 0), err.get("message", "")[:50])
+            if key in seen:
+                continue
+            seen.add(key)
+            all_errors.append(err)
     return all_errors
 
 
 def _parse_errors_from_text(text: str, source: str) -> List[Dict[str, Any]]:
-    """
-    从文本中解析结构化错误信息
+    errors: List[Dict[str, Any]] = []
+    cleaned = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    cleaned = re.sub(r"\n\s*At File:", " At File:", cleaned)
 
-    支持多种格式：
-    - ArkTS 编译器: Error Message: xxx At File: path:line:column
-    - ArkTS WARN/ERROR (多行): ArkTS:WARN File: path:line:column \\n message
-    - TypeScript: src/main/ets/pages/Index.ets(10,5): error TS2304: Cannot find name 'foo'.
-    - 通用: ERROR: src/main/ets/pages/Index.ets:10:5 - Error message
-    """
-    errors = []
-    seen = set()  # 去重
-
-    # 预处理：将多行错误合并为单行
-    # ArkTS 错误格式通常是：
-    # Error Message: xxx
-    # At File: path:line:column
-    text = re.sub(r'\n\s*At File:', ' At File:', text)
-
-    # 移除 ANSI 颜色码
-    text = re.sub(r'\x1b\[[0-9;]*m', '', text)
-
-    lines = text.split('\n')
-
-    # 错误模式匹配（按优先级排序）
     patterns = [
-        # ArkTS 编译器格式: Error Message: xxx At File: path:line:column
-        re.compile(
-            r'Error Message:\s*(.+?)\s*At File:\s*(.+?\.(?:ts|ets|js)):?(\d+):?(\d+)',
-            re.IGNORECASE
-        ),
-        # TypeScript/ArkTS 格式: file(line,col): error CODE: message
-        re.compile(
-            r'^(.+?\.(?:ts|ets|js))\((\d+),(\d+)\):\s*(?:error|ERROR)\s*(?:\w+)?\s*:\s*(.+)$'
-        ),
-        # 通用格式: ERROR: path:line:column - message
-        re.compile(
-            r'^(?:ERROR|Error)\s*[:：]?\s*(.+?\.(?:ts|ets|js|json5?)):(\d+)(?::(\d+))?\s*[-:]?\s*(.+)$'
-        ),
+        re.compile(r"Error Message:\s*(.+?)\s*At File:\s*(.+?\.(?:ts|ets|js)):?(\d+):?(\d+)", re.IGNORECASE),
+        re.compile(r"^(.+?\.(?:ts|ets|js))\((\d+),(\d+)\):\s*(?:error|ERROR)\s*(?:\w+)?\s*:\s*(.+)$"),
+        re.compile(r"^(?:ERROR|Error)\s*[:：]?\s*(.+?\.(?:ts|ets|js|json5?)):(\d+)(?::(\d+))?\s*[-:]?\s*(.+)$"),
     ]
 
-    # ArkTS ERROR 多行格式单独处理（忽略 WARN）
-    arkts_pattern = re.compile(
-        r'ArkTS:ERROR\s+File:\s*(.+?\.(?:ts|ets|js)):(\d+):(\d+)',
-        re.IGNORECASE
-    )
-
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
+    for line in cleaned.splitlines():
+        line = line.strip()
         if not line:
-            i += 1
             continue
-
-        # 先尝试匹配 ArkTS 多行格式
-        arkts_match = arkts_pattern.search(line)
-        if arkts_match:
-            file_path, line_num, col = arkts_match.groups()
-            # 查找下一行的消息
-            message = ''
-            if i + 1 < len(lines):
-                next_line = lines[i + 1].strip()
-                # 消息通常以单引号开头，或者不是另一个错误/警告
-                if next_line and not arkts_pattern.search(next_line):
-                    message = next_line.strip().strip("'\"")
-                    i += 1  # 跳过下一行
-
-            error_key = (file_path.strip(), line_num, message[:50] if message else '')
-            if error_key not in seen:
-                seen.add(error_key)
-                errors.append({
-                    'file': _normalize_path(file_path.strip()),
-                    'line': int(line_num) if line_num else 0,
-                    'column': int(col) if col else 0,
-                    'message': message,
-                    'type': _classify_error(message),
-                    'source': source
-                })
-            i += 1
-            continue
-
-        # 尝试匹配其他格式
-        matched = False
         for pattern in patterns:
             match = pattern.search(line)
-            if match:
-                groups = match.groups()
-
-                # 根据模式确定字段
-                if 'Error Message:' in line and 'At File:' in line:
-                    message, file_path, line_num, col = groups[0], groups[1], groups[2], groups[3]
-                elif len(groups) == 4:
-                    file_path, line_num, col, message = groups
-                elif len(groups) == 3:
-                    file_path, line_num, message = groups
-                    col = '1'
-                else:
-                    continue
-
-                error_key = (file_path.strip(), line_num, message[:50] if message else '')
-                if error_key not in seen:
-                    seen.add(error_key)
-                    errors.append({
-                        'file': _normalize_path(file_path.strip()),
-                        'line': int(line_num) if line_num else 0,
-                        'column': int(col) if col and col.isdigit() else 0,
-                        'message': message.strip() if message else '',
-                        'type': _classify_error(message.strip() if message else ''),
-                        'source': source
-                    })
-                matched = True
-                break
-
-        i += 1
+            if not match:
+                continue
+            groups = match.groups()
+            if len(groups) != 4:
+                continue
+            file_path, line_num, col, message = groups
+            errors.append(
+                {
+                    "file": _normalize_path(file_path.strip()),
+                    "line": int(line_num) if str(line_num).isdigit() else 0,
+                    "column": int(col) if str(col).isdigit() else 0,
+                    "message": (message or "").strip(),
+                    "type": _classify_error((message or "").strip()),
+                    "source": source,
+                }
+            )
+            break
 
     return errors
+
+
 def _extract_detailed_error_output(build_result: Dict[str, Any]) -> str:
-    """返回本次构建的原始详细失败输出。"""
-    stderr = (build_result.get('stderr') or '').strip()
-    stdout = (build_result.get('stdout') or '').strip()
+    stderr = (build_result.get("stderr") or "").strip()
+    stdout = (build_result.get("stdout") or "").strip()
     if stderr and stdout:
         return f"{stderr}\n{stdout}"
     return stderr or stdout
 
 
 def _normalize_path(path: str) -> str:
-    """标准化文件路径，使其相对于项目根目录"""
-    # 移除常见的路径前缀
-    prefixes = ['/entry/', '/build/', '/src/', '\\entry\\', '\\build\\', '\\src\\']
+    prefixes = ["/entry/", "/build/", "/src/", "\\entry\\", "\\build\\", "\\src\\"]
     for prefix in prefixes:
-        if prefix in path or prefix.replace('/', '\\') in path:
-            idx = max(path.find(prefix), path.find(prefix.replace('/', '\\')))
+        if prefix in path or prefix.replace("/", "\\") in path:
+            idx = max(path.find(prefix), path.find(prefix.replace("/", "\\")))
             if idx >= 0:
-                return path[idx + 1:]
-
-    # 如果是绝对路径，尝试提取相对部分
-    if path.startswith('/') or ':' in path[:3]:
-        parts = path.replace('\\', '/').split('/')
+                return path[idx + 1 :]
+    if path.startswith("/") or ":" in path[:3]:
+        parts = path.replace("\\", "/").split("/")
         for i, part in enumerate(parts):
-            if part in ['src', 'entry', 'build']:
-                return '/'.join(parts[i:])
-
+            if part in ["src", "entry", "build"]:
+                return "/".join(parts[i:])
     return path
 
 
 def _classify_error(message: str) -> str:
-    """根据错误消息分类错误类型"""
     message_lower = message.lower()
-
-    if any(kw in message_lower for kw in ['cannot find', 'not found', 'no such', 'does not exist']):
-        return 'missing'
-    elif any(kw in message_lower for kw in ['type', 'cannot be assigned', 'is not compatible']):
-        return 'type'
-    elif any(kw in message_lower for kw in ['syntax', 'unexpected', 'expected']):
-        return 'syntax'
-    elif any(kw in message_lower for kw in ['import', 'export', 'module']):
-        return 'module'
-    elif any(kw in message_lower for kw in ['permission', 'denied', 'access']):
-        return 'permission'
-    elif any(kw in message_lower for kw in ['config', 'profile', 'json', 'schema']):
-        return 'config'
-    else:
-        return 'compile'
-
-
-def _summarize_errors(errors: List[Dict[str, Any]]) -> str:
-    """生成错误摘要"""
-    if not errors:
-        return ''
-
-    # 按类型分组
-    type_counts = {}
-    for e in errors:
-        t = e.get('type', 'unknown')
-        type_counts[t] = type_counts.get(t, 0) + 1
-
-    # 生成摘要
-    parts = []
-    if type_counts.get('type'):
-        parts.append(f"{type_counts['type']}个类型错误")
-    if type_counts.get('syntax'):
-        parts.append(f"{type_counts['syntax']}个语法错误")
-    if type_counts.get('missing'):
-        parts.append(f"{type_counts['missing']}个缺失引用")
-    if type_counts.get('module'):
-        parts.append(f"{type_counts['module']}个模块错误")
-
-    other = sum(v for k, v in type_counts.items() if k not in ['type', 'syntax', 'missing', 'module'])
-    if other:
-        parts.append(f"{other}个其他错误")
-
-    summary = f"构建失败，共{len(errors)}个错误"
-    if parts:
-        summary += f"：{', '.join(parts)}"
-
-    return summary
+    if any(kw in message_lower for kw in ["cannot find", "not found", "no such", "does not exist"]):
+        return "missing"
+    if any(kw in message_lower for kw in ["type", "cannot be assigned", "is not compatible"]):
+        return "type"
+    if any(kw in message_lower for kw in ["syntax", "unexpected", "expected"]):
+        return "syntax"
+    if any(kw in message_lower for kw in ["import", "export", "module"]):
+        return "module"
+    if any(kw in message_lower for kw in ["permission", "denied", "access"]):
+        return "permission"
+    if any(kw in message_lower for kw in ["config", "profile", "json", "schema"]):
+        return "config"
+    return "compile"
 
 
 @mcp_tool(category="build")
-@ToolBase.handle_tool_error('INSTALL_ERROR', hap_path='')
-@ToolBase.with_device(hap_path='')
+@mcp_response("install_app")
+@ToolBase.handle_tool_error("INSTALL_ERROR", hap_path="")
+@ToolBase.with_device(hap_path="")
 async def install_app(hap_path: str, device_id: Optional[str] = None) -> InstallResult:
-    """安装HAP包到设备。hap_path: HAP包路径，device_id: 设备ID（可选）。"""
     hdc = get_hdc()
-    success = await asyncio.to_thread(hdc.install_app, device_id, hap_path)
-
-    return {
-        'success': success,
-        'device_id': device_id,
-        'hap_path': hap_path
-    }
+    raw = await asyncio.to_thread(hdc.install_app, device_id, hap_path)
+    if isinstance(raw, bool):
+        raw = {"success": raw}
+    return from_action_result(
+        raw,
+        default_code="INSTALL_FAILED",
+        default_detail="install app failed",
+        default_result={"device_id": device_id, "hap_path": hap_path},
+    )
 
 
 @mcp_tool(category="build")
-@ToolBase.handle_tool_error('RUN_APP_ERROR', bundle_name='', ability_name='', module_name='entry', auto_detected=False, command_success=False, window_found=False, window=None)
-@ToolBase.with_device(bundle_name='', ability_name='', module_name='entry', auto_detected=False, command_success=False, window_found=False, window=None)
+@mcp_response("run_app")
+@ToolBase.handle_tool_error(
+    "RUN_APP_ERROR",
+    bundle_name="",
+    ability_name="",
+    module_name="entry",
+    auto_detected=False,
+    command_success=False,
+    window_found=False,
+    window=None,
+)
+@ToolBase.with_device(
+    bundle_name="",
+    ability_name="",
+    module_name="entry",
+    auto_detected=False,
+    command_success=False,
+    window_found=False,
+    window=None,
+)
 async def run_app(
     bundle_name: str,
     device_id: Optional[str] = None,
     ability_name: Optional[str] = None,
     module_name: Optional[str] = None,
-    auto_detect: bool = True
+    auto_detect: bool = True,
 ) -> RunAppResult:
-    """启动应用。bundle_name: 包名，ability_name/module_name: 入口（可选，默认自动检测）。"""
     hdc = get_hdc()
 
-    # 解析 Ability 信息
     final_ability, final_module, auto_detected = await asyncio.to_thread(
-        _resolve_ability, hdc, device_id, bundle_name, ability_name, module_name, auto_detect
+        _resolve_ability,
+        hdc,
+        device_id,
+        bundle_name,
+        ability_name,
+        module_name,
+        auto_detect,
     )
 
     start_result = await asyncio.to_thread(hdc.start_app, device_id, bundle_name, final_ability, final_module)
 
-    result = {
-        'success': start_result['success'],
-        'device_id': device_id,
-        'bundle_name': bundle_name,
-        'ability_name': final_ability or '',
-        'module_name': final_module or 'entry',
-        'auto_detected': auto_detected,
-        'command_success': start_result.get('command_success', False),
-        'window_found': start_result.get('window_found', False),
-        'window': start_result.get('window'),
+    payload = {
+        "device_id": device_id,
+        "bundle_name": bundle_name,
+        "ability_name": final_ability or "",
+        "module_name": final_module or "entry",
+        "auto_detected": auto_detected,
+        "command_success": start_result.get("command_success", False),
+        "window_found": start_result.get("window_found", False),
+        "window": start_result.get("window"),
     }
-    if start_result.get('error'):
-        result['error'] = start_result['error']
-    return result
+    return from_action_result(
+        start_result,
+        default_code="RUN_APP_FAILED",
+        default_detail="run app failed",
+        default_result=payload,
+    )
 
 
-def _resolve_ability(hdc, device_id: str, bundle_name: str,
-                     ability_name: str, module_name: str, auto_detect: bool):
-    """
-    解析 Ability 信息
-    
-    优化的自动检测逻辑：
-    1. 优先使用 get_main_ability 获取推荐的主入口
-    2. 如果失败，尝试从 abilities 列表中选择第一个 page 类型的可见 Ability
-    3. 最后使用默认值 EntryAbility/entry
-    
-    Args:
-        hdc: HdcWrapper 实例
-        device_id: 设备ID
-        bundle_name: 包名
-        ability_name: 指定的 Ability 名称
-        module_name: 指定的模块名称
-        auto_detect: 是否自动检测
-        
-    Returns:
-        (ability_name, module_name, auto_detected)
-    """
+def _resolve_ability(
+    hdc,
+    device_id: str,
+    bundle_name: str,
+    ability_name: str,
+    module_name: str,
+    auto_detect: bool,
+):
     final_ability = ability_name
     final_module = module_name
     auto_detected = False
 
     if not final_ability and auto_detect:
-        logger.debug(f"未指定Ability,尝试自动检测包 {bundle_name} 的主Ability")
-        
-        # 1. 优先使用 get_main_ability
         result = hdc.get_main_ability(device_id, bundle_name)
-        if result['success'] and result.get('ability_name'):
-            final_ability = result['ability_name']
-            final_module = final_module or result['module_name']
+        candidates = result.get("candidates", []) if isinstance(result, dict) else []
+        idx = result.get("recommended", -1) if isinstance(result, dict) else -1
+
+        if result.get("success", False) and candidates and 0 <= idx < len(candidates):
+            chosen = candidates[idx]
+            final_ability = chosen.get("ability_name", "")
+            final_module = final_module or chosen.get("module_name")
             auto_detected = True
-            logger.debug(f"自动检测到主Ability: {final_ability}, module: {final_module}")
+            logger.debug(f"auto detected main ability: {final_ability}, module: {final_module}")
         else:
-            # 2. 尝试从 abilities 列表中选择备选
-            logger.debug(f"get_main_ability 未找到，尝试从 abilities 列表选择")
             pkg_info = hdc.get_package_info(device_id, bundle_name)
-            if pkg_info.get('success'):
-                abilities = pkg_info.get('abilities', [])
-                # 优先选择 page 类型且 visible 的 Ability
+            if pkg_info.get("success"):
+                abilities = pkg_info.get("abilities", [])
                 for ability in abilities:
-                    if ability.get('type') == 'page' and ability.get('visible', False):
-                        final_ability = ability.get('name')
-                        final_module = final_module or ability.get('module', 'entry')
+                    if ability.get("type") == "page" and ability.get("visible", True):
+                        final_ability = ability.get("name")
+                        final_module = final_module or ability.get("module", "entry")
                         auto_detected = True
-                        logger.debug(f"从abilities列表选择: {final_ability}, module: {final_module}")
                         break
-                # 如果没有，选择第一个 page 类型
                 if not final_ability:
                     for ability in abilities:
-                        if ability.get('type') == 'page':
-                            final_ability = ability.get('name')
-                            final_module = final_module or ability.get('module', 'entry')
+                        if ability.get("type") == "page":
+                            final_ability = ability.get("name")
+                            final_module = final_module or ability.get("module", "entry")
                             auto_detected = True
-                            logger.debug(f"选择第一个page类型: {final_ability}, module: {final_module}")
                             break
 
-    # 使用默认值
-    return (
-        final_ability or "EntryAbility",
-        final_module or "entry",
-        auto_detected
-    )
+    if not final_ability:
+        final_ability = "MainAbility"
+        auto_detected = True if auto_detect else auto_detected
+
+    return (final_ability, final_module or "entry", auto_detected)
 
 
 @mcp_tool(category="build")
-@ToolBase.handle_tool_error('UNINSTALL_ERROR', bundle_name='')
-@ToolBase.with_device(bundle_name='')
+@mcp_response("uninstall_app")
+@ToolBase.handle_tool_error("UNINSTALL_ERROR", bundle_name="")
+@ToolBase.with_device(bundle_name="")
 async def uninstall_app(bundle_name: str, device_id: Optional[str] = None) -> UninstallResult:
-    """卸载应用。bundle_name: 应用包名，device_id: 设备ID（可选）。"""
     hdc = get_hdc()
-    success = await asyncio.to_thread(hdc.uninstall_app, device_id, bundle_name)
-
-    return {
-        'success': success,
-        'device_id': device_id,
-        'bundle_name': bundle_name
-    }
+    raw = await asyncio.to_thread(hdc.uninstall_app, device_id, bundle_name)
+    if isinstance(raw, bool):
+        raw = {"success": raw}
+    return from_action_result(
+        raw,
+        default_code="UNINSTALL_FAILED",
+        default_detail="uninstall app failed",
+        default_result={"device_id": device_id, "bundle_name": bundle_name},
+    )

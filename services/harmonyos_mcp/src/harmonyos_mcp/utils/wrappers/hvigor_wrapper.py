@@ -9,6 +9,7 @@ hvigor构建工具封装
 import subprocess
 import os
 import platform
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from loguru import logger
@@ -42,7 +43,7 @@ class HvigorWrapper:
         self.hvigorw_js = self._find_hvigor_wrapper()
         self.sdk_root = self._resolve_sdk_root()
         self.java_home = self._find_java_home()
-        self.hvigor_user_home = self.project_path / ".hvigor" / "mcp-user-home"
+        self.hvigor_user_home = self._resolve_hvigor_user_home()
 
         # 验证工具存在
         if not self.node_exe.exists():
@@ -63,6 +64,41 @@ class HvigorWrapper:
         if self.java_home:
             logger.info(f"  JAVA_HOME: {self.java_home}")
         logger.info(f"  HVIGOR_USER_HOME: {self.hvigor_user_home}")
+
+    @staticmethod
+    def _is_writable_dir(path: Path) -> bool:
+        """Check whether a directory is writable by creating a probe file."""
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            probe = path / ".write_probe"
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("ok")
+            probe.unlink(missing_ok=True)
+            return True
+        except Exception:
+            return False
+
+    def _resolve_hvigor_user_home(self) -> Path:
+        """
+        Pick a writable HVIGOR_USER_HOME.
+
+        Preferred location is project-local `.hvigor/mcp-user-home`.
+        Fallback uses system temp directory when project path is not writable.
+        """
+        preferred = self.project_path / ".hvigor" / "mcp-user-home"
+        if self._is_writable_dir(preferred):
+            return preferred
+
+        fallback = Path(tempfile.gettempdir()) / "harmonyos_mcp" / "hvigor_home"
+        if self._is_writable_dir(fallback):
+            logger.warning(
+                f"项目目录不可写，HVIGOR_USER_HOME 回退到临时目录: {fallback}"
+            )
+            return fallback
+
+        raise PermissionError(
+            f"HVIGOR_USER_HOME 不可写，项目路径与临时目录均不可用: {preferred}, {fallback}"
+        )
 
     def _find_deveco_studio(self, custom_path: Optional[str] = None) -> Optional[Path]:
         """
@@ -118,17 +154,23 @@ class HvigorWrapper:
         if Config.NODE_PATH and Path(Config.NODE_PATH).exists():
             return Path(Config.NODE_PATH)
 
-        node_name = "node.exe" if platform.system() == "Windows" else "node"
+        # Keep discovery platform-agnostic. Test fixtures and mixed host layouts
+        # can provide macOS/Linux style `node` paths even on Windows runners.
+        node_names = ["node", "node.exe"]
+        if platform.system() == "Windows":
+            node_names = ["node.exe", "node"]
         candidates = [
-            self.deveco_path / "tools" / "node" / node_name,
-            self.deveco_path / "tools" / "node" / "bin" / node_name,
-            self.deveco_path / "Contents" / "tools" / "node" / node_name,
-            self.deveco_path / "Contents" / "tools" / "node" / "bin" / node_name,
+            self.deveco_path / "tools" / "node",
+            self.deveco_path / "tools" / "node" / "bin",
+            self.deveco_path / "Contents" / "tools" / "node",
+            self.deveco_path / "Contents" / "tools" / "node" / "bin",
         ]
-        for candidate in candidates:
-            if candidate.exists():
-                return candidate
-        return candidates[0]
+        for base in candidates:
+            for node_name in node_names:
+                candidate = base / node_name
+                if candidate.exists():
+                    return candidate
+        return candidates[0] / node_names[0]
 
     def _find_hvigor_wrapper(self) -> Path:
         if Config.HVIGOR_PATH and Path(Config.HVIGOR_PATH).exists():
@@ -173,13 +215,16 @@ class HvigorWrapper:
         return candidates[0]
 
     def _find_java_home(self) -> Optional[Path]:
-        java_exe = "java.exe" if platform.system() == "Windows" else "java"
+        java_names = ["java", "java.exe"]
+        if platform.system() == "Windows":
+            java_names = ["java.exe", "java"]
 
         env_java_home = os.getenv("JAVA_HOME")
         if env_java_home:
             candidate = Path(env_java_home).expanduser()
-            if (candidate / "bin" / java_exe).exists():
-                return candidate
+            for java_exe in java_names:
+                if (candidate / "bin" / java_exe).exists():
+                    return candidate
 
         candidates = [
             # Windows/Linux: JBR directly under DevEco
@@ -191,8 +236,9 @@ class HvigorWrapper:
             self.deveco_path / "Contents" / "jbr" / "Contents" / "Home",
         ]
         for candidate in candidates:
-            if (candidate / "bin" / java_exe).exists():
-                return candidate
+            for java_exe in java_names:
+                if (candidate / "bin" / java_exe).exists():
+                    return candidate
         return None
 
     def _ensure_local_properties(self):

@@ -524,7 +524,7 @@ class UiTestWrapper:
         Returns:
             查找结果，包含匹配的元素列表
         """
-        from .uitree_parser import UITreeParser
+        from ..uitree_parser import UITreeParser
 
         # 确定窗口ID
         target_window_id = window_id

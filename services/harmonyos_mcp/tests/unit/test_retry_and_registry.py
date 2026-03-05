@@ -257,7 +257,7 @@ class TestRealToolRegistration:
         # 导入工具模块触发注册
         from harmonyos_mcp.tools import general, build, ui, ui_tree  # noqa: F401
         from harmonyos_mcp.tools.log import query as log_query  # noqa: F401
-        from harmonyos_mcp.tools.registry import get_registered_tools, get_tool_summary
+        from common.tools.registry import get_registered_tools, get_tool_summary
 
         tools = get_registered_tools()
         summary = get_tool_summary()
@@ -271,7 +271,7 @@ class TestRealToolRegistration:
         """验证各分类工具数量正确"""
         from harmonyos_mcp.tools import general, build, ui, ui_tree  # noqa: F401
         from harmonyos_mcp.tools.log import query as log_query  # noqa: F401
-        from harmonyos_mcp.tools.registry import get_tool_summary
+        from common.tools.registry import get_tool_summary
 
         summary = get_tool_summary()
         expected = {

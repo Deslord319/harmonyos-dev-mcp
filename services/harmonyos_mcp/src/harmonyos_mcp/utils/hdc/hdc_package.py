@@ -472,10 +472,6 @@ class HdcPackage:
             'entry_module_name': entry_module_name,
             'candidates': candidates,
             'recommended': recommended,
-            # 向后兼容：提供推荐的ability信息
-            'ability_name': candidates[recommended]['ability_name'] if recommended >= 0 else '',
-            'module_name': candidates[recommended]['module_name'] if recommended >= 0 else 'entry',
-            'is_launcher': candidates[recommended]['is_launcher'] if recommended >= 0 else False
         }
 
     def _get_ability_source(self, ability: Dict[str, Any], is_entry_module: bool, is_entry_main_ability: bool = False) -> str:

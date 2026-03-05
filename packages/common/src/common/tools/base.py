@@ -38,15 +38,17 @@ class ToolBase:
         """
         logger.error(f"操作失败: {error}")
 
+        code = error_code or getattr(error, "code", "UNKNOWN_ERROR")
         result = {
-            'success': False,
-            'error': str(error)
+            "tool": "unknown",
+            "ok": False,
+            "result": {},
+            "error": {
+                "code": code,
+                "detail": str(error),
+            },
+            "meta": {},
         }
-
-        if error_code:
-            result['error_code'] = error_code
-        elif hasattr(error, 'code'):
-            result['error_code'] = error.code
 
         return result
 
@@ -179,8 +181,10 @@ class ToolBase:
                         return await func(*args, **kwargs)
                     except Exception as e:
                         error_result = ToolBase.wrap_error(e, error_code)
+                        error_result["tool"] = func.__name__
                         for k, v in default_fields.items():
-                            error_result.setdefault(k, v)
+                            error_result.setdefault("result", {})
+                            error_result["result"].setdefault(k, v)
                         return error_result
                 return async_wrapper
             else:
@@ -190,8 +194,10 @@ class ToolBase:
                         return func(*args, **kwargs)
                     except Exception as e:
                         error_result = ToolBase.wrap_error(e, error_code)
+                        error_result["tool"] = func.__name__
                         for k, v in default_fields.items():
-                            error_result.setdefault(k, v)
+                            error_result.setdefault("result", {})
+                            error_result["result"].setdefault(k, v)
                         return error_result
                 return wrapper
         return decorator

@@ -13,11 +13,23 @@ class ToolBase(_CommonToolBase):
             hdc = get_hdc()
             devices = hdc.list_devices()
             if not devices:
-                return False, {'success': False, 'error': 'No device found', 'error_code': 'DEVICE_NOT_FOUND'}
+                return False, {
+                    "tool": "with_device",
+                    "ok": False,
+                    "result": {},
+                    "error": {"code": "DEVICE_NOT_FOUND", "detail": "No device found"},
+                    "meta": {},
+                }
             return True, devices[0]
         except Exception as e:
             logger.error(f'Failed to get device list: {e}')
-            return False, {'success': False, 'error': str(e), 'error_code': 'DEVICE_LIST_ERROR'}
+            return False, {
+                "tool": "with_device",
+                "ok": False,
+                "result": {},
+                "error": {"code": "DEVICE_LIST_ERROR", "detail": str(e)},
+                "meta": {},
+            }
 
     @staticmethod
     def with_device(**error_fields):
@@ -29,7 +41,8 @@ class ToolBase(_CommonToolBase):
                     ok, device = ToolBase.get_device_id(device_id)
                     if not ok:
                         for k, v in error_fields.items():
-                            device.setdefault(k, v)
+                            device.setdefault("result", {})
+                            device["result"].setdefault(k, v)
                         return device
                     kwargs['device_id'] = device
                     return await func(*args, **kwargs)
@@ -41,9 +54,11 @@ class ToolBase(_CommonToolBase):
                     ok, device = ToolBase.get_device_id(device_id)
                     if not ok:
                         for k, v in error_fields.items():
-                            device.setdefault(k, v)
+                            device.setdefault("result", {})
+                            device["result"].setdefault(k, v)
                         return device
                     kwargs['device_id'] = device
                     return func(*args, **kwargs)
                 return wrapper
         return decorator
+
