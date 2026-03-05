@@ -1,141 +1,139 @@
-# query_package - 统一包查询工具
+# query_package
 
-## 概述
+统一包查询工具，支持：
+- 列包：`info_type=list`
+- 查能力：`info_type=abilities`
+- 查主入口：`info_type=main_ability`
+- 查权限：`info_type=permissions`
 
-`query_package` 实现统一的包查询功能，支持：
-
-- 列出设备上所有已安装的应用包
-- 获取指定包的所有 Abilities
-- 获取指定包的主入口 Ability
-- 获取指定包的权限列表
-
----
-
-## 参数说明
+## 参数
 
 | 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `device_id` | string | null | 设备ID，为空时使用第一个设备 |
-| `bundle_name` | string | null | 应用包名（指定后查询该包详情） |
-| `keyword` | string | null | 关键字过滤（仅 list 模式生效） |
-| `info_type` | string | "list" | 查询类型：list/abilities/main_ability/permissions |
+|---|---|---|---|
+| `device_id` | string | `null` | 设备 ID，空时自动选第一台在线设备 |
+| `bundle_name` | string | `null` | 应用包名 |
+| `keyword` | string | `null` | 仅在 `list` 模式下生效，用于过滤包名 |
+| `info_type` | string | `list` | `list/abilities/main_ability/permissions` |
 
-### info_type 说明
+规则：
+- 当 `info_type` 为 `abilities/main_ability/permissions` 时，必须传 `bundle_name`。
+- 当传入 `bundle_name` 且 `info_type=list` 时，会自动切到 `abilities`。
 
-| 值 | 说明 |
-|----|------|
-| `list` | 列出所有包（默认） |
-| `abilities` | 获取指定包的所有 Abilities |
-| `main_ability` | 获取指定包的主入口 Ability |
-| `permissions` | 获取指定包的权限列表 |
+## 返回结构
 
----
-
-## 使用示例
-
-### 列出所有已安装的应用
-
-```python
-query_package()
-```
-
-返回：
-```json
-{
-  "success": true,
-  "device_id": "xxx",
-  "packages": [
-    {"bundle_name": "com.example.app1", "label": "应用1"},
-    {"bundle_name": "com.example.app2", "label": "应用2"}
-  ],
-  "total": 2
-}
-```
-
-### 根据关键字过滤包
-
-```python
-query_package(keyword="camera")
-```
-
-### 获取指定包的所有 Abilities
-
-```python
-query_package(bundle_name="com.example.myapp", info_type="abilities")
-```
-
-### 获取指定包的主 Ability
-
-```python
-query_package(bundle_name="com.example.myapp", info_type="main_ability")
-```
-
-### 获取指定包的权限列表
-
-```python
-query_package(bundle_name="com.example.myapp", info_type="permissions")
-```
-
----
-
-## 返回结果结构
-
-### list 模式
+工具外层为 MCP 标准结构，业务数据在 `structuredContent`：
 
 ```json
 {
-  "success": true,
-  "device_id": "xxx",
-  "packages": [
-    {
-      "bundle_name": "com.example.app",
-      "label": "应用名称",
-      "version": "1.0.0"
-    }
-  ],
-  "total": 1
+  "tool": "query_package",
+  "ok": true,
+  "result": {},
+  "error": null,
+  "meta": {}
 }
 ```
 
-### abilities 模式
+失败时：
 
 ```json
 {
-  "success": true,
-  "bundle_name": "com.example.app",
-  "abilities": [
-    {
-      "name": "EntryAbility",
-      "type": "page",
-      "uri": "ability://com.example.app/entry"
-    }
-  ]
+  "tool": "query_package",
+  "ok": false,
+  "result": {},
+  "error": {
+    "code": "MISSING_BUNDLE_NAME",
+    "detail": "info_type=\"main_ability\" requires bundle_name"
+  },
+  "meta": {}
 }
 ```
 
-### main_ability 模式
+`error` 仅包含 `code/detail`，不再包含历史字段。
+
+## 结果示例
+
+### 1. `info_type=list`
 
 ```json
 {
-  "success": true,
-  "bundle_name": "com.example.app",
-  "main_ability": {
-    "name": "EntryAbility",
-    "type": "page",
-    "uri": "ability://com.example.app/entry"
-  }
+  "tool": "query_package",
+  "ok": true,
+  "result": {
+    "device_id": "3QC0124C11000711",
+    "info_type": "list",
+    "packages": ["com.example.myapplication"],
+    "count": 1,
+    "keyword": ""
+  },
+  "error": null
 }
 ```
 
-### permissions 模式
+### 2. `info_type=abilities`
 
 ```json
 {
-  "success": true,
-  "bundle_name": "com.example.app",
-  "permissions": [
-    "ohos.permission.INTERNET",
-    "ohos.permission.CAMERA"
-  ]
+  "tool": "query_package",
+  "ok": true,
+  "result": {
+    "device_id": "3QC0124C11000711",
+    "info_type": "abilities",
+    "bundle_name": "com.example.myapplication",
+    "abilities": [
+      {"name": "EntryAbility", "module": "entry", "type": "page"}
+    ],
+    "modules": ["entry"],
+    "main_ability": {"name": "EntryAbility", "module": "entry", "type": "page"},
+    "ability_count": 1
+  },
+  "error": null
 }
 ```
+
+### 3. `info_type=main_ability`
+
+```json
+{
+  "tool": "query_package",
+  "ok": true,
+  "result": {
+    "device_id": "3QC0124C11000711",
+    "info_type": "main_ability",
+    "bundle_name": "com.example.myapplication",
+    "ability_name": "EntryAbility",
+    "module_name": "entry",
+    "candidates": [
+      {
+        "ability_name": "EntryAbility",
+        "module_name": "entry",
+        "is_entry_module": true,
+        "is_entry_main_ability": true,
+        "is_launcher": true,
+        "source": "entryModule.mainAbility, action.system.home",
+        "visible": true,
+        "type": "page"
+      }
+    ],
+    "recommended": 0
+  },
+  "error": null
+}
+```
+
+### 4. `info_type=permissions`
+
+```json
+{
+  "tool": "query_package",
+  "ok": true,
+  "result": {
+    "device_id": "3QC0124C11000711",
+    "info_type": "permissions",
+    "bundle_name": "com.example.myapplication",
+    "requested_permissions": ["ohos.permission.INTERNET"],
+    "permission_count": 1
+  },
+  "error": null
+}
+```
+
