@@ -11,8 +11,8 @@
 - query: 主查询入口
 """
 
-from .parser import LogParser, LogEntry, FilterStats
+from .parser import LogParser, LogEntry
 from .crash_parser import CrashParser, CrashInfo
 from .query import logs_query
 
-__all__ = ['LogParser', 'LogEntry', 'FilterStats', 'CrashParser', 'CrashInfo', 'logs_query']
+__all__ = ['LogParser', 'LogEntry', 'CrashParser', 'CrashInfo', 'logs_query']

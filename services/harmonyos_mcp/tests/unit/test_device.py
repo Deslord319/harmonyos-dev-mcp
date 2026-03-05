@@ -53,7 +53,7 @@ class TestLogsQuery:
 
         assert sc["ok"] is True
         assert sc["result"]["source"] == "direct"
-        assert sc["result"]["total_lines"] == 2
+        assert len(sc["result"]["findings"]) == 1
 
     @pytest.mark.asyncio
     async def test_level_filter(self, mock_hdc: MagicMock, unwrap_result):
@@ -67,7 +67,7 @@ class TestLogsQuery:
         sc = unwrap_result(await logs_query(logs=test_logs, level="E"))
 
         assert sc["ok"] is True
-        assert sc["result"]["total_lines"] == 1
+        assert len(sc["result"]["findings"]) == 1
 
     @pytest.mark.asyncio
     async def test_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result):

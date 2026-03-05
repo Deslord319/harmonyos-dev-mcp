@@ -244,7 +244,6 @@ class ListWindowsResult(DeviceResult):
 # ============================================================================
 
 LogLevel = Literal['D', 'I', 'W', 'E', 'F']
-AnalysisType = Literal['summary', 'custom']
 
 
 class LogsFilterConfig(TypedDict, total=False):
@@ -261,21 +260,28 @@ class LogsFilterConfig(TypedDict, total=False):
     time_range: Optional[dict]
 
 
+class Finding(TypedDict, total=False):
+    """Structured error/suspicious finding from logs."""
+    type: str
+    severity: int
+    timestamp: Optional[str]
+    level: Optional[str]
+    tag: Optional[str]
+    pid: Optional[int]
+    message: str
+    raw_line: str
+    error_keywords: List[str]
+    suspicious_keywords: List[str]
+
+
 class LogsQueryResult(BaseResult, total=False):
     """logs_query 返回类型（统一日志查询结果）"""
     device_id: str
     source: str                          # "direct" | "file" | "realtime_buffer" | "persist_file"
-    logs: List[str]
-    total_lines: int
-    truncated: bool
+    findings: List[Finding]
     filters_applied: LogsFilterConfig
-    analysis_type: str
-    analysis: dict
-    total_entries_analyzed: int
     # 保存模式字段
     saved_path: str
-    file_size: int
-    file_size_human: str
     # 历史文件模式字段
     dict_used: bool
     files_count: int
