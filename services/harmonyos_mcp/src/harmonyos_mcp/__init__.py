@@ -4,7 +4,7 @@ HarmonyOS MCP Server
 AI-assisted HarmonyOS development tools via Model Context Protocol.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.6.0"
 __author__ = "HarmonyOS MCP Team"
 
 from .server import mcp, main

@@ -665,7 +665,7 @@ wheels = [
 
 [[package]]
 name = "harmonyos-compile-mcp"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "services/harmonyos_compile_mcp" }
 dependencies = [
     { name = "fastmcp" },
@@ -684,7 +684,7 @@ requires-dist = [
 
 [[package]]
 name = "harmonyos-mcp"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "services/harmonyos_mcp" }
 dependencies = [
     { name = "fastmcp" },
@@ -709,7 +709,7 @@ requires-dist = [
 
 [[package]]
 name = "harmonyos-mcp-common"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "packages/common" }
 dependencies = [
     { name = "fastmcp" },
@@ -1050,8 +1050,12 @@ wheels = [
 
 [[package]]
 name = "mcp-ho-dev-workspace"
-version = "0.0.0"
+version = "0.6.0"
 source = { virtual = "." }
+dependencies = [
+    { name = "harmonyos-compile-mcp" },
+    { name = "harmonyos-mcp" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1064,6 +1068,10 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "harmonyos-compile-mcp", editable = "services/harmonyos_compile_mcp" },
+    { name = "harmonyos-mcp", editable = "services/harmonyos_mcp" },
+]
 
 [package.metadata.requires-dev]
 dev = [

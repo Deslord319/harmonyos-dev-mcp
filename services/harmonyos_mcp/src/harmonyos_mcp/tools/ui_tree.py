@@ -12,6 +12,16 @@ from .device_base import ToolBase
 from .response import error_result, from_action_result, mcp_response, ok_result
 
 
+def _rect_to_bounds(rect: Optional[dict]) -> dict:
+    if not isinstance(rect, dict):
+        return {"left": 0, "top": 0, "right": 0, "bottom": 0}
+    x = int(rect.get("x", 0))
+    y = int(rect.get("y", 0))
+    w = int(rect.get("w", 0))
+    h = int(rect.get("h", 0))
+    return {"left": x, "top": y, "right": x + w, "bottom": y + h}
+
+
 @mcp_tool(category="ui_tree")
 @mcp_response("get_ui_tree")
 @ToolBase.handle_tool_error("GET_UI_TREE_ERROR", window_id=0, ui_tree={}, node_count=0)
@@ -42,7 +52,13 @@ async def get_ui_tree(
                 default_detail="failed to list windows",
                 default_result={"windows": windows},
             )
-            if not window_check.get("ok", False) or not windows:
+            if not window_check.get("ok", False):
+                return error_result(
+                    window_check.get("error", {}).get("code", "LIST_WINDOWS_ERROR"),
+                    window_check.get("error", {}).get("detail", "failed to list windows"),
+                    result={"device_id": device_id, "window_id": 0, "ui_tree": {}, "node_count": 0},
+                )
+            if not windows:
                 return error_result(
                     "NO_WINDOWS",
                     "no window found",
@@ -92,9 +108,13 @@ async def list_windows(device_id: Optional[str] = None) -> ListWindowsResult:
     raw = await asyncio.to_thread(hdc.get_window_list, device_id)
     windows = raw.get("windows", []) if isinstance(raw, dict) else []
     for w in windows:
-        w.setdefault("bundle_name", "")
+        bundle_name = w.get("bundle_name")
+        if not isinstance(bundle_name, str):
+            bundle_name = ""
+        w["bundle_name"] = bundle_name
+        w["bundle_name_resolved"] = bool(bundle_name)
         w.setdefault("is_visible", False)
-        w.setdefault("bounds", {"left": 0, "top": 0, "right": 0, "bottom": 0})
+        w["bounds"] = _rect_to_bounds(w.get("rect"))
 
     return from_action_result(
         raw,

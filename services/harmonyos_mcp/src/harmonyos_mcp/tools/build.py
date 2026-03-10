@@ -42,7 +42,7 @@ async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult
     payload["errors"] = errors[:MAX_ERRORS]
     payload["error_count"] = len(errors)
     detail = _extract_detailed_error_output(raw) or "build failed"
-    return error_result(raw.get("error_code", "BUILD_FAILED"), detail, result=None)
+    return error_result(raw.get("error_code", "BUILD_FAILED"), detail, result=payload)
 
 
 def _extract_build_errors(build_result: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -208,6 +208,9 @@ async def run_app(
         "window_found": start_result.get("window_found", False),
         "window": start_result.get("window"),
     }
+    if start_result.get("command_success") and start_result.get("window_found") is False:
+        start_result = dict(start_result)
+        start_result["error"] = "app launch command succeeded, but window verification did not pass"
     return from_action_result(
         start_result,
         default_code="RUN_APP_FAILED",

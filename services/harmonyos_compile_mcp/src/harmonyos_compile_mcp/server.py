@@ -1,25 +1,21 @@
-"""
-HarmonyOS MCP Server - 编译工具主入口
-"""
-from loguru import logger
+"""HarmonyOS compile MCP server entry point."""
 
 from common.server.base import create_server, run_server
+
 from .config import Config
+from .tools import compile_tools  # noqa: F401
 
 
-def _setup_logger():
+def _setup_logger() -> None:
     from .utils.logger import setup_logger
+
     setup_logger()
 
 
-# 导入工具模块触发注册
-from .tools import compile_tools
-
-# 创建服务器
 mcp = create_server("harmonyos-compile-tools")
 
 
-def main():
+def main() -> None:
     run_server(
         mcp,
         config_class=Config,

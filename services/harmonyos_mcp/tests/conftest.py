@@ -31,6 +31,7 @@ def reset_container():
 
 @pytest.fixture
 def mock_hdc() -> Generator[MagicMock, None, None]:
+    import harmonyos_mcp  # noqa: F401
     from harmonyos_mcp.utils.hdc import HdcWrapper
     from harmonyos_mcp.container import container
     import harmonyos_mcp.container as container_mod
@@ -77,7 +78,14 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
     }
     mock.get_window_list.return_value = {
         "success": True,
-        "windows": [{"window_id": 1, "bundle_name": "com.example.app", "is_visible": True}],
+        "windows": [
+            {
+                "window_id": 1,
+                "bundle_name": "com.example.app",
+                "is_visible": True,
+                "rect": {"x": 10, "y": 20, "w": 300, "h": 400},
+            }
+        ],
     }
     mock.get_ui_tree_raw.return_value = {"success": True, "ui_tree": {"type": "Root", "children": []}}
     mock.get_realtime_logs.return_value = "01-31 10:00:00.123  1234  1234 I MyTag: Test log"
@@ -112,15 +120,16 @@ def no_device_mock(mock_hdc: MagicMock) -> MagicMock:
 
 @pytest.fixture
 def mock_ui_operations() -> Generator[MagicMock, None, None]:
+    import harmonyos_mcp  # noqa: F401
     from harmonyos_mcp.utils.wrappers.ui_operations import UiTestWrapper
     from harmonyos_mcp.container import container
     import harmonyos_mcp.container as container_mod
 
     mock = MagicMock(spec=UiTestWrapper)
 
-    mock.click.return_value = {"success": True, "x": 100, "y": 200}
-    mock.double_click.return_value = {"success": True, "x": 100, "y": 200}
-    mock.long_click.return_value = {"success": True, "x": 100, "y": 200}
+    mock.click.return_value = {"success": True, "x": 100, "y": 200, "message": "鐐瑰嚮鎴愬姛"}
+    mock.double_click.return_value = {"success": True, "x": 100, "y": 200, "message": "鍙岀偣鎴愬姛"}
+    mock.long_click.return_value = {"success": True, "x": 100, "y": 200, "message": "闀挎寜鎴愬姛"}
     mock.swipe.return_value = {"success": True, "from_x": 1, "from_y": 2, "to_x": 3, "to_y": 4}
     mock.swipe_direction.return_value = {
         "success": True,
@@ -129,12 +138,30 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
         "to_x": 3,
         "to_y": 4,
         "direction": "up",
+        "message": "婊戝姩鎴愬姛",
     }
-    mock.input_text.return_value = {"success": True, "text": "ok", "x": 100, "y": 200}
-    mock.press_key.return_value = {"success": True, "key": "Home"}
+    mock.input_text.return_value = {"success": True, "text": "ok", "x": 100, "y": 200, "message": "鏂囨湰杈撳叆鎴愬姛"}
+    mock.press_key.return_value = {"success": True, "key": "Home", "message": "鎸夐敭鎴愬姛"}
     mock.find_element.return_value = {
         "success": True,
-        "elements": [{"x": 100, "y": 200, "text": "Button", "type": "Button"}],
+        "window_id": 1,
+        "elements": [
+            {
+                "id": "btn_login",
+                "compid": "comp_btn_login",
+                "x": 100,
+                "y": 200,
+                "left": 80,
+                "top": 180,
+                "width": 40,
+                "height": 40,
+                "text": "Button",
+                "type": "Button",
+                "visible": True,
+                "clickable": True,
+                "depth": 2,
+            }
+        ],
         "count": 1,
     }
 

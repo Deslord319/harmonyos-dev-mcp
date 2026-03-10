@@ -124,8 +124,8 @@ async def query_package(
         module_name = ""
         if isinstance(candidates, list) and 0 <= idx < len(candidates):
             picked = candidates[idx]
-            ability_name = picked.get("name", "")
-            module_name = picked.get("module", "")
+            ability_name = picked.get("ability_name", "")
+            module_name = picked.get("module_name", "")
 
         return ok_result(
             {

@@ -31,6 +31,19 @@ class LogQueryError(Exception):
         self.result = result or {}
 
 
+def _coerce_optional_int(name: str, value: Optional[int]) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        raise LogQueryError("INVALID_PARAM", f"{name} must be an integer", {})
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        raise LogQueryError("INVALID_PARAM", f"{name} must be an integer", {})
+
+
 def _clean_dict(d: dict) -> dict:
     return {k: v for k, v in d.items() if v is not None}
 
@@ -185,7 +198,11 @@ def _collect_lines(
         if not app_pid:
             raise LogQueryError(
                 "APP_NOT_RUNNING",
-                f"app not running or pid not found: {package_name}",
+                (
+                    f"app not running or pid not found: {package_name}. "
+                    "package_name realtime filtering requires the target app to be running; "
+                    "for offline or historical analysis use input_file/input_files or a time window."
+                ),
                 _default_result(filters, device_id=resolved_device),
             )
         resolved_pid = app_pid
@@ -245,6 +262,9 @@ def _query_impl(
     include_crash=False,
 ):
     _check_and_cleanup_cache()
+    lines = _coerce_optional_int("lines", lines) or 100
+    pid = _coerce_optional_int("pid", pid)
+    seconds = _coerce_optional_int("seconds", seconds)
     start_time, end_time = _resolve_time_window(start_time, end_time, seconds, time_expr)
     filters = _clean_dict(
         {
@@ -370,4 +390,3 @@ async def logs_query(
         time_expr=time_expr,
         include_crash=include_crash,
     )
-

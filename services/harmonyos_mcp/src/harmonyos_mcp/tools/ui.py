@@ -1,9 +1,9 @@
-﻿"""UI automation tools."""
+"""UI automation tools."""
 
 import asyncio
 import os
 from datetime import datetime
-from typing import Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 from common.tools.registry import mcp_tool
 
@@ -23,11 +23,260 @@ from .device_base import ToolBase
 from .response import error_result, from_action_result, mcp_response
 
 
+def _compact_candidate_handles(elements: list[Dict[str, Any]], limit: int = 3) -> list[Dict[str, Any]]:
+    compact = []
+    for element in elements[:limit]:
+        compact.append(
+            {
+                "id": element.get("id"),
+                "compid": element.get("compid"),
+                "type": element.get("type"),
+                "text": element.get("text"),
+                "x": element.get("x"),
+                "y": element.get("y"),
+            }
+        )
+    return compact
+
+
+def _with_success_message(raw: Any, message: str) -> Any:
+    if not isinstance(raw, dict):
+        return raw
+    normalized = dict(raw)
+    if normalized.get("success", False):
+        normalized["message"] = message
+    return normalized
+
+
+def _build_bounds(element: Dict[str, Any]) -> Optional[Dict[str, int]]:
+    if isinstance(element.get("bounds"), dict):
+        return dict(element["bounds"])
+
+    left = element.get("left")
+    top = element.get("top")
+    width = element.get("width")
+    height = element.get("height")
+    if None in (left, top, width, height):
+        return None
+
+    return {
+        "left": int(left),
+        "top": int(top),
+        "right": int(left) + int(width),
+        "bottom": int(top) + int(height),
+    }
+
+
+def _build_lookup_hint(
+    *,
+    text: Optional[str] = None,
+    element_type: Optional[str] = None,
+    element_id: Optional[str] = None,
+    bundle_name: Optional[str] = None,
+    window_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    hint: Dict[str, Any] = {}
+    if text:
+        hint["text"] = text
+    if element_type:
+        hint["element_type"] = element_type
+    if element_id:
+        hint["element_id"] = element_id
+    if bundle_name:
+        hint["bundle_name"] = bundle_name
+    if window_id is not None:
+        hint["window_id"] = window_id
+    return hint
+
+
+def _attach_element_metadata(
+    elements: list[Dict[str, Any]],
+    *,
+    bundle_name: Optional[str],
+    window_id: Optional[int],
+    lookup_hint: Optional[Dict[str, Any]],
+) -> list[Dict[str, Any]]:
+    is_broad_lookup = bool(element_type := (lookup_hint or {}).get("element_type")) and not (
+        (lookup_hint or {}).get("text") or (lookup_hint or {}).get("element_id")
+    )
+    lookup_is_broad = is_broad_lookup or len(elements) > 1
+    enriched = []
+    for element in elements:
+        item = dict(element)
+        bounds = _build_bounds(item)
+        if bounds:
+            item["bounds"] = bounds
+
+        effective_window_id = item.get("window_id", window_id)
+        handle = {
+            "window_id": effective_window_id,
+            "id": item.get("id"),
+            "compid": item.get("compid"),
+            "type": item.get("type"),
+            "text": item.get("text"),
+            "x": item.get("x"),
+            "y": item.get("y"),
+            "bounds": item.get("bounds"),
+            "bundle_name": bundle_name,
+            "lookup_hint": dict(lookup_hint or {}),
+        }
+        item["element_handle"] = {k: v for k, v in handle.items() if v is not None}
+        item["lookup_is_broad"] = lookup_is_broad
+        enriched.append(item)
+    return enriched
+
+
+def _is_close(a: Any, b: Any, tolerance: int = 12) -> bool:
+    if a is None or b is None:
+        return False
+    return abs(int(a) - int(b)) <= tolerance
+
+
+def _match_handle_candidates(candidates: list[Dict[str, Any]], handle: Dict[str, Any]) -> list[Dict[str, Any]]:
+    exact = []
+    approximate = []
+    for candidate in candidates:
+        candidate_window = candidate.get("window_id")
+        handle_window = handle.get("window_id")
+        if candidate_window is not None and handle_window is not None and candidate_window != handle_window:
+            continue
+
+        if handle.get("compid") and candidate.get("compid") == handle.get("compid"):
+            exact.append(candidate)
+            continue
+
+        if handle.get("id") and candidate.get("id") == handle.get("id"):
+            if not handle.get("type") or candidate.get("type") == handle.get("type"):
+                exact.append(candidate)
+                continue
+
+        if (
+            handle.get("type")
+            and candidate.get("type") == handle.get("type")
+            and _is_close(candidate.get("x"), handle.get("x"))
+            and _is_close(candidate.get("y"), handle.get("y"))
+        ):
+            approximate.append(candidate)
+
+    return exact or approximate
+
+
+def _resolved_result(
+    element: Dict[str, Any],
+    *,
+    resolved_via: str,
+    handle_refreshed: bool,
+) -> Dict[str, Any]:
+    return {
+        "x": int(element["x"]),
+        "y": int(element["y"]),
+        "element_handle": dict(element.get("element_handle") or {}),
+        "resolved_via": resolved_via,
+        "handle_refreshed": handle_refreshed,
+    }
+
+
+async def _resolve_handle_coords(
+    device_id: str,
+    element_handle: Dict[str, Any],
+) -> Tuple[bool, Union[Dict[str, Any], dict]]:
+    if not isinstance(element_handle, dict):
+        return False, error_result(
+            "INVALID_ELEMENT_HANDLE",
+            "element_handle must be an object",
+            result={"elements": [], "count": 0},
+        )
+
+    ui_ops = get_ui_operations()
+    lookup_hint = element_handle.get("lookup_hint") if isinstance(element_handle.get("lookup_hint"), dict) else {}
+    bundle_name = element_handle.get("bundle_name") or lookup_hint.get("bundle_name")
+    window_id = element_handle.get("window_id", lookup_hint.get("window_id"))
+
+    raw = await asyncio.to_thread(
+        ui_ops.find_element,
+        device_id,
+        element_id=element_handle.get("id"),
+        element_type=element_handle.get("type"),
+        bundle_name=bundle_name,
+        window_id=window_id,
+    )
+    if not raw.get("success", False):
+        return False, from_action_result(
+            raw,
+            default_code="FIND_ELEMENT_ERROR",
+            default_detail="find element failed",
+            default_result={"elements": [], "count": 0},
+        )
+
+    candidates = _attach_element_metadata(
+        raw.get("elements", []),
+        bundle_name=bundle_name,
+        window_id=raw.get("window_id", window_id),
+        lookup_hint=lookup_hint,
+    )
+    matches = _match_handle_candidates(candidates, element_handle)
+    if len(matches) == 1 and matches[0].get("x") is not None and matches[0].get("y") is not None:
+        return True, _resolved_result(matches[0], resolved_via="handle", handle_refreshed=False)
+
+    if not lookup_hint:
+        return False, error_result(
+            "ELEMENT_NOT_FOUND",
+            "element_handle is stale and no lookup_hint is available for retry",
+            result={"elements": [], "count": 0},
+        )
+
+    retry_raw = await asyncio.to_thread(
+        ui_ops.find_element,
+        device_id,
+        text=lookup_hint.get("text"),
+        element_type=lookup_hint.get("element_type"),
+        element_id=lookup_hint.get("element_id"),
+        bundle_name=lookup_hint.get("bundle_name"),
+        window_id=lookup_hint.get("window_id"),
+    )
+    if not retry_raw.get("success", False):
+        return False, from_action_result(
+            retry_raw,
+            default_code="FIND_ELEMENT_ERROR",
+            default_detail="find element failed",
+            default_result={"elements": [], "count": 0},
+        )
+
+    retry_candidates = _attach_element_metadata(
+        retry_raw.get("elements", []),
+        bundle_name=lookup_hint.get("bundle_name"),
+        window_id=retry_raw.get("window_id", lookup_hint.get("window_id")),
+        lookup_hint=lookup_hint,
+    )
+    if len(retry_candidates) == 1 and retry_candidates[0].get("x") is not None and retry_candidates[0].get("y") is not None:
+        return True, _resolved_result(retry_candidates[0], resolved_via="lookup_hint", handle_refreshed=True)
+
+    if len(retry_candidates) > 1:
+        return False, error_result(
+            "AMBIGUOUS_ELEMENT_MATCH",
+            "element_handle is stale and lookup_hint matched multiple elements; use a more specific text, element_id, or coordinates",
+            result={
+                "elements": retry_candidates,
+                "count": len(retry_candidates),
+                "match_count": len(retry_candidates),
+                "candidate_handles": _compact_candidate_handles(retry_candidates),
+            },
+        )
+
+    return False, error_result(
+        "ELEMENT_NOT_FOUND",
+        "element_handle is stale and lookup_hint retry did not find the target element",
+        result={"elements": [], "count": 0},
+    )
+
+
 async def _resolve_element_coords(
     device_id: str,
     text: Optional[str] = None,
     element_type: Optional[str] = None,
+    element_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
+    window_id: Optional[int] = None,
 ) -> Tuple[bool, Union[Tuple[int, int], dict]]:
     ui_ops = get_ui_operations()
     raw = await asyncio.to_thread(
@@ -35,7 +284,9 @@ async def _resolve_element_coords(
         device_id,
         text=text,
         element_type=element_type,
+        element_id=element_id,
         bundle_name=bundle_name,
+        window_id=window_id,
     )
     if not raw.get("success", False):
         return False, from_action_result(
@@ -49,7 +300,7 @@ async def _resolve_element_coords(
     if not elements:
         return False, error_result(
             "ELEMENT_NOT_FOUND",
-            f"element not found: text={text}, type={element_type}",
+            f"element not found: text={text}, type={element_type}, id={element_id}",
             result={"elements": [], "count": 0},
         )
 
@@ -71,30 +322,53 @@ async def click_element(
     device_id: Optional[str] = None,
     x: Optional[int] = None,
     y: Optional[int] = None,
+    element_handle: Optional[Dict[str, Any]] = None,
     text: Optional[str] = None,
     element_type: Optional[str] = None,
     double_click: bool = False,
     bundle_name: Optional[str] = None,
 ) -> ClickResult:
     has_coords = x is not None and y is not None
+    has_handle = element_handle is not None
     has_search = bool(text or element_type)
 
-    if has_coords and has_search:
+    if has_coords and (has_handle or has_search):
         return error_result(
             "PARAM_CONFLICT",
-            "cannot provide both coordinates and search criteria",
+            "cannot provide coordinates together with element_handle or search criteria",
             result={"x": x, "y": y},
         )
 
     ui_ops = get_ui_operations()
+    click_fn = ui_ops.double_click if double_click else ui_ops.click
 
     if has_coords:
-        raw = await asyncio.to_thread(ui_ops.double_click if double_click else ui_ops.click, device_id, x, y)
+        raw = await asyncio.to_thread(click_fn, device_id, x, y)
+        raw = _with_success_message(raw, "click succeeded" if not double_click else "double click succeeded")
         return from_action_result(
             raw,
             default_code="CLICK_ERROR",
             default_detail="click failed",
-            default_result={"x": x, "y": y},
+            default_result={
+                "x": x,
+                "y": y,
+                "resolved_via": "coordinates",
+                "handle_refreshed": False,
+                "element_handle": None,
+            },
+        )
+
+    if has_handle:
+        ok, resolved = await _resolve_handle_coords(device_id, element_handle)
+        if not ok:
+            return resolved
+        raw = await asyncio.to_thread(click_fn, device_id, resolved["x"], resolved["y"])
+        raw = _with_success_message(raw, "click succeeded" if not double_click else "double click succeeded")
+        return from_action_result(
+            raw,
+            default_code="CLICK_ERROR",
+            default_detail="click failed",
+            default_result=resolved,
         )
 
     if has_search:
@@ -102,17 +376,24 @@ async def click_element(
         if not ok:
             return coords
         ex, ey = coords
-        raw = await asyncio.to_thread(ui_ops.double_click if double_click else ui_ops.click, device_id, ex, ey)
+        raw = await asyncio.to_thread(click_fn, device_id, ex, ey)
+        raw = _with_success_message(raw, "click succeeded" if not double_click else "double click succeeded")
         return from_action_result(
             raw,
             default_code="CLICK_ERROR",
             default_detail="click failed",
-            default_result={"x": ex, "y": ey},
+            default_result={
+                "x": ex,
+                "y": ey,
+                "resolved_via": "lookup_hint",
+                "handle_refreshed": False,
+                "element_handle": None,
+            },
         )
 
     return error_result(
         "MISSING_PARAMS",
-        "must provide (x,y) or (text/element_type)",
+        "must provide (x,y), element_handle, or (text/element_type)",
         result={"x": x or 0, "y": y or 0},
     )
 
@@ -125,19 +406,47 @@ async def long_press_element(
     device_id: Optional[str] = None,
     x: Optional[int] = None,
     y: Optional[int] = None,
+    element_handle: Optional[Dict[str, Any]] = None,
     text: Optional[str] = None,
     element_type: Optional[str] = None,
     bundle_name: Optional[str] = None,
 ) -> LongPressResult:
     ui_ops = get_ui_operations()
 
+    if x is not None and y is not None and (element_handle is not None or text or element_type):
+        return error_result(
+            "PARAM_CONFLICT",
+            "cannot provide coordinates together with element_handle or search criteria",
+            result={"x": x, "y": y},
+        )
+
     if x is not None and y is not None:
         raw = await asyncio.to_thread(ui_ops.long_click, device_id, x, y)
+        raw = _with_success_message(raw, "long press succeeded")
         return from_action_result(
             raw,
             default_code="LONG_PRESS_ERROR",
             default_detail="long press failed",
-            default_result={"x": x, "y": y},
+            default_result={
+                "x": x,
+                "y": y,
+                "resolved_via": "coordinates",
+                "handle_refreshed": False,
+                "element_handle": None,
+            },
+        )
+
+    if element_handle is not None:
+        ok, resolved = await _resolve_handle_coords(device_id, element_handle)
+        if not ok:
+            return resolved
+        raw = await asyncio.to_thread(ui_ops.long_click, device_id, resolved["x"], resolved["y"])
+        raw = _with_success_message(raw, "long press succeeded")
+        return from_action_result(
+            raw,
+            default_code="LONG_PRESS_ERROR",
+            default_detail="long press failed",
+            default_result=resolved,
         )
 
     if text or element_type:
@@ -146,14 +455,25 @@ async def long_press_element(
             return coords
         ex, ey = coords
         raw = await asyncio.to_thread(ui_ops.long_click, device_id, ex, ey)
+        raw = _with_success_message(raw, "long press succeeded")
         return from_action_result(
             raw,
             default_code="LONG_PRESS_ERROR",
             default_detail="long press failed",
-            default_result={"x": ex, "y": ey},
+            default_result={
+                "x": ex,
+                "y": ey,
+                "resolved_via": "lookup_hint",
+                "handle_refreshed": False,
+                "element_handle": None,
+            },
         )
 
-    return error_result("MISSING_PARAMS", "must provide coordinates or search criteria", result={"x": 0, "y": 0})
+    return error_result(
+        "MISSING_PARAMS",
+        "must provide coordinates, element_handle, or search criteria",
+        result={"x": 0, "y": 0},
+    )
 
 
 @mcp_tool(category="ui")
@@ -181,6 +501,7 @@ async def swipe(
 
     if direction:
         raw = await asyncio.to_thread(ui_ops.swipe_direction, device_id, direction, speed)
+        raw = _with_success_message(raw, "swipe succeeded")
         return from_action_result(
             raw,
             default_code="SWIPE_ERROR",
@@ -190,6 +511,7 @@ async def swipe(
 
     if all(v is not None for v in [from_x, from_y, to_x, to_y]):
         raw = await asyncio.to_thread(ui_ops.swipe, device_id, from_x, from_y, to_x, to_y, speed)
+        raw = _with_success_message(raw, "swipe succeeded")
         return from_action_result(
             raw,
             default_code="SWIPE_ERROR",
@@ -209,6 +531,7 @@ async def input_text(
     x: Optional[int] = None,
     y: Optional[int] = None,
     text: Optional[str] = None,
+    element_handle: Optional[Dict[str, Any]] = None,
     element_text: Optional[str] = None,
     element_type: Optional[str] = None,
     bundle_name: Optional[str] = None,
@@ -220,29 +543,73 @@ async def input_text(
 
     ui_ops = get_ui_operations()
 
+    if x is not None and y is not None and (element_handle is not None or element_text or element_type):
+        return error_result(
+            "PARAM_CONFLICT",
+            "cannot provide coordinates together with element_handle or search criteria",
+            result=default_result,
+        )
+
     if x is not None and y is not None:
         raw = await asyncio.to_thread(ui_ops.input_text, device_id, x, y, text)
+        raw = _with_success_message(raw, "input text succeeded")
         return from_action_result(
             raw,
             default_code="INPUT_TEXT_ERROR",
             default_detail="input text failed",
-            default_result=default_result,
+            default_result={
+                "text": text,
+                "x": x,
+                "y": y,
+                "resolved_via": "coordinates",
+                "handle_refreshed": False,
+                "element_handle": None,
+            },
+        )
+
+    if element_handle is not None:
+        ok, resolved = await _resolve_handle_coords(device_id, element_handle)
+        if not ok:
+            return resolved
+        raw = await asyncio.to_thread(ui_ops.input_text, device_id, resolved["x"], resolved["y"], text)
+        raw = _with_success_message(raw, "input text succeeded")
+        return from_action_result(
+            raw,
+            default_code="INPUT_TEXT_ERROR",
+            default_detail="input text failed",
+            default_result={**resolved, "text": text},
         )
 
     if element_text or element_type:
         ok, coords = await _resolve_element_coords(device_id, text=element_text, element_type=element_type, bundle_name=bundle_name)
         if not ok:
+            if isinstance(coords, dict) and coords.get("error", {}).get("code") == "ELEMENT_NOT_FOUND":
+                coords["error"]["detail"] = (
+                    "element not found for input_text lookup; use x/y for a stable path if the UI may have changed"
+                )
             return coords
         ex, ey = coords
         raw = await asyncio.to_thread(ui_ops.input_text, device_id, ex, ey, text)
+        raw = _with_success_message(raw, "input text succeeded")
         return from_action_result(
             raw,
             default_code="INPUT_TEXT_ERROR",
             default_detail="input text failed",
-            default_result={"text": text, "x": ex, "y": ey},
+            default_result={
+                "text": text,
+                "x": ex,
+                "y": ey,
+                "resolved_via": "lookup_hint",
+                "handle_refreshed": False,
+                "element_handle": None,
+            },
         )
 
-    return error_result("MISSING_PARAMS", "must provide coordinates or search criteria", result=default_result)
+    return error_result(
+        "MISSING_PARAMS",
+        "must provide coordinates, element_handle, or search criteria",
+        result=default_result,
+    )
 
 
 @mcp_tool(category="ui")
@@ -255,6 +622,7 @@ async def press_key(device_id: Optional[str] = None, key: Optional[str] = None) 
 
     ui_ops = get_ui_operations()
     raw = await asyncio.to_thread(ui_ops.press_key, device_id, key)
+    raw = _with_success_message(raw, "key press succeeded")
     return from_action_result(
         raw,
         default_code="PRESS_KEY_ERROR",
@@ -273,6 +641,7 @@ async def find_element(
     element_type: Optional[str] = None,
     element_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
+    window_id: Optional[int] = None,
 ) -> FindElementResult:
     if not any([text, element_type, element_id]):
         return error_result(
@@ -289,8 +658,32 @@ async def find_element(
         element_type=element_type,
         element_id=element_id,
         bundle_name=bundle_name,
+        window_id=window_id,
     )
-    base = {"elements": raw.get("elements", []), "count": raw.get("count", len(raw.get("elements", [])))}
+    lookup_hint = _build_lookup_hint(
+        text=text,
+        element_type=element_type,
+        element_id=element_id,
+        bundle_name=bundle_name,
+        window_id=raw.get("window_id", window_id),
+    )
+    elements = _attach_element_metadata(
+        raw.get("elements", []),
+        bundle_name=bundle_name,
+        window_id=raw.get("window_id", window_id),
+        lookup_hint=lookup_hint,
+    )
+    base = {"elements": elements, "count": raw.get("count", len(elements))}
+    if raw.get("success", False) and base["count"] == 0:
+        return error_result(
+            "ELEMENT_NOT_FOUND",
+            f"element not found: text={text}, type={element_type}, id={element_id}",
+            result=base,
+        )
+    if isinstance(raw, dict):
+        raw = dict(raw)
+        raw["elements"] = elements
+        raw["count"] = base["count"]
     return from_action_result(
         raw,
         default_code="FIND_ELEMENT_ERROR",
@@ -325,6 +718,7 @@ async def screenshot(
     if left is not None and top is not None and right is not None and bottom is not None:
         bounds = {"left": left, "top": top, "right": right, "bottom": bottom}
         raw = await asyncio.to_thread(hdc.take_element_screenshot, device_id, local_path, bounds)
+        raw = _with_success_message(raw, "element screenshot succeeded")
         return from_action_result(
             raw,
             default_code="SCREENSHOT_ERROR",
@@ -333,6 +727,7 @@ async def screenshot(
         )
 
     raw = await asyncio.to_thread(hdc.take_screenshot, device_id, local_path, display_id)
+    raw = _with_success_message(raw, "screenshot succeeded")
     return from_action_result(
         raw,
         default_code="SCREENSHOT_ERROR",
@@ -361,6 +756,7 @@ async def drag(
 
     ui_ops = get_ui_operations()
     raw = await asyncio.to_thread(ui_ops.drag, device_id, from_x, from_y, to_x, to_y, speed)
+    raw = _with_success_message(raw, "drag succeeded")
     return from_action_result(
         raw,
         default_code="DRAG_ERROR",

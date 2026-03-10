@@ -1,28 +1,15 @@
-"""
-类型定义模块
+"""Shared result and payload type definitions for harmonyos_mcp."""
 
-定义所有工具函数的输入输出类型，提供完整的类型提示支持。
-"""
-
-from typing import TypedDict, Optional, List, Literal, Any
+from typing import List, Literal, Optional, TypedDict
 
 from common.types import BaseResult
 
 
 class DeviceResult(BaseResult, total=False):
-    """设备相关操作结果基类"""
-
     device_id: str
 
 
-# ============================================================================
-# 设备管理类型
-# ============================================================================
-
-
 class DeviceInfo(TypedDict, total=False):
-    """设备信息"""
-
     device_id: str
     model: str
     device_name: str
@@ -32,62 +19,43 @@ class DeviceInfo(TypedDict, total=False):
 
 
 class ListDevicesResult(BaseResult):
-    """list_devices 返回类型"""
-
     devices: List[DeviceInfo]
     count: int
 
 
 class ScreenshotResult(DeviceResult):
-    """take_screenshot 返回类型"""
-
     local_path: str
     file_size: int
 
 
 class ElementScreenshotResult(DeviceResult):
-    """take_element_screenshot 返回类型"""
-
     local_path: str
     file_size: int
     bounds: dict
     warning: Optional[str]
 
 
-# ============================================================================
-# 构建部署类型
-# ============================================================================
-
-
 class BuildError(TypedDict, total=False):
-    """构建错误详情"""
-
-    file: Optional[str]  # 错误文件路径（相对于项目根目录）
-    line: int  # 行号
-    column: int  # 列号
-    message: str  # 错误消息
-    type: str  # 错误类型: type/syntax/missing/module/permission/config/compile/build
-    source: str  # 错误来源: stdout/stderr/build.log
+    file: Optional[str]
+    line: int
+    column: int
+    message: str
+    type: str
+    source: str
 
 
 class BuildResult(BaseResult):
-    """build_app 返回类型"""
-
     hap_path: Optional[str]
     duration: Optional[float]
-    errors: Optional[List[BuildError]]  # 结构化错误列表（最多15条）
-    error_count: Optional[int]  # 总错误数量
+    errors: Optional[List[BuildError]]
+    error_count: Optional[int]
 
 
 class InstallResult(DeviceResult):
-    """install_app 返回类型"""
-
     hap_path: str
 
 
 class RunAppResult(DeviceResult):
-    """run_app 返回类型"""
-
     bundle_name: str
     ability_name: str
     module_name: str
@@ -98,60 +66,37 @@ class RunAppResult(DeviceResult):
 
 
 class UninstallResult(DeviceResult):
-    """uninstall_app 返回类型"""
-
     bundle_name: str
 
 
-# ============================================================================
-# 包管理类型
-# ============================================================================
-
-
 class AbilityInfo(TypedDict, total=False):
-    """Ability 信息"""
-
     name: str
     module: str
     type: str
 
 
-QueryInfoType = Literal["list", "abilities", "main_ability"]
+QueryInfoType = Literal["list", "abilities", "main_ability", "permissions"]
 
 
 class QueryPackageResult(DeviceResult, total=False):
-    """query_package 返回类型（统一包查询结果）
-
-    根据 info_type 不同，返回字段有所差异：
-    - list: 返回 packages, count
-    - abilities: 返回 bundle_name, abilities, modules, main_ability, ability_count
-    - main_ability: 返回 bundle_name, ability_name, module_name
-    """
-
     info_type: QueryInfoType
-    # list 模式字段
     packages: List[str]
     count: int
     keyword: str
-    # abilities 模式字段
     bundle_name: str
     abilities: List[AbilityInfo]
     modules: List[str]
     main_ability: Optional[AbilityInfo]
     ability_count: int
-    # main_ability 模式字段
     ability_name: str
     module_name: str
-
-
-# ============================================================================
-# UI 操作类型
-# ============================================================================
+    candidates: List[dict]
+    recommended: int
+    requested_permissions: List[str]
+    permission_count: int
 
 
 class UIElement(TypedDict, total=False):
-    """UI 元素"""
-
     id: str
     type: str
     text: str
@@ -162,11 +107,13 @@ class UIElement(TypedDict, total=False):
     bounds: dict
     clickable: bool
     visible: bool
+    compid: str
+    depth: int
+    element_handle: dict
+    lookup_is_broad: bool
 
 
 class Bounds(TypedDict):
-    """元素边界"""
-
     left: int
     top: int
     right: int
@@ -174,29 +121,21 @@ class Bounds(TypedDict):
 
 
 class FindElementResult(DeviceResult):
-    """find_element 返回类型"""
-
     elements: List[UIElement]
     count: int
 
 
 class ClickResult(BaseResult):
-    """点击操作返回类型"""
-
     x: int
     y: int
 
 
 class LongPressResult(BaseResult):
-    """长按操作返回类型"""
-
     x: int
     y: int
 
 
 class DragResult(BaseResult):
-    """拖拽操作返回类型"""
-
     from_x: int
     from_y: int
     to_x: int
@@ -204,8 +143,6 @@ class DragResult(BaseResult):
 
 
 class SwipeResult(BaseResult):
-    """滑动操作返回类型"""
-
     from_x: int
     from_y: int
     to_x: int
@@ -214,27 +151,16 @@ class SwipeResult(BaseResult):
 
 
 class InputTextResult(BaseResult):
-    """输入文本返回类型"""
-
     text: str
     x: int
     y: int
 
 
 class PressKeyResult(BaseResult):
-    """按键操作返回类型"""
-
     key: str
 
 
-# ============================================================================
-# UI 树类型
-# ============================================================================
-
-
 class UITreeNode(TypedDict, total=False):
-    """UI 树节点"""
-
     type: str
     id: str
     text: str
@@ -244,39 +170,28 @@ class UITreeNode(TypedDict, total=False):
 
 
 class UITreeResult(DeviceResult):
-    """get_ui_tree 返回类型"""
-
     window_id: int
     ui_tree: dict
     node_count: int
 
 
 class WindowInfo(TypedDict):
-    """窗口信息"""
-
     window_id: int
     bundle_name: str
+    bundle_name_resolved: bool
     is_visible: bool
     bounds: Bounds
 
 
 class ListWindowsResult(DeviceResult):
-    """list_windows 返回类型"""
-
     windows: List[WindowInfo]
     count: int
 
-
-# ============================================================================
-# 日志类型
-# ============================================================================
 
 LogLevel = Literal["D", "I", "W", "E", "F"]
 
 
 class LogsFilterConfig(TypedDict, total=False):
-    """日志过滤配置"""
-
     level: LogLevel
     tag: str
     keyword: str
@@ -290,8 +205,6 @@ class LogsFilterConfig(TypedDict, total=False):
 
 
 class Finding(TypedDict, total=False):
-    """Structured error/suspicious finding from logs."""
-
     type: str
     severity: int
     timestamp: Optional[str]
@@ -305,14 +218,10 @@ class Finding(TypedDict, total=False):
 
 
 class LogsQueryResult(BaseResult, total=False):
-    """logs_query 返回类型（统一日志查询结果）"""
-
     device_id: str
-    source: str  # "direct" | "file" | "realtime_buffer" | "persist_file"
+    source: str
     findings: List[Finding]
     filters_applied: LogsFilterConfig
-    # 保存模式字段
     saved_path: str
-    # 历史文件模式字段
     dict_used: bool
     files_count: int

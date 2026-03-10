@@ -1,11 +1,19 @@
 [project]
 name = "mcp-ho-dev-workspace"
-version = "0.0.0"
+version = "0.6.0"
 description = "HarmonyOS MCP development workspace"
 requires-python = ">=3.10"
+dependencies = [
+    "harmonyos-mcp",
+    "harmonyos-compile-mcp",
+]
 
 [tool.uv.workspace]
 members = ["packages/common", "services/harmonyos_mcp", "services/harmonyos_compile_mcp"]
+
+[tool.uv.sources]
+harmonyos-mcp = { workspace = true }
+harmonyos-compile-mcp = { workspace = true }
 
 [dependency-groups]
 dev = [

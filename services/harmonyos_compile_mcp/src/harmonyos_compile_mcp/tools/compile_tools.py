@@ -21,9 +21,11 @@ from .types import (
 )
 from common.tools.base import ToolBase
 from common.tools.registry import mcp_tool
+from .response import from_action_result, mcp_response, ok_result
 
 
 @mcp_tool(category="compile")
+@mcp_response("check_wsl")
 @ToolBase.handle_tool_error("WSL_CHECK_ERROR")
 async def check_wsl() -> WslCheckResult:
     """
@@ -33,10 +35,12 @@ async def check_wsl() -> WslCheckResult:
         WSL 检查结果
     """
     manager = get_compile_manager()
-    return await asyncio.to_thread(manager.check_wsl_available)
+    raw = await asyncio.to_thread(manager.check_wsl_available)
+    return ok_result(raw)
 
 
 @mcp_tool(category="compile")
+@mcp_response("check_harmonyos_compiler_tools")
 @ToolBase.handle_tool_error("COMPILER_TOOLS_CHECK_ERROR")
 async def check_harmonyos_compiler_tools(
     tools_dir: str = "./harmonyos_commandline_tools",
@@ -51,10 +55,12 @@ async def check_harmonyos_compiler_tools(
         工具检查结果
     """
     manager = get_compile_manager()
-    return await asyncio.to_thread(manager.check_harmonyos_compiler_tools, tools_dir)
+    raw = await asyncio.to_thread(manager.check_harmonyos_compiler_tools, tools_dir)
+    return ok_result(raw)
 
 
 @mcp_tool(category="compile")
+@mcp_response("clone_library")
 @ToolBase.handle_tool_error("CLONE_LIBRARY_ERROR")
 async def clone_library(
     repo_url: str, local_path: str, version: Optional[str] = None
@@ -74,10 +80,16 @@ async def clone_library(
         拉取结果，包含success状态、本地路径和克隆的版本信息
     """
     manager = get_compile_manager()
-    return await asyncio.to_thread(manager.clone_library, repo_url, local_path, version)
+    raw = await asyncio.to_thread(manager.clone_library, repo_url, local_path, version)
+    return from_action_result(
+        raw,
+        default_code="CLONE_LIBRARY_ERROR",
+        default_detail="clone library failed",
+    )
 
 
 @mcp_tool(category="compile")
+@mcp_response("analyze_build_system")
 @ToolBase.handle_tool_error("ANALYZE_BUILD_ERROR")
 async def analyze_build_system(project_dir: str) -> AnalyzeBuildResult:
     """
@@ -90,10 +102,16 @@ async def analyze_build_system(project_dir: str) -> AnalyzeBuildResult:
         检测到的构建系统列表及其标记文件
     """
     manager = get_compile_manager()
-    return await asyncio.to_thread(manager.analyze_build_system, project_dir)
+    raw = await asyncio.to_thread(manager.analyze_build_system, project_dir)
+    return from_action_result(
+        raw,
+        default_code="ANALYZE_BUILD_ERROR",
+        default_detail="analyze build system failed",
+    )
 
 
 @mcp_tool(category="compile")
+@mcp_response("read_build_files")
 @ToolBase.handle_tool_error("READ_BUILD_FILES_ERROR")
 async def read_build_files(project_dir: str) -> ReadBuildFilesResult:
     """
@@ -128,10 +146,16 @@ async def read_build_files(project_dir: str) -> ReadBuildFilesResult:
         logger.info(f"读取构建文件: {len(result['files'])} 个文件")
         return result
 
-    return await asyncio.to_thread(_read)
+    raw = await asyncio.to_thread(_read)
+    return from_action_result(
+        raw,
+        default_code="READ_BUILD_FILES_ERROR",
+        default_detail="read build files failed",
+    )
 
 
 @mcp_tool(category="compile")
+@mcp_response("write_compile_script")
 @ToolBase.handle_tool_error("WRITE_SCRIPT_ERROR")
 async def write_compile_script(
     project_dir: str, script_content: str
@@ -156,10 +180,16 @@ async def write_compile_script(
         writer = get_script_writer()
         return writer.write_script(project_dir, script_content)
 
-    return await asyncio.to_thread(_write)
+    raw = await asyncio.to_thread(_write)
+    return from_action_result(
+        raw,
+        default_code="WRITE_SCRIPT_ERROR",
+        default_detail="write compile script failed",
+    )
 
 
 @mcp_tool(category="compile")
+@mcp_response("execute_compile_script")
 @ToolBase.handle_tool_error(
     "EXECUTE_SCRIPT_ERROR", exit_code=-1, stdout="", stderr="", duration=0
 )
@@ -188,10 +218,16 @@ async def execute_compile_script(
         executor = get_script_executor()
         return executor.execute(script_path, timeout=timeout)
 
-    return await asyncio.to_thread(_execute)
+    raw = await asyncio.to_thread(_execute)
+    return from_action_result(
+        raw,
+        default_code="EXECUTE_SCRIPT_ERROR",
+        default_detail="execute compile script failed",
+    )
 
 
 @mcp_tool(category="compile")
+@mcp_response("verify_so_output")
 @ToolBase.handle_tool_error("VERIFY_SO_ERROR")
 async def verify_so_output(
     project_dir: str, output_dir: Optional[str] = None
@@ -207,6 +243,11 @@ async def verify_so_output(
         验证结果，包含文件检查、格式验证等信息
     """
     manager = get_compile_manager()
-    return await asyncio.to_thread(
+    raw = await asyncio.to_thread(
         manager.verify_so_output, project_dir=project_dir, output_dir=output_dir
+    )
+    return from_action_result(
+        raw,
+        default_code="VERIFY_SO_ERROR",
+        default_detail="verify so output failed",
     )

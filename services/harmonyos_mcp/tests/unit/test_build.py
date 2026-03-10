@@ -39,7 +39,8 @@ class TestBuildApp:
         sc = unwrap_result(await build.build_app("/path/to/project"))
 
         assert sc["ok"] is False
-        assert sc["result"] is None
+        assert sc["result"]["errors"] == []
+        assert sc["result"]["error_count"] == 0
         assert sc["error"]["detail"] == "compiler exited with code 1"
 
     @patch("harmonyos_mcp.tools.build.HvigorWrapper")
@@ -151,6 +152,26 @@ class TestRunApp:
 
         sc = unwrap_result(await build.run_app("com.example.app"))
         assert sc["ok"] is False
+
+    @pytest.mark.asyncio
+    async def test_run_command_success_but_window_unverified_has_neutral_detail(
+        self, mock_hdc: MagicMock, unwrap_result
+    ):
+        from harmonyos_mcp.tools import build
+
+        mock_hdc.start_app.return_value = {
+            "success": False,
+            "error": "应用窗口未出现（可能ability_name或module_name错误）",
+            "command_success": True,
+            "window_found": False,
+        }
+
+        sc = unwrap_result(await build.run_app("com.example.app"))
+
+        assert sc["ok"] is False
+        assert sc["result"]["command_success"] is True
+        assert sc["result"]["window_found"] is False
+        assert sc["error"]["detail"] == "app launch command succeeded, but window verification did not pass"
 
 
 class TestUninstallApp:

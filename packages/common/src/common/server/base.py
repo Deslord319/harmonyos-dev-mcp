@@ -33,7 +33,7 @@ def create_server(
         func = entry.func
         if enable_error_handler:
             func = _wrap_with_error_handler(func, on_error)
-        server.tool()(func)
+        server.tool(output_schema=None)(func)
         server._tools[func.__name__] = func
 
     summary = get_tool_summary()
@@ -145,6 +145,7 @@ def run_server(
     setup_logger_func: Optional[Callable] = None,
     on_startup: Optional[Callable] = None,
     on_error: Optional[Callable] = None,
+    show_banner: bool = False,
 ):
     """Run MCP server with optional bootstrap hooks."""
     if setup_logger_func:
@@ -162,7 +163,7 @@ def run_server(
                 on_error(str(e), "STARTUP_ERROR")
 
     try:
-        server.run()
+        server.run(show_banner=show_banner)
     except KeyboardInterrupt:
         logger.info("Server stopped")
     except Exception as e:
