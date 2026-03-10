@@ -32,11 +32,11 @@ class HvigorWrapper:
         if not self.project_path.exists():
             raise ValueError(f"项目路径不存在: {project_path}")
 
-        # 查找DevEco Studio路径（优先级：参数 > 环境变量 > Config > 自动检测）
+        # 查找DevEco Studio路径（优先级：参数覆盖 > 已初始化配置 > 自动发现）
         self.deveco_path = self._find_deveco_studio(deveco_path)
         if not self.deveco_path:
             raise ValueError(
-                "未找到 DevEco Studio 安装路径。请设置环境变量 DEVECO_STUDIO_PATH 或安装 DevEco Studio"
+                "未找到可用的 DevEco Studio 安装路径。请确认本机已安装 DevEco Studio，或显式传入 deveco_path。"
             )
 
         self.node_exe = self._find_node_executable()
@@ -104,31 +104,29 @@ class HvigorWrapper:
         """
         查找 DevEco Studio 安装路径
 
-        优先级：参数 > 环境变量 > Config > 自动检测
+        优先级：参数 > Config > 自动发现
         """
         # 1. 使用传入的自定义路径
         if custom_path:
             path = Path(custom_path)
-            if path.exists():
+            if Config._is_valid_deveco_path(path):
                 return path
 
-        # 2. 使用环境变量
-        env_path = os.getenv('DEVECO_STUDIO_PATH')
-        if env_path:
-            path = Path(env_path)
-            if path.exists():
-                logger.info(f"使用环境变量 DEVECO_STUDIO_PATH: {path}")
-                return path
-
-        # 3. 使用 Config 中已检测的路径
+        # 2. 使用 Config 中已检测的路径
         if Config.DEVECO_STUDIO_PATH:
             path = Path(Config.DEVECO_STUDIO_PATH)
-            if path.exists():
+            if Config._is_valid_deveco_path(path):
                 return path
 
-        # 4. 自动检测（使用 Config 的搜索逻辑）
+        # 3. 自动检测（使用 Config 的搜索逻辑）
+        detected = Config._detect_deveco_studio_path()
+        if detected:
+            path = Path(detected)
+            logger.info(f"自动检测到 DevEco Studio: {path}")
+            return path
+
         for path in Config._get_deveco_search_paths():
-            if path.exists():
+            if Config._is_valid_deveco_path(path):
                 logger.info(f"自动检测到 DevEco Studio: {path}")
                 return path
 

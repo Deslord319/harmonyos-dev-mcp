@@ -8,7 +8,7 @@ import platform
 import shutil
 import re
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Iterable
 from loguru import logger
 
 from common.config.base import ConfigBase
@@ -61,6 +61,89 @@ class Config(ConfigBase):
         return None
 
     @classmethod
+    def _is_valid_deveco_path(cls, path: Path) -> bool:
+        if not path.exists() or not path.is_dir():
+            return False
+
+        system = platform.system()
+        studio_names = ["devecostudio64.exe", "devecostudio.exe"] if system == "Windows" else ["devecostudio"]
+        checks = [
+            path / "tools" / "hvigor" / "bin" / "hvigorw.js",
+            path / "sdk",
+            path / "jbr",
+            path / "Contents" / "tools" / "hvigor" / "bin" / "hvigorw.js",
+            path / "Contents" / "sdk",
+            path / "Contents" / "jbr",
+        ]
+        checks.extend(path / "bin" / name for name in studio_names)
+        checks.extend(path / "Contents" / "bin" / name for name in studio_names)
+        return any(candidate.exists() for candidate in checks)
+
+    @staticmethod
+    def _extract_command_path(raw_command: str) -> Optional[Path]:
+        value = raw_command.strip()
+        if not value:
+            return None
+        if value.startswith('"'):
+            end = value.find('"', 1)
+            if end > 1:
+                return Path(value[1:end])
+        return Path(value.split()[0])
+
+    @classmethod
+    def _get_windows_registry_deveco_paths(cls) -> List[Path]:
+        if platform.system() != "Windows":
+            return []
+
+        try:
+            import winreg
+        except ImportError:
+            return []
+
+        registry_keys = [
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Classes\Applications\devecostudio64.exe\shell\open\command"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Classes\devecostudio\shell\open\command"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Classes\Applications\devecostudio64.exe\shell\open\command"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Classes\devecostudio\shell\open\command"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\devecostudio64.exe"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\devecostudio64.exe"),
+        ]
+
+        candidates: List[Path] = []
+        for hive, key_path in registry_keys:
+            try:
+                with winreg.OpenKey(hive, key_path) as key:
+                    for value_name in ("", "Path"):
+                        try:
+                            raw_value, _ = winreg.QueryValueEx(key, value_name)
+                        except OSError:
+                            continue
+                        extracted = cls._extract_command_path(str(raw_value))
+                        if not extracted:
+                            continue
+                        if extracted.name.lower() == "bin":
+                            extracted = extracted.parent
+                        elif extracted.suffix.lower() == ".exe":
+                            extracted = extracted.parent.parent if extracted.parent.name.lower() == "bin" else extracted.parent
+                        candidates.append(extracted)
+            except OSError:
+                continue
+        return candidates
+
+    @staticmethod
+    def _unique_existing_paths(candidates: Iterable[Path]) -> List[Path]:
+        seen = set()
+        result: List[Path] = []
+        for candidate in candidates:
+            normalized = candidate.expanduser()
+            key = str(normalized)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(normalized)
+        return result
+
+    @classmethod
     def _get_deveco_search_paths(cls) -> List[Path]:
         """Return likely DevEco Studio install locations for the current platform."""
         system = platform.system()
@@ -87,10 +170,14 @@ class Config(ConfigBase):
             local_app_data = Path(os.getenv("LOCALAPPDATA", home / "AppData" / "Local"))
             program_files = Path(os.getenv("ProgramFiles", r"C:\Program Files"))
             program_files_x86 = Path(os.getenv("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+            candidates.extend(cls._get_windows_registry_deveco_paths())
             candidates.extend([
                 local_app_data / "Programs" / "DevEco Studio",
+                local_app_data / "Programs" / "Huawei" / "DevEco Studio",
                 program_files / "DevEco Studio",
+                program_files / "Huawei" / "DevEco Studio",
                 program_files_x86 / "DevEco Studio",
+                program_files_x86 / "Huawei" / "DevEco Studio",
             ])
         else:
             candidates.extend([
@@ -101,17 +188,77 @@ class Config(ConfigBase):
                 home / ".local" / "share" / "DevEco-Studio",
             ])
 
-        seen = set()
-        unique_candidates: List[Path] = []
-        for candidate in candidates:
-            normalized = candidate.expanduser()
-            key = str(normalized)
-            if key in seen:
-                continue
-            seen.add(key)
-            unique_candidates.append(normalized)
+        return cls._unique_existing_paths(candidates)
 
-        return unique_candidates
+    @classmethod
+    def _detect_deveco_studio_path(cls) -> Optional[str]:
+        env_candidates: List[Path] = []
+        for env_name in ("DEVECO_STUDIO_PATH", "DevEco Studio"):
+            env_value = os.getenv(env_name)
+            if not env_value:
+                continue
+            raw_hint = env_value.split(";" if platform.system() == "Windows" else ":")[0].strip()
+            if not raw_hint:
+                continue
+            candidate = Path(raw_hint).expanduser()
+            if candidate.name.lower() == "bin":
+                candidate = candidate.parent
+            if cls._is_valid_deveco_path(candidate):
+                return str(candidate)
+            env_candidates.append(candidate)
+
+        for candidate in cls._get_deveco_search_paths():
+            if cls._is_valid_deveco_path(candidate):
+                return str(candidate)
+
+        for candidate in env_candidates:
+            if candidate.exists():
+                return str(candidate)
+
+        return None
+
+    @classmethod
+    def _derive_sdk_candidates(cls, deveco_path: Optional[str]) -> List[Path]:
+        user_home = Path.home()
+        candidates: List[Path] = []
+        for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH", "OHOS_SDK_ROOT"):
+            env_value = os.getenv(env_name)
+            if env_value:
+                candidates.append(Path(env_value).expanduser())
+
+        if deveco_path:
+            deveco = Path(deveco_path)
+            candidates.extend([
+                deveco / "sdk",
+                deveco / "Contents" / "sdk",
+                deveco.parent / "sdk",
+            ])
+
+        candidates.extend([
+            user_home / "HarmonyOS" / "sdk",
+            user_home / "harmonyos" / "sdk",
+            user_home / "AppData" / "Local" / "HarmonyOS" / "Sdk",
+            user_home / "AppData" / "Local" / "Huawei" / "Sdk",
+        ])
+
+        hdc_in_path = shutil.which("hdc")
+        if hdc_in_path:
+            hdc_path = Path(hdc_in_path)
+            for parent in hdc_path.parents:
+                normalized = cls._normalize_sdk_root(parent)
+                if normalized:
+                    candidates.append(normalized)
+                    break
+
+        return cls._unique_existing_paths(candidates)
+
+    @classmethod
+    def _detect_sdk_root(cls, deveco_path: Optional[str]) -> Optional[str]:
+        for candidate in cls._derive_sdk_candidates(deveco_path):
+            normalized = cls._normalize_sdk_root(candidate)
+            if normalized:
+                return str(normalized)
+        return None
 
     @classmethod
     def init(cls):
@@ -129,38 +276,11 @@ class Config(ConfigBase):
         cls.BUILD_TIMEOUT = int(os.getenv("BUILD_TIMEOUT", str(cls.BUILD_TIMEOUT)))
         cls.INSTALL_TIMEOUT = int(os.getenv("INSTALL_TIMEOUT", str(cls.INSTALL_TIMEOUT)))
 
-        if not cls.DEVECO_STUDIO_PATH:
-            deveco_env = os.getenv("DevEco Studio")
-            if deveco_env:
-                deveco_env = deveco_env.split(";")[0].strip()
-                if deveco_env:
-                    path = Path(deveco_env)
-                    if path.name.lower() == "bin":
-                        path = path.parent
-                    if path.exists():
-                        cls.DEVECO_STUDIO_PATH = str(path)
+        if not cls.DEVECO_STUDIO_PATH or not cls._is_valid_deveco_path(Path(cls.DEVECO_STUDIO_PATH)):
+            cls.DEVECO_STUDIO_PATH = cls._detect_deveco_studio_path()
 
         if not cls.HARMONYOS_SDK_PATH:
-            candidates = []
-            if cls.DEVECO_STUDIO_PATH:
-                deveco = Path(cls.DEVECO_STUDIO_PATH)
-                candidates.extend([
-                    deveco / "sdk",
-                    deveco / "Contents" / "sdk",
-                    deveco.parent / "sdk",
-                ])
-            user_home = Path.home()
-            candidates.extend([
-                user_home / "HarmonyOS" / "sdk",
-                user_home / "harmonyos" / "sdk",
-                user_home / "AppData" / "Local" / "HarmonyOS" / "Sdk",
-                user_home / "AppData" / "Local" / "Huawei" / "Sdk",
-            ])
-            for c in candidates:
-                normalized = cls._normalize_sdk_root(c)
-                if normalized:
-                    cls.HARMONYOS_SDK_PATH = str(normalized)
-                    break
+            cls.HARMONYOS_SDK_PATH = cls._detect_sdk_root(cls.DEVECO_STUDIO_PATH)
 
         if not cls.HDC_PATH and cls.HARMONYOS_SDK_PATH:
             hdc_name = "hdc.exe" if system == "Windows" else "hdc"
