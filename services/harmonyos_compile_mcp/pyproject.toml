@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "harmonyos-compile-mcp"
-version = "0.1.0"
+version = "0.5.0"
 requires-python = ">=3.10"
 dependencies = [
     "harmonyos-mcp-common",
@@ -21,6 +21,3 @@ harmonyos-mcp-common = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/harmonyos_compile_mcp"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"../../packages/common/src/common" = "common"
