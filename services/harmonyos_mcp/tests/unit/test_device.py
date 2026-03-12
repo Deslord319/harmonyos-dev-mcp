@@ -203,6 +203,9 @@ class TestUiTree:
         sc = unwrap_result(await ui_tree.get_ui_tree())
 
         assert sc["ok"] is True
+        assert sc["result"]["validation_applied"] is False
+        assert sc["result"]["validated_window_id"] is None
+        assert sc["result"]["capture_scope"] == "global_dump"
         mock_hdc.get_window_list.assert_not_called()
         mock_hdc.get_ui_tree_raw.assert_called_once_with("device_001", None)
 
@@ -213,7 +216,10 @@ class TestUiTree:
         sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
 
         assert sc["ok"] is True
-        mock_hdc.get_window_list.assert_called_once_with("device_001")
+        assert sc["result"]["validation_applied"] is True
+        assert sc["result"]["validated_window_id"] == 1
+        assert sc["result"]["capture_scope"] == "validated_global_dump"
+        mock_hdc.resolve_window_target.assert_called_once_with("device_001", bundle_name="com.example.app", window_id=None)
         mock_hdc.get_ui_tree_raw.assert_called_once_with("device_001", 1)
 
     @pytest.mark.asyncio
@@ -248,7 +254,8 @@ class TestUiTree:
         sc = unwrap_result(await ui_tree.get_ui_tree(window_id=1))
 
         assert sc["ok"] is True
-        mock_hdc.get_window_list.assert_called_once_with("device_001")
+        assert sc["result"]["validated_window_id"] == 1
+        mock_hdc.resolve_window_target.assert_called_once_with("device_001", bundle_name=None, window_id=1)
         mock_hdc.get_ui_tree_raw.assert_called_once_with("device_001", 1)
 
     @pytest.mark.asyncio

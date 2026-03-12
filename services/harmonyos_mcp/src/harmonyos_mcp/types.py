@@ -181,6 +181,9 @@ class UITreeNode(TypedDict, total=False):
 
 class UITreeResult(DeviceResult):
     window_id: int
+    validated_window_id: Optional[int]
+    validation_applied: bool
+    capture_scope: str
     ui_tree: dict
     node_count: int
 

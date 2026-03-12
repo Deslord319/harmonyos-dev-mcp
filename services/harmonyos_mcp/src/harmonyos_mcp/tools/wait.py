@@ -7,6 +7,7 @@ from common.tools.registry import mcp_tool
 
 from ..container import get_ui_operations
 from ..types import UIElement, WaitElementResult, WaitElementState
+from ..utils.ui_common import element_to_bounds
 from .device_base import ToolBase
 from .response import error_result, from_action_result, mcp_response, ok_result
 
@@ -26,23 +27,6 @@ def _validate_search_target(
     )
 
 
-def _build_bounds(element: Dict[str, Any]) -> Optional[Dict[str, int]]:
-    if isinstance(element.get("bounds"), dict):
-        return dict(element["bounds"])
-    left = element.get("left")
-    top = element.get("top")
-    width = element.get("width")
-    height = element.get("height")
-    if None in (left, top, width, height):
-        return None
-    return {
-        "left": int(left),
-        "top": int(top),
-        "right": int(left) + int(width),
-        "bottom": int(top) + int(height),
-    }
-
-
 def _normalize_element(
     element: Dict[str, Any],
     *,
@@ -50,7 +34,7 @@ def _normalize_element(
     window_id: Optional[int],
 ) -> UIElement:
     normalized = dict(element)
-    bounds = _build_bounds(normalized)
+    bounds = element_to_bounds(normalized)
     if bounds:
         normalized["bounds"] = bounds
     handle = {

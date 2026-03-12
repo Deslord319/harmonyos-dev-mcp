@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 from loguru import logger
 
 from harmonyos_mcp.config import Config
+from harmonyos_mcp.utils.ui_common import normalize_bundle_name
 
 
 class HdcUI:
@@ -32,22 +33,13 @@ class HdcUI:
                 header_idx = i
                 break
 
-        if header_idx == -1:
-            logger.warning("Failed to locate window list header")
-            return {
-                "success": False,
-                "error_code": "LIST_WINDOWS_PARSE_ERROR",
-                "error": "failed to parse window list header",
-                "windows": [],
-                "raw_output": result["stdout"],
-            }
-
         pid_bundle_cache: Dict[int, Optional[str]] = {}
         pattern = re.compile(
             r"^(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(-?\d+)\s+(\d+)\s+\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]"
         )
 
-        for line in lines[header_idx + 1 :]:
+        candidate_lines = lines[header_idx + 1 :] if header_idx != -1 else lines
+        for line in candidate_lines:
             line = line.strip()
             if not line or line.startswith("-"):
                 continue
@@ -84,6 +76,9 @@ class HdcUI:
                 )
             except (ValueError, IndexError) as exc:
                 logger.debug(f"Failed to parse window line: {line}, error: {exc}")
+
+        if header_idx == -1 and windows:
+            logger.warning("Window list header not found, using regex-only parse fallback")
 
         if result["stdout"].strip() and not windows:
             logger.warning("Window list command returned output but no windows were parsed")
@@ -144,23 +139,83 @@ class HdcUI:
         }
 
     def find_window_by_bundle(self, device_id: str, bundle_name: str) -> Optional[int]:
-        logger.info(f"Finding window for bundle {bundle_name}")
-        window_list = self.get_window_list(device_id)
-
-        if not window_list["success"]:
-            logger.error("Failed to get window list")
+        resolved = self.resolve_window_target(device_id, bundle_name=bundle_name)
+        if not resolved.get("success", False):
+            logger.warning(f"Window not found for bundle {bundle_name}")
             return None
+        window = resolved.get("window")
+        return window.get("window_id") if isinstance(window, dict) else None
 
-        target_bundle = bundle_name.strip()
-        for window in window_list["windows"]:
-            if window.get("bundle_name") == target_bundle and window.get("is_visible"):
-                logger.info(f"Matched visible window {window['window_name']} ({window['window_id']})")
-                return window["window_id"]
+    def resolve_window_target(
+        self,
+        device_id: str,
+        *,
+        bundle_name: Optional[str] = None,
+        window_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        window_list = self.get_window_list(device_id)
+        if not window_list.get("success", False):
+            return {
+                "success": False,
+                "error_code": window_list.get("error_code", "LIST_WINDOWS_ERROR"),
+                "error": window_list.get("error", "failed to list windows"),
+                "window": None,
+                "windows": [],
+            }
 
-        for window in window_list["windows"]:
-            if window.get("bundle_name") == target_bundle:
-                logger.info(f"Matched background window {window['window_name']} ({window['window_id']})")
-                return window["window_id"]
+        windows = window_list.get("windows", [])
+        if not windows:
+            return {
+                "success": False,
+                "error_code": "NO_WINDOWS",
+                "error": "no window found",
+                "window": None,
+                "windows": [],
+            }
 
-        logger.warning(f"Window not found for bundle {bundle_name}")
-        return None
+        target_bundle = normalize_bundle_name(bundle_name)
+        matched_window: Optional[Dict[str, Any]] = None
+
+        if window_id is not None:
+            matched_window = next((w for w in windows if w.get("window_id") == window_id), None)
+            if not matched_window:
+                return {
+                    "success": False,
+                    "error_code": "WINDOW_NOT_FOUND",
+                    "error": f"window not found: {window_id}",
+                    "window": None,
+                    "windows": windows,
+                }
+            if target_bundle and normalize_bundle_name(matched_window.get("bundle_name")) != target_bundle:
+                return {
+                    "success": False,
+                    "error_code": "WINDOW_BUNDLE_MISMATCH",
+                    "error": f"window {window_id} does not match bundle: {target_bundle}",
+                    "window": None,
+                    "windows": windows,
+                }
+            return {"success": True, "window": matched_window, "windows": windows}
+
+        if target_bundle:
+            visible_matches = [
+                w for w in windows
+                if w.get("is_visible") and normalize_bundle_name(w.get("bundle_name")) == target_bundle
+            ]
+            matched_window = visible_matches[0] if visible_matches else None
+            if not matched_window:
+                any_matches = [w for w in windows if normalize_bundle_name(w.get("bundle_name")) == target_bundle]
+                matched_window = any_matches[0] if any_matches else None
+            if not matched_window:
+                return {
+                    "success": False,
+                    "error_code": "WINDOW_NOT_FOUND",
+                    "error": f"window not found for bundle: {target_bundle}",
+                    "window": None,
+                    "windows": windows,
+                }
+            return {"success": True, "window": matched_window, "windows": windows}
+
+        for window in windows:
+            if window.get("is_visible"):
+                return {"success": True, "window": window, "windows": windows}
+        return {"success": True, "window": windows[0], "windows": windows}

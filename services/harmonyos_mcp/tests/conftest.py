@@ -87,6 +87,63 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
             }
         ],
     }
+    def _resolve_window_target(device_id, *, bundle_name=None, window_id=None):
+        window_list = mock.get_window_list(device_id)
+        if not window_list.get("success", False):
+            return {
+                "success": False,
+                "error_code": window_list.get("error_code", "LIST_WINDOWS_ERROR"),
+                "error": window_list.get("error", "failed to list windows"),
+                "window": None,
+                "windows": [],
+            }
+
+        windows = window_list.get("windows", [])
+        if not windows:
+            return {
+                "success": False,
+                "error_code": "NO_WINDOWS",
+                "error": "no window found",
+                "window": None,
+                "windows": [],
+            }
+
+        if window_id is not None:
+            match = next((w for w in windows if w.get("window_id") == window_id), None)
+            if not match:
+                return {
+                    "success": False,
+                    "error_code": "WINDOW_NOT_FOUND",
+                    "error": f"window not found: {window_id}",
+                    "window": None,
+                    "windows": windows,
+                }
+            if bundle_name and match.get("bundle_name") != bundle_name:
+                return {
+                    "success": False,
+                    "error_code": "WINDOW_BUNDLE_MISMATCH",
+                    "error": f"window {window_id} does not match bundle: {bundle_name}",
+                    "window": None,
+                    "windows": windows,
+                }
+            return {"success": True, "window": match, "windows": windows}
+
+        if bundle_name:
+            visible = [w for w in windows if w.get("bundle_name") == bundle_name and w.get("is_visible")]
+            match = visible[0] if visible else next((w for w in windows if w.get("bundle_name") == bundle_name), None)
+            if not match:
+                return {
+                    "success": False,
+                    "error_code": "WINDOW_NOT_FOUND",
+                    "error": f"window not found for bundle: {bundle_name}",
+                    "window": None,
+                    "windows": windows,
+                }
+            return {"success": True, "window": match, "windows": windows}
+
+        return {"success": True, "window": windows[0], "windows": windows}
+
+    mock.resolve_window_target.side_effect = _resolve_window_target
     mock.get_ui_tree_raw.return_value = {"success": True, "ui_tree": {"type": "Root", "children": []}}
     mock.get_realtime_logs.return_value = "01-31 10:00:00.123  1234  1234 I MyTag: Test log"
     mock.get_app_pid.return_value = 1234

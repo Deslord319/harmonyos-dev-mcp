@@ -122,18 +122,17 @@ class HdcApp:
         window_info = None
 
         while time.time() - start_time < timeout:
-            window_list = self.get_window_list(device_id)
-            if window_list["success"]:
-                for window in window_list["windows"]:
-                    if window.get("bundle_name") == bundle_name and window.get("is_visible"):
-                        window_found = True
-                        window_info = {
-                            "window_name": window["window_name"],
-                            "window_id": window["window_id"],
-                            "zord": window.get("zord"),
-                            "rect": window.get("rect"),
-                        }
-                        break
+            resolved = self.resolve_window_target(device_id, bundle_name=bundle_name)
+            if resolved.get("success", False):
+                window = resolved.get("window")
+                if isinstance(window, dict) and window.get("is_visible"):
+                    window_found = True
+                    window_info = {
+                        "window_name": window["window_name"],
+                        "window_id": window["window_id"],
+                        "zord": window.get("zord"),
+                        "rect": window.get("rect"),
+                    }
             if window_found:
                 break
             time.sleep(0.3)
