@@ -77,9 +77,9 @@ class TestQueryPackage:
 class TestUiTree:
     @pytest.mark.asyncio
     async def test_list_windows_maps_rect_to_bounds(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
-        sc = unwrap_result(await ui_tree.list_windows())
+        sc = unwrap_result(await e2e.list_windows())
 
         assert sc["ok"] is True
         window = sc["result"]["windows"][0]
@@ -88,7 +88,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_list_windows_filters_by_bundle_name(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": True,
@@ -111,7 +111,7 @@ class TestUiTree:
             ],
         }
 
-        sc = unwrap_result(await ui_tree.list_windows(bundle_name="com.huawei.hmos.settings"))
+        sc = unwrap_result(await e2e.list_windows(bundle_name="com.huawei.hmos.settings"))
 
         assert sc["ok"] is True
         assert sc["result"]["count"] == 1
@@ -119,9 +119,9 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_list_windows_bundle_filter_can_return_empty(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
-        sc = unwrap_result(await ui_tree.list_windows(bundle_name="com.example.missing"))
+        sc = unwrap_result(await e2e.list_windows(bundle_name="com.example.missing"))
 
         assert sc["ok"] is True
         assert sc["result"]["count"] == 0
@@ -129,7 +129,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_list_windows_marks_unresolved_bundle_name(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": True,
@@ -145,7 +145,7 @@ class TestUiTree:
             ],
         }
 
-        sc = unwrap_result(await ui_tree.list_windows())
+        sc = unwrap_result(await e2e.list_windows())
 
         assert sc["ok"] is True
         window = sc["result"]["windows"][0]
@@ -155,7 +155,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_list_windows_returns_parse_error(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": False,
@@ -164,7 +164,7 @@ class TestUiTree:
             "windows": [],
         }
 
-        sc = unwrap_result(await ui_tree.list_windows())
+        sc = unwrap_result(await e2e.list_windows())
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "LIST_WINDOWS_PARSE_ERROR"
@@ -173,11 +173,11 @@ class TestUiTree:
     async def test_get_ui_tree_returns_list_windows_error_when_window_query_fails_for_targeted_lookup(
         self, mock_hdc: MagicMock, unwrap_result
     ):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {"success": False, "error": "wm failed", "error_code": "LIST_WINDOWS_ERROR"}
 
-        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
+        sc = unwrap_result(await e2e.get_ui_tree(bundle_name="com.example.app"))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "LIST_WINDOWS_ERROR"
@@ -187,20 +187,20 @@ class TestUiTree:
     async def test_get_ui_tree_returns_no_windows_when_targeted_lookup_window_list_empty(
         self, mock_hdc: MagicMock, unwrap_result
     ):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {"success": True, "windows": [], "count": 0}
 
-        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
+        sc = unwrap_result(await e2e.get_ui_tree(bundle_name="com.example.app"))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "NO_WINDOWS"
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_without_target_does_not_query_windows(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
-        sc = unwrap_result(await ui_tree.get_ui_tree())
+        sc = unwrap_result(await e2e.get_ui_tree())
 
         assert sc["ok"] is True
         assert sc["result"]["validation_applied"] is False
@@ -211,9 +211,9 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_with_bundle_name_validates_target_window(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
-        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
+        sc = unwrap_result(await e2e.get_ui_tree(bundle_name="com.example.app"))
 
         assert sc["ok"] is True
         assert sc["result"]["validation_applied"] is True
@@ -226,7 +226,7 @@ class TestUiTree:
     async def test_get_ui_tree_rejects_bundle_when_not_explicitly_resolved(
         self, mock_hdc: MagicMock, unwrap_result
     ):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": True,
@@ -242,16 +242,16 @@ class TestUiTree:
             ],
         }
 
-        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
+        sc = unwrap_result(await e2e.get_ui_tree(bundle_name="com.example.app"))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "WINDOW_NOT_FOUND"
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_with_window_id_validates_window_exists(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
-        sc = unwrap_result(await ui_tree.get_ui_tree(window_id=1))
+        sc = unwrap_result(await e2e.get_ui_tree(window_id=1))
 
         assert sc["ok"] is True
         assert sc["result"]["validated_window_id"] == 1
@@ -260,16 +260,16 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_rejects_unknown_window_id(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
-        sc = unwrap_result(await ui_tree.get_ui_tree(window_id=999))
+        sc = unwrap_result(await e2e.get_ui_tree(window_id=999))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "WINDOW_NOT_FOUND"
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_rejects_window_bundle_mismatch(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import ui_tree
+        from harmonyos_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": True,
@@ -285,7 +285,7 @@ class TestUiTree:
             ],
         }
 
-        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app", window_id=7))
+        sc = unwrap_result(await e2e.get_ui_tree(bundle_name="com.example.app", window_id=7))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "WINDOW_BUNDLE_MISMATCH"

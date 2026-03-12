@@ -210,7 +210,7 @@ class TestRegistry:
 
 class TestRealToolRegistration:
     def test_all_tools_registered(self):
-        from harmonyos_mcp.tools import build, general, ui, ui_tree, wait  # noqa: F401
+        from harmonyos_mcp.tools import build, e2e, general, ui  # noqa: F401
         from harmonyos_mcp.tools.log import query as log_query  # noqa: F401
 
         tools = get_registered_tools()
@@ -223,7 +223,7 @@ class TestRealToolRegistration:
         )
 
     def test_categories_correct(self):
-        from harmonyos_mcp.tools import build, general, ui, ui_tree, wait  # noqa: F401
+        from harmonyos_mcp.tools import build, e2e, general, ui  # noqa: F401
         from harmonyos_mcp.tools.log import query as log_query  # noqa: F401
 
         summary = get_tool_summary()

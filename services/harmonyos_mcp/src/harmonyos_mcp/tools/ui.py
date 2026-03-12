@@ -19,24 +19,9 @@ from ..types import (
     ScreenshotResult,
     SwipeResult,
 )
+from ..utils.normalizers.element import attach_element_metadata, build_lookup_hint, compact_candidate_handles
 from .device_base import ToolBase
 from .response import error_result, from_action_result, mcp_response
-
-
-def _compact_candidate_handles(elements: list[Dict[str, Any]], limit: int = 3) -> list[Dict[str, Any]]:
-    compact = []
-    for element in elements[:limit]:
-        compact.append(
-            {
-                "id": element.get("id"),
-                "compid": element.get("compid"),
-                "type": element.get("type"),
-                "text": element.get("text"),
-                "x": element.get("x"),
-                "y": element.get("y"),
-            }
-        )
-    return compact
 
 
 def _with_success_message(raw: Any, message: str) -> Any:
@@ -46,84 +31,6 @@ def _with_success_message(raw: Any, message: str) -> Any:
     if normalized.get("success", False):
         normalized["message"] = message
     return normalized
-
-
-def _build_bounds(element: Dict[str, Any]) -> Optional[Dict[str, int]]:
-    if isinstance(element.get("bounds"), dict):
-        return dict(element["bounds"])
-
-    left = element.get("left")
-    top = element.get("top")
-    width = element.get("width")
-    height = element.get("height")
-    if None in (left, top, width, height):
-        return None
-
-    return {
-        "left": int(left),
-        "top": int(top),
-        "right": int(left) + int(width),
-        "bottom": int(top) + int(height),
-    }
-
-
-def _build_lookup_hint(
-    *,
-    text: Optional[str] = None,
-    element_type: Optional[str] = None,
-    element_id: Optional[str] = None,
-    bundle_name: Optional[str] = None,
-    window_id: Optional[int] = None,
-) -> Dict[str, Any]:
-    hint: Dict[str, Any] = {}
-    if text:
-        hint["text"] = text
-    if element_type:
-        hint["element_type"] = element_type
-    if element_id:
-        hint["element_id"] = element_id
-    if bundle_name:
-        hint["bundle_name"] = bundle_name
-    if window_id is not None:
-        hint["window_id"] = window_id
-    return hint
-
-
-def _attach_element_metadata(
-    elements: list[Dict[str, Any]],
-    *,
-    bundle_name: Optional[str],
-    window_id: Optional[int],
-    lookup_hint: Optional[Dict[str, Any]],
-) -> list[Dict[str, Any]]:
-    is_broad_lookup = bool(element_type := (lookup_hint or {}).get("element_type")) and not (
-        (lookup_hint or {}).get("text") or (lookup_hint or {}).get("element_id")
-    )
-    lookup_is_broad = is_broad_lookup or len(elements) > 1
-    enriched = []
-    for element in elements:
-        item = dict(element)
-        bounds = _build_bounds(item)
-        if bounds:
-            item["bounds"] = bounds
-
-        effective_window_id = item.get("window_id", window_id)
-        handle = {
-            "window_id": effective_window_id,
-            "id": item.get("id"),
-            "compid": item.get("compid"),
-            "type": item.get("type"),
-            "text": item.get("text"),
-            "x": item.get("x"),
-            "y": item.get("y"),
-            "bounds": item.get("bounds"),
-            "bundle_name": bundle_name,
-            "lookup_hint": dict(lookup_hint or {}),
-        }
-        item["element_handle"] = {k: v for k, v in handle.items() if v is not None}
-        item["lookup_is_broad"] = lookup_is_broad
-        enriched.append(item)
-    return enriched
 
 
 def _is_close(a: Any, b: Any, tolerance: int = 12) -> bool:
@@ -208,7 +115,7 @@ async def _resolve_handle_coords(
             default_result={"elements": [], "count": 0},
         )
 
-    candidates = _attach_element_metadata(
+    candidates = attach_element_metadata(
         raw.get("elements", []),
         bundle_name=bundle_name,
         window_id=raw.get("window_id", window_id),
@@ -242,7 +149,7 @@ async def _resolve_handle_coords(
             default_result={"elements": [], "count": 0},
         )
 
-    retry_candidates = _attach_element_metadata(
+    retry_candidates = attach_element_metadata(
         retry_raw.get("elements", []),
         bundle_name=lookup_hint.get("bundle_name"),
         window_id=retry_raw.get("window_id", lookup_hint.get("window_id")),
@@ -259,7 +166,7 @@ async def _resolve_handle_coords(
                 "elements": retry_candidates,
                 "count": len(retry_candidates),
                 "match_count": len(retry_candidates),
-                "candidate_handles": _compact_candidate_handles(retry_candidates),
+                "candidate_handles": compact_candidate_handles(retry_candidates),
             },
         )
 
@@ -660,14 +567,14 @@ async def find_element(
         bundle_name=bundle_name,
         window_id=window_id,
     )
-    lookup_hint = _build_lookup_hint(
+    lookup_hint = build_lookup_hint(
         text=text,
         element_type=element_type,
         element_id=element_id,
         bundle_name=bundle_name,
         window_id=raw.get("window_id", window_id),
     )
-    elements = _attach_element_metadata(
+    elements = attach_element_metadata(
         raw.get("elements", []),
         bundle_name=bundle_name,
         window_id=raw.get("window_id", window_id),

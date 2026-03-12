@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from functools import wraps
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 from datetime import datetime, timezone
 
 from fastmcp import FastMCP
@@ -16,25 +16,20 @@ from common.tools.registry import get_registered_tools, get_tool_summary
 
 def create_server(
     name: str,
-    tool_modules: Optional[List] = None,
     enable_error_handler: bool = True,
     on_error: Optional[Callable] = None,
 ) -> FastMCP:
     """Create FastMCP server and register all discovered tools."""
     server = FastMCP(name)
-
-    # Import-only side effects are still allowed for explicit tool registration.
-    if tool_modules:
-        for _module in tool_modules:
-            pass
-
-    server._tools = {}
+    registered_tools = []
     for entry in get_registered_tools():
         func = entry.func
         if enable_error_handler:
             func = _wrap_with_error_handler(func, on_error)
         server.tool(output_schema=None)(func)
-        server._tools[func.__name__] = func
+        registered_tools.append(func)
+
+    server.codex_registered_tools = tuple(registered_tools)
 
     summary = get_tool_summary()
     logger.info(f"Registered {summary['total']} tools, categories: {summary['categories']}")
