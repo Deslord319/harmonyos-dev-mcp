@@ -90,7 +90,6 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
     mock.get_ui_tree_raw.return_value = {"success": True, "ui_tree": {"type": "Root", "children": []}}
     mock.get_realtime_logs.return_value = "01-31 10:00:00.123  1234  1234 I MyTag: Test log"
     mock.get_app_pid.return_value = 1234
-
     container.register(HdcWrapper, lambda: mock)
     container_mod._registered = True
 

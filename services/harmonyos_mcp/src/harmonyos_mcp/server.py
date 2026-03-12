@@ -5,7 +5,7 @@ from loguru import logger
 from common.server.base import create_server, run_server
 
 from .config import Config
-from .tools import build, general, ui, ui_tree  # noqa: F401
+from .tools import build, general, ui, ui_tree, wait  # noqa: F401
 from .tools.log.query import logs_query  # noqa: F401
 
 

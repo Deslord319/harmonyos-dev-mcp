@@ -1,104 +1,137 @@
-"""
-hdc 应用管理模块
+"""Application-level hdc helpers."""
 
-提供应用启动、进程管理、端口转发等功能。
-"""
 import time
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from loguru import logger
 
 
 class HdcApp:
-    """应用管理相关方法"""
+    """Application and process helpers."""
+
+    PID_BUNDLE_CACHE_TTL_SECONDS = 3.0
+
+    @staticmethod
+    def _normalize_bundle_from_process_name(process_name: str) -> str:
+        normalized = (process_name or "").strip().strip("\x00")
+        if not normalized:
+            return ""
+        first_token = normalized.replace("\x00", " ").split()[0]
+        return first_token.split(":", 1)[0]
+
+    def _get_pid_bundle_cache(self) -> dict[tuple[str, int], tuple[float, Optional[str]]]:
+        cache = getattr(self, "_pid_bundle_cache", None)
+        if cache is None:
+            cache = {}
+            self._pid_bundle_cache = cache
+        return cache
+
+    def _prune_pid_bundle_cache(self, now: float) -> None:
+        cache = self._get_pid_bundle_cache()
+        expired_keys = [key for key, (expires_at, _) in cache.items() if expires_at <= now]
+        for key in expired_keys:
+            cache.pop(key, None)
+
+    def get_bundle_name_by_pid(self, device_id: str, pid: int) -> Optional[str]:
+        logger.debug(f"Resolving bundle name for pid {pid}")
+        now = time.monotonic()
+        cache_key = (device_id, pid)
+        cache = self._get_pid_bundle_cache()
+        self._prune_pid_bundle_cache(now)
+
+        cached = cache.get(cache_key)
+        if cached is not None:
+            _, cached_bundle = cached
+            cache[cache_key] = (now + self.PID_BUNDLE_CACHE_TTL_SECONDS, cached_bundle)
+            logger.debug(f"PID bundle cache hit for {cache_key}: {cached_bundle}")
+            return cached_bundle
+
+        result = self.execute_shell(device_id, f"cat /proc/{pid}/cmdline")
+        if result["success"] and result["stdout"]:
+            bundle_name = self._normalize_bundle_from_process_name(result["stdout"])
+            if bundle_name:
+                logger.info(f"Resolved pid {pid} to bundle {bundle_name}")
+                cache[cache_key] = (time.monotonic() + self.PID_BUNDLE_CACHE_TTL_SECONDS, bundle_name)
+                return bundle_name
+
+        ps_result = self.execute_shell(device_id, f"ps -A | grep {pid}")
+        if ps_result["success"] and ps_result["stdout"]:
+            for line in ps_result["stdout"].splitlines():
+                tokens = line.split()
+                if not tokens or str(pid) not in tokens:
+                    continue
+                bundle_name = self._normalize_bundle_from_process_name(tokens[-1])
+                if bundle_name:
+                    logger.info(f"Resolved pid {pid} to bundle {bundle_name} via ps")
+                    cache[cache_key] = (time.monotonic() + self.PID_BUNDLE_CACHE_TTL_SECONDS, bundle_name)
+                    return bundle_name
+
+        logger.warning(f"Unable to resolve bundle name for pid {pid}")
+        cache[cache_key] = (time.monotonic() + self.PID_BUNDLE_CACHE_TTL_SECONDS, None)
+        return None
 
     def get_app_pid(self, device_id: str, package_name: str) -> Optional[int]:
-        """
-        获取应用的进程ID
-        
-        Args:
-            device_id: 设备ID
-            package_name: 应用包名 (如 com.example.myapplication)
-        
-        Returns:
-            进程ID，如果应用未运行则返回 None
-        """
-        logger.debug(f"获取应用 {package_name} 的进程ID")
-        
-        # 使用 pidof 命令获取进程ID
-        result = self.execute_shell(device_id, f'pidof {package_name}')
-        
-        if result['success'] and result['stdout'].strip():
+        logger.debug(f"Getting pid for package {package_name}")
+        result = self.execute_shell(device_id, f"pidof {package_name}")
+
+        if result["success"] and result["stdout"].strip():
             try:
-                # pidof 可能返回多个 PID（多进程），取第一个
-                pid_str = result['stdout'].strip().split()[0]
+                pid_str = result["stdout"].strip().split()[0]
                 pid = int(pid_str)
-                logger.info(f"应用 {package_name} 的进程ID: {pid}")
+                logger.info(f"Package {package_name} pid: {pid}")
                 return pid
             except (ValueError, IndexError):
-                logger.warning(f"无法解析进程ID: {result['stdout']}")
+                logger.warning(f"Unable to parse pid from: {result['stdout']}")
                 return None
-        else:
-            logger.debug(f"应用 {package_name} 未运行或未找到进程")
-            return None
 
-    def start_app(self, device_id: str, bundle_name: str, ability_name: str = "EntryAbility", 
-                  module_name: str = "entry", verify: bool = True, timeout: float = 3.0) -> Dict[str, Any]:
-        """
-        启动应用
+        logger.debug(f"Package {package_name} is not running")
+        return None
 
-        Args:
-            device_id: 设备ID
-            bundle_name: 应用包名
-            ability_name: Ability名称
-            module_name: 模块名称
-            verify: 是否验证应用实际启动（检查窗口是否出现）
-            timeout: 验证超时时间（秒）
-
-        Returns:
-            包含启动状态的字典
-        """
-        logger.info(f"启动应用: {bundle_name}/{ability_name} (module: {module_name})")
-
-        # 使用aa start命令启动应用，添加-m参数指定模块
+    def start_app(
+        self,
+        device_id: str,
+        bundle_name: str,
+        ability_name: str = "EntryAbility",
+        module_name: str = "entry",
+        verify: bool = True,
+        timeout: float = 3.0,
+    ) -> Dict[str, Any]:
+        logger.info(f"Starting app: {bundle_name}/{ability_name} (module={module_name})")
         command = f"aa start -a {ability_name} -b {bundle_name} -m {module_name}"
         result = self.execute_shell(device_id, command)
 
-        if not result['success']:
-            logger.error(f"应用启动命令失败: {result['stderr']}")
+        if not result["success"]:
+            logger.error(f"App start command failed: {result['stderr']}")
             return {
-                'success': False,
-                'error': result['stderr'],
-                'command_success': False,
-                'window_found': False
+                "success": False,
+                "error": result["stderr"],
+                "command_success": False,
+                "window_found": False,
             }
 
-        # 如果不需要验证，直接返回命令执行结果
         if not verify:
             return {
-                'success': True,
-                'command_success': True,
-                'window_found': None,
-                'message': '启动命令已执行（未验证窗口）'
+                "success": True,
+                "command_success": True,
+                "window_found": None,
+                "message": "start command executed without window verification",
             }
 
-        # 验证应用实际启动：检查窗口是否出现
-        app_name = bundle_name.split('.')[-1].lower()
         start_time = time.time()
         window_found = False
         window_info = None
 
         while time.time() - start_time < timeout:
             window_list = self.get_window_list(device_id)
-            if window_list['success']:
-                for window in window_list['windows']:
-                    window_name = window['window_name'].lower()
-                    if window_name.startswith(app_name) and window['is_visible']:
+            if window_list["success"]:
+                for window in window_list["windows"]:
+                    if window.get("bundle_name") == bundle_name and window.get("is_visible"):
                         window_found = True
                         window_info = {
-                            'window_name': window['window_name'],
-                            'window_id': window['window_id'],
-                            'zord': window.get('zord'),
-                            'rect': window.get('rect')
+                            "window_name": window["window_name"],
+                            "window_id": window["window_id"],
+                            "zord": window.get("zord"),
+                            "rect": window.get("rect"),
                         }
                         break
             if window_found:
@@ -106,45 +139,31 @@ class HdcApp:
             time.sleep(0.3)
 
         if window_found:
-            logger.info(f"应用启动成功，窗口已出现: {window_info['window_name']}")
+            logger.info(f"App started and visible window detected: {window_info['window_name']}")
             return {
-                'success': True,
-                'command_success': True,
-                'window_found': True,
-                'window': window_info
+                "success": True,
+                "command_success": True,
+                "window_found": True,
+                "window": window_info,
             }
-        else:
-            logger.warning(f"应用启动命令成功，但未检测到窗口 (app_name={app_name})")
-            return {
-                'success': False,
-                'error': f'应用窗口未出现（可能ability_name或module_name错误）',
-                'command_success': True,
-                'window_found': False
-            }
+
+        logger.warning(f"Start command succeeded but window was not detected for {bundle_name}")
+        return {
+            "success": False,
+            "error": "app window did not appear after start command",
+            "command_success": True,
+            "window_found": False,
+        }
 
     def forward_port(self, device_id: str, local_port: int, remote_port: int) -> bool:
-        """
-        端口转发
+        logger.info(f"Forwarding localhost:{local_port} -> device:{remote_port}")
+        result = self._execute_command(
+            ["-t", device_id, "fport", f"tcp:{local_port}", f"tcp:{remote_port}"]
+        )
 
-        Args:
-            device_id: 设备ID
-            local_port: 本地端口
-            remote_port: 远程端口
-
-        Returns:
-            是否转发成功
-        """
-        logger.info(f"设置端口转发: localhost:{local_port} -> device:{remote_port}")
-        result = self._execute_command([
-            '-t', device_id,
-            'fport',
-            f'tcp:{local_port}',
-            f'tcp:{remote_port}'
-        ])
-
-        if result['success']:
-            logger.info(f"端口转发设置成功")
+        if result["success"]:
+            logger.info("Port forwarding configured")
             return True
-        else:
-            logger.error(f"端口转发设置失败: {result['stderr']}")
-            return False
+
+        logger.error(f"Port forwarding failed: {result['stderr']}")
+        return False

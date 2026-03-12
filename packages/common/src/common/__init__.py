@@ -9,7 +9,7 @@ HarmonyOS MCP Common Package
 - create_server/run_server: MCP服务器工厂
 """
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __author__ = "HarmonyOS MCP Team"
 
 from .container import Container

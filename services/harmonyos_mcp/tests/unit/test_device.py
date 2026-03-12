@@ -87,6 +87,47 @@ class TestUiTree:
         assert window["bundle_name_resolved"] is True
 
     @pytest.mark.asyncio
+    async def test_list_windows_filters_by_bundle_name(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_mcp.tools import ui_tree
+
+        mock_hdc.get_window_list.return_value = {
+            "success": True,
+            "count": 2,
+            "windows": [
+                {
+                    "window_id": 1,
+                    "window_name": "settings0",
+                    "bundle_name": "com.huawei.hmos.settings",
+                    "is_visible": True,
+                    "rect": {"x": 10, "y": 20, "w": 300, "h": 400},
+                },
+                {
+                    "window_id": 2,
+                    "window_name": "securitytool0",
+                    "bundle_name": "com.huawei.securitytool",
+                    "is_visible": True,
+                    "rect": {"x": 30, "y": 40, "w": 500, "h": 600},
+                },
+            ],
+        }
+
+        sc = unwrap_result(await ui_tree.list_windows(bundle_name="com.huawei.hmos.settings"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["count"] == 1
+        assert sc["result"]["windows"][0]["bundle_name"] == "com.huawei.hmos.settings"
+
+    @pytest.mark.asyncio
+    async def test_list_windows_bundle_filter_can_return_empty(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_mcp.tools import ui_tree
+
+        sc = unwrap_result(await ui_tree.list_windows(bundle_name="com.example.missing"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["count"] == 0
+        assert sc["result"]["windows"] == []
+
+    @pytest.mark.asyncio
     async def test_list_windows_marks_unresolved_bundle_name(self, mock_hdc: MagicMock, unwrap_result):
         from harmonyos_mcp.tools import ui_tree
 
@@ -113,29 +154,134 @@ class TestUiTree:
         assert window["bounds"] == {"left": 1, "top": 2, "right": 4, "bottom": 6}
 
     @pytest.mark.asyncio
-    async def test_get_ui_tree_returns_list_windows_error_when_window_query_fails(
+    async def test_list_windows_returns_parse_error(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_mcp.tools import ui_tree
+
+        mock_hdc.get_window_list.return_value = {
+            "success": False,
+            "error_code": "LIST_WINDOWS_PARSE_ERROR",
+            "error": "failed to parse window list header",
+            "windows": [],
+        }
+
+        sc = unwrap_result(await ui_tree.list_windows())
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "LIST_WINDOWS_PARSE_ERROR"
+
+    @pytest.mark.asyncio
+    async def test_get_ui_tree_returns_list_windows_error_when_window_query_fails_for_targeted_lookup(
         self, mock_hdc: MagicMock, unwrap_result
     ):
         from harmonyos_mcp.tools import ui_tree
 
         mock_hdc.get_window_list.return_value = {"success": False, "error": "wm failed", "error_code": "LIST_WINDOWS_ERROR"}
 
-        sc = unwrap_result(await ui_tree.get_ui_tree())
+        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "LIST_WINDOWS_ERROR"
         assert sc["error"]["detail"] == "wm failed"
 
     @pytest.mark.asyncio
-    async def test_get_ui_tree_returns_no_windows_when_window_list_empty(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_get_ui_tree_returns_no_windows_when_targeted_lookup_window_list_empty(
+        self, mock_hdc: MagicMock, unwrap_result
+    ):
         from harmonyos_mcp.tools import ui_tree
 
         mock_hdc.get_window_list.return_value = {"success": True, "windows": [], "count": 0}
 
-        sc = unwrap_result(await ui_tree.get_ui_tree())
+        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "NO_WINDOWS"
+
+    @pytest.mark.asyncio
+    async def test_get_ui_tree_without_target_does_not_query_windows(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_mcp.tools import ui_tree
+
+        sc = unwrap_result(await ui_tree.get_ui_tree())
+
+        assert sc["ok"] is True
+        mock_hdc.get_window_list.assert_not_called()
+        mock_hdc.get_ui_tree_raw.assert_called_once_with("device_001", None)
+
+    @pytest.mark.asyncio
+    async def test_get_ui_tree_with_bundle_name_validates_target_window(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_mcp.tools import ui_tree
+
+        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
+
+        assert sc["ok"] is True
+        mock_hdc.get_window_list.assert_called_once_with("device_001")
+        mock_hdc.get_ui_tree_raw.assert_called_once_with("device_001", 1)
+
+    @pytest.mark.asyncio
+    async def test_get_ui_tree_rejects_bundle_when_not_explicitly_resolved(
+        self, mock_hdc: MagicMock, unwrap_result
+    ):
+        from harmonyos_mcp.tools import ui_tree
+
+        mock_hdc.get_window_list.return_value = {
+            "success": True,
+            "count": 1,
+            "windows": [
+                {
+                    "window_id": 1,
+                    "window_name": "app0",
+                    "bundle_name": "",
+                    "is_visible": True,
+                    "rect": {"x": 10, "y": 20, "w": 300, "h": 400},
+                }
+            ],
+        }
+
+        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "WINDOW_NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_get_ui_tree_with_window_id_validates_window_exists(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_mcp.tools import ui_tree
+
+        sc = unwrap_result(await ui_tree.get_ui_tree(window_id=1))
+
+        assert sc["ok"] is True
+        mock_hdc.get_window_list.assert_called_once_with("device_001")
+        mock_hdc.get_ui_tree_raw.assert_called_once_with("device_001", 1)
+
+    @pytest.mark.asyncio
+    async def test_get_ui_tree_rejects_unknown_window_id(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_mcp.tools import ui_tree
+
+        sc = unwrap_result(await ui_tree.get_ui_tree(window_id=999))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "WINDOW_NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_get_ui_tree_rejects_window_bundle_mismatch(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_mcp.tools import ui_tree
+
+        mock_hdc.get_window_list.return_value = {
+            "success": True,
+            "count": 1,
+            "windows": [
+                {
+                    "window_id": 7,
+                    "window_name": "settings0",
+                    "bundle_name": "com.example.settings",
+                    "is_visible": True,
+                    "rect": {"x": 1, "y": 2, "w": 3, "h": 4},
+                }
+            ],
+        }
+
+        sc = unwrap_result(await ui_tree.get_ui_tree(bundle_name="com.example.app", window_id=7))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "WINDOW_BUNDLE_MISMATCH"
 
 
 class TestLogsQuery:

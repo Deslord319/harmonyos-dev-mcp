@@ -125,6 +125,16 @@ class FindElementResult(DeviceResult):
     count: int
 
 
+WaitElementState = Literal["found", "gone"]
+
+
+class WaitElementResult(DeviceResult, total=False):
+    state: WaitElementState
+    satisfied: bool
+    elapsed_ms: int
+    element: Optional[UIElement]
+
+
 class ClickResult(BaseResult):
     x: int
     y: int
