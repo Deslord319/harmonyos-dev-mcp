@@ -221,7 +221,7 @@ class Config(ConfigBase):
     def _derive_sdk_candidates(cls, deveco_path: Optional[str]) -> List[Path]:
         user_home = Path.home()
         candidates: List[Path] = []
-        for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH", "OHOS_SDK_ROOT"):
+        for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH"):
             env_value = os.getenv(env_name)
             if env_value:
                 candidates.append(Path(env_value).expanduser())

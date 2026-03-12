@@ -81,10 +81,11 @@ class TestBuildApp:
 
 class TestInstallApp:
     @pytest.mark.asyncio
-    async def test_install_success(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_install_success(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
 
-        sc = unwrap_result(await build.install_app("/path/to/app.hap"))
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
+        sc = unwrap_result(await build.install_app("/path/to/app.hap", device_id="device_001"))
 
         assert sc["ok"] is True
         assert sc["tool"] == "install_app"
@@ -92,29 +93,70 @@ class TestInstallApp:
         assert sc["result"]["hap_path"] == "/path/to/app.hap"
 
     @pytest.mark.asyncio
-    async def test_install_to_specific_device(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_install_to_specific_device(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
 
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         sc = unwrap_result(await build.install_app("/path/to/app.hap", device_id="device_002"))
 
         assert sc["result"]["device_id"] == "device_002"
         mock_hdc.install_app.assert_called_with("device_002", "/path/to/app.hap")
 
     @pytest.mark.asyncio
-    async def test_install_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result):
+    async def test_install_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
+        from harmonyos_mcp.tools.device_base import ToolBase
 
+        monkeypatch.setattr(
+            ToolBase,
+            "get_device_id",
+            staticmethod(
+                lambda device_id=None: (
+                    False,
+                    {
+                        "tool": "with_device",
+                        "ok": False,
+                        "result": {},
+                        "error": {"code": "DEVICE_NOT_FOUND", "detail": "No device found"},
+                        "meta": {},
+                    },
+                )
+            ),
+        )
         sc = unwrap_result(await build.install_app("/path/to/app.hap"))
 
         assert sc["ok"] is False
         assert sc["error"]["detail"]
 
+    @pytest.mark.asyncio
+    async def test_install_detects_business_failure_even_when_command_returns_success(
+        self, mock_hdc: MagicMock, unwrap_result, monkeypatch
+    ):
+        from harmonyos_mcp.tools import build
+
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
+        mock_hdc.install_app.return_value = {
+            "success": False,
+            "stdout": "[INSTALL_FAILED] install bundle failed, code:9568320",
+            "stderr": "",
+            "returncode": 0,
+            "error": "[INSTALL_FAILED] install bundle failed, code:9568320",
+            "error_code": "INSTALL_FAILED",
+        }
+
+        sc = unwrap_result(await build.install_app("/path/to/app.hap", device_id="device_001"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["detail"] == "[INSTALL_FAILED] install bundle failed, code:9568320"
+        assert sc["result"]["hap_path"] == "/path/to/app.hap"
+
 
 class TestRunApp:
     @pytest.mark.asyncio
-    async def test_auto_detect_ability(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_auto_detect_ability(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
 
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         sc = unwrap_result(await build.run_app("com.example.app"))
 
         assert sc["ok"] is True
@@ -123,9 +165,10 @@ class TestRunApp:
         assert sc["result"]["auto_detected"] is True
 
     @pytest.mark.asyncio
-    async def test_use_specified_ability(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_use_specified_ability(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
 
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         sc = unwrap_result(
             await build.run_app("com.example.app", ability_name="CustomAbility", module_name="feature")
         )
@@ -135,9 +178,10 @@ class TestRunApp:
         assert sc["result"]["auto_detected"] is False
 
     @pytest.mark.asyncio
-    async def test_use_default_ability_when_detection_fails(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_use_default_ability_when_detection_fails(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
 
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         mock_hdc.get_main_ability.return_value = {"success": False, "error": "Package not found"}
 
         sc = unwrap_result(await build.run_app("com.example.app"))
@@ -147,18 +191,37 @@ class TestRunApp:
         assert sc["result"]["auto_detected"] is True
 
     @pytest.mark.asyncio
-    async def test_run_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result):
+    async def test_run_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
+        from harmonyos_mcp.tools.device_base import ToolBase
 
+        monkeypatch.setattr(build, "get_hdc", lambda: no_device_mock)
+        monkeypatch.setattr(
+            ToolBase,
+            "get_device_id",
+            staticmethod(
+                lambda device_id=None: (
+                    False,
+                    {
+                        "tool": "with_device",
+                        "ok": False,
+                        "result": {},
+                        "error": {"code": "DEVICE_NOT_FOUND", "detail": "No device found"},
+                        "meta": {},
+                    },
+                )
+            ),
+        )
         sc = unwrap_result(await build.run_app("com.example.app"))
         assert sc["ok"] is False
 
     @pytest.mark.asyncio
     async def test_run_command_success_but_window_unverified_has_neutral_detail(
-        self, mock_hdc: MagicMock, unwrap_result
+        self, mock_hdc: MagicMock, unwrap_result, monkeypatch
     ):
         from harmonyos_mcp.tools import build
 
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         mock_hdc.start_app.return_value = {
             "success": False,
             "error": "应用窗口未出现（可能ability_name或module_name错误）",
@@ -176,18 +239,42 @@ class TestRunApp:
 
 class TestUninstallApp:
     @pytest.mark.asyncio
-    async def test_uninstall_success(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_uninstall_success(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
 
-        sc = unwrap_result(await build.uninstall_app("com.example.app"))
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
+        sc = unwrap_result(await build.uninstall_app("com.example.app", device_id="device_001"))
 
         assert sc["ok"] is True
         assert sc["result"]["bundle_name"] == "com.example.app"
         mock_hdc.uninstall_app.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_uninstall_from_specific_device(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_uninstall_from_specific_device(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_mcp.tools import build
 
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         await build.uninstall_app("com.example.app", device_id="device_002")
         mock_hdc.uninstall_app.assert_called_with("device_002", "com.example.app")
+
+    @pytest.mark.asyncio
+    async def test_uninstall_detects_business_failure_even_when_command_returns_success(
+        self, mock_hdc: MagicMock, unwrap_result, monkeypatch
+    ):
+        from harmonyos_mcp.tools import build
+
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
+        mock_hdc.uninstall_app.return_value = {
+            "success": False,
+            "stdout": "uninstall failed: bundle is not installed",
+            "stderr": "",
+            "returncode": 0,
+            "error": "uninstall failed: bundle is not installed",
+            "error_code": "UNINSTALL_FAILED",
+        }
+
+        sc = unwrap_result(await build.uninstall_app("com.example.app", device_id="device_001"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["detail"] == "uninstall failed: bundle is not installed"
+        assert sc["result"]["bundle_name"] == "com.example.app"

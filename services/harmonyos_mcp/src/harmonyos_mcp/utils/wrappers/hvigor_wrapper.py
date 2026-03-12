@@ -9,6 +9,7 @@ hvigor构建工具封装
 import subprocess
 import os
 import platform
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -186,7 +187,7 @@ class HvigorWrapper:
     def _resolve_sdk_root(self) -> Path:
         candidates: List[Path] = []
 
-        for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH", "OHOS_SDK_ROOT"):
+        for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH"):
             env_value = os.getenv(env_name)
             if env_value:
                 candidates.append(Path(env_value).expanduser())
@@ -217,12 +218,22 @@ class HvigorWrapper:
         if platform.system() == "Windows":
             java_names = ["java.exe", "java"]
 
-        env_java_home = os.getenv("JAVA_HOME")
-        if env_java_home:
+        for env_name in ("JAVA_HOME", "JDK_HOME"):
+            env_java_home = os.getenv(env_name)
+            if not env_java_home:
+                continue
             candidate = Path(env_java_home).expanduser()
             for java_exe in java_names:
                 if (candidate / "bin" / java_exe).exists():
                     return candidate
+
+        java_in_path = shutil.which("java")
+        if java_in_path:
+            java_path = Path(java_in_path).resolve()
+            java_home = java_path.parent.parent
+            for java_exe in java_names:
+                if (java_home / "bin" / java_exe).exists():
+                    return java_home
 
         candidates = [
             # Windows/Linux: JBR directly under DevEco
@@ -232,6 +243,8 @@ class HvigorWrapper:
             # macOS: JBR inside Contents
             self.deveco_path / "Contents" / "jbr",
             self.deveco_path / "Contents" / "jbr" / "Contents" / "Home",
+            Path.home() / "AppData" / "Local" / "Programs" / "DevEco Studio" / "jbr",
+            Path.home() / "AppData" / "Local" / "Programs" / "Huawei" / "DevEco Studio" / "jbr",
         ]
         for candidate in candidates:
             for java_exe in java_names:

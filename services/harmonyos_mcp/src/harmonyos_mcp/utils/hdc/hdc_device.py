@@ -1,136 +1,148 @@
 """
-hdc 设备管理模块
+hdc device helpers.
 
-提供设备列表、应用安装/卸载等功能。
+Provides device listing, device info, install and uninstall operations.
 """
-from typing import List, Dict, Any, Optional
+import re
+from typing import Any, Dict, List
+
 from loguru import logger
 
 from harmonyos_mcp.config import Config
 
 
 class HdcDevice:
-    """设备管理相关方法"""
+    """Device-related hdc operations."""
+
+    INSTALL_FAILURE_PATTERN = re.compile(
+        r"(?im)(?:\[(?:install_failed)\]|(?:^|\b)install\s+(?:bundle\s+)?failed\b|\bfailed\s+to\s+install\b)"
+    )
+    UNINSTALL_FAILURE_PATTERN = re.compile(
+        r"(?im)(?:\[(?:uninstall_failed)\]|(?:^|\b)uninstall\s+failed\b|\bfailed\s+to\s+uninstall\b)"
+    )
+
+    @staticmethod
+    def _extract_action_error(result: Dict[str, Any], fallback: str) -> str:
+        for key in ("stderr", "stdout"):
+            value = (result.get(key) or "").strip()
+            if value:
+                return value
+        return fallback
+
+    @staticmethod
+    def _looks_like_install_failure(output: str) -> bool:
+        return bool(HdcDevice.INSTALL_FAILURE_PATTERN.search(output or ""))
+
+    @staticmethod
+    def _looks_like_uninstall_failure(output: str) -> bool:
+        return bool(HdcDevice.UNINSTALL_FAILURE_PATTERN.search(output or ""))
 
     def list_devices(self) -> List[str]:
-        """
-        列出所有连接的设备
-        
-        Returns:
-            设备ID列表
-        """
-        logger.debug("获取设备列表")
-        result = self._execute_command(['list', 'targets'])
-        
-        if not result['success']:
-            logger.error(f"获取设备列表失败: {result['stderr']}")
+        """Return connected device ids."""
+        logger.debug("Getting device list")
+        result = self._execute_command(["list", "targets"])
+
+        if not result["success"]:
+            logger.error(f"Failed to list devices: {result['stderr']}")
             return []
-        
-        devices = [line.strip() for line in result['stdout'].split('\n') if line.strip()]
-        logger.debug(f"找到 {len(devices)} 个设备: {devices}")
+
+        devices = [line.strip() for line in result["stdout"].split("\n") if line.strip()]
+        logger.debug(f"Found {len(devices)} devices: {devices}")
         return devices
 
     def get_device_info(self, device_id: str) -> Dict[str, Any]:
-        """
-        获取设备详细信息（型号、系统版本等）
-        
-        Args:
-            device_id: 设备ID
-            
-        Returns:
-            设备信息字典
-        """
-        logger.debug(f"获取设备 {device_id} 的详细信息")
-        
-        # HarmonyOS 使用 param get 命令（而非 Android 的 getprop）
+        """Return device information such as model and OS version."""
+        logger.debug(f"Getting details for device {device_id}")
+
         props = {
-            'model': 'const.product.model',
-            'device_name': 'const.product.name',
-            'os_version': 'const.ohos.fullname',
-            'api_version': 'const.ohos.apiversion',
+            "model": "const.product.model",
+            "device_name": "const.product.name",
+            "os_version": "const.ohos.fullname",
+            "api_version": "const.ohos.apiversion",
         }
-        
-        info = {'device_id': device_id}
-        
+
+        info = {"device_id": device_id}
+
         for key, prop in props.items():
-            result = self.execute_shell(device_id, f'param get {prop}')
-            if result['success']:
-                stdout = result['stdout'].strip()
-                # 检查是否为错误响应（HarmonyOS 错误格式：Get parameter "xxx" fail!）
-                if stdout and 'fail' not in stdout.lower() and 'errNum' not in stdout:
+            result = self.execute_shell(device_id, f"param get {prop}")
+            if result["success"]:
+                stdout = result["stdout"].strip()
+                if stdout and "fail" not in stdout.lower() and "errNum" not in stdout:
                     info[key] = stdout
-        
-        # 获取屏幕分辨率（从 WindowManagerService 解析）
-        wm_result = self.execute_shell(device_id, 'hidumper -s WindowManagerService -a \'-a\'')
-        if wm_result['success']:
-            output = wm_result['stdout']
-            # 解析格式: [ x    y    w    h    ]
-            # 查找第一个窗口的分辨率信息
+
+        wm_result = self.execute_shell(device_id, "hidumper -s WindowManagerService -a '-a'")
+        if wm_result["success"]:
+            output = wm_result["stdout"]
             import re
-            match = re.search(r'\[\s*\d+\s+\d+\s+(\d+)\s+(\d+)\s*\]', output)
+
+            match = re.search(r"\[\s*\d+\s+\d+\s+(\d+)\s+(\d+)\s*\]", output)
             if match:
                 width, height = match.groups()
-                info['screen_size'] = f'{width}x{height}'
-        
+                info["screen_size"] = f"{width}x{height}"
+
         return info
 
     def list_devices_with_info(self) -> List[Dict[str, Any]]:
-        """
-        列出所有设备及其详细信息
-        
-        Returns:
-            设备信息列表
-        """
-        devices = self.list_devices()
-        result = []
-        
-        for device_id in devices:
-            info = self.get_device_info(device_id)
-            result.append(info)
-        
-        return result
+        """Return connected devices with extra metadata."""
+        return [self.get_device_info(device_id) for device_id in self.list_devices()]
 
-    def install_app(self, device_id: str, hap_path: str) -> bool:
-        """
-        安装应用到设备
-        
-        Args:
-            device_id: 设备ID
-            hap_path: HAP包路径
-        
-        Returns:
-            是否安装成功
-        """
-        logger.info(f"安装应用到设备 {device_id}: {hap_path}")
+    def install_app(self, device_id: str, hap_path: str) -> Dict[str, Any]:
+        """Install a hap on the target device."""
+        logger.info(f"Installing app on {device_id}: {hap_path}")
         result = self._execute_command(
-            ['-t', device_id, 'install', hap_path],
-            timeout=Config.INSTALL_TIMEOUT
+            ["-t", device_id, "install", hap_path],
+            timeout=Config.INSTALL_TIMEOUT,
         )
-        
-        if result['success']:
-            logger.info(f"应用安装成功")
-            return True
+
+        combined_output = "\n".join(
+            part for part in ((result.get("stdout") or "").strip(), (result.get("stderr") or "").strip()) if part
+        )
+        command_success = bool(result.get("success"))
+        success = command_success and not self._looks_like_install_failure(combined_output)
+
+        payload = dict(result)
+        payload.update(
+            {
+                "success": success,
+                "device_id": device_id,
+                "hap_path": hap_path,
+            }
+        )
+
+        if success:
+            logger.info("App install succeeded")
         else:
-            logger.error(f"应用安装失败: {result['stderr']}")
-            return False
+            payload["error_code"] = "INSTALL_FAILED"
+            payload["error"] = self._extract_action_error(payload, "install app failed")
+            logger.error(f"App install failed: {payload['error']}")
 
-    def uninstall_app(self, device_id: str, bundle_name: str) -> bool:
-        """
-        卸载应用
+        return payload
 
-        Args:
-            device_id: 设备ID
-            bundle_name: 应用包名
+    def uninstall_app(self, device_id: str, bundle_name: str) -> Dict[str, Any]:
+        """Uninstall an app from the target device."""
+        logger.info(f"Uninstalling app from {device_id}: {bundle_name}")
+        result = self._execute_command(["-t", device_id, "uninstall", bundle_name])
 
-        Returns:
-            是否卸载成功
-        """
-        logger.info(f"从设备 {device_id} 卸载应用: {bundle_name}")
-        result = self._execute_command(['-t', device_id, 'uninstall', bundle_name])
+        combined_output = "\n".join(
+            part for part in ((result.get("stdout") or "").strip(), (result.get("stderr") or "").strip()) if part
+        )
+        command_success = bool(result.get("success"))
+        success = command_success and not self._looks_like_uninstall_failure(combined_output)
 
-        if result['success']:
-            logger.info(f"应用卸载成功")
-            return True
+        payload = dict(result)
+        payload.update(
+            {
+                "success": success,
+                "device_id": device_id,
+                "bundle_name": bundle_name,
+            }
+        )
+
+        if success:
+            logger.info("App uninstall succeeded")
         else:
-            logger.error(f"应用卸载失败: {result['stderr']}")
-            return False
+            payload["error_code"] = "UNINSTALL_FAILED"
+            payload["error"] = self._extract_action_error(payload, "uninstall app failed")
+            logger.error(f"App uninstall failed: {payload['error']}")
+
+        return payload

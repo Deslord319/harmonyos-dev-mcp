@@ -152,7 +152,6 @@ class TestSdkDetection:
         monkeypatch.setattr(Path, "home", lambda: Path(r"C:\Users\tester"))
         monkeypatch.setenv("DEVECO_SDK_HOME", r"D:\sdk")
         monkeypatch.delenv("HARMONYOS_SDK_PATH", raising=False)
-        monkeypatch.delenv("OHOS_SDK_ROOT", raising=False)
         monkeypatch.setattr(
             "harmonyos_mcp.config.shutil.which",
             lambda name: r"F:\DevEco\sdk\default\openharmony\toolchains\hdc.exe" if name == "hdc" else None,

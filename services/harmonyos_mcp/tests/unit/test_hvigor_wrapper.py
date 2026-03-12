@@ -12,6 +12,21 @@ def _write_file(path: Path, content: str = ""):
     path.write_text(content, encoding="utf-8")
 
 
+def _isolate_discovery_env(monkeypatch, *, clear_java=True, clear_path_java=False):
+    for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH"):
+        monkeypatch.delenv(env_name, raising=False)
+
+    if clear_java:
+        for env_name in ("JAVA_HOME", "JDK_HOME"):
+            monkeypatch.delenv(env_name, raising=False)
+
+    if clear_path_java:
+        monkeypatch.setattr(
+            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.shutil.which",
+            lambda name: None,
+        )
+
+
 class TestHvigorWrapper:
     def test_custom_deveco_path_overrides_config_and_auto_detect(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
@@ -31,6 +46,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(tmp_path / "WrongDevEco"))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
             Config,
             "_detect_deveco_studio_path",
@@ -69,6 +85,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
 
         wrapper = HvigorWrapper(str(project))
 
@@ -97,6 +114,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
 
         wrapper = HvigorWrapper(str(project))
 
@@ -121,6 +139,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", str(config_hvigor))
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
             "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
@@ -151,6 +170,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
         monkeypatch.setattr(Config, "BUILD_TIMEOUT", 42)
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
 
         captured = {}
 
@@ -198,6 +218,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
             "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
@@ -231,6 +252,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
             "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
@@ -262,6 +284,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
 
         def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
             return CompletedProcess(
@@ -296,6 +319,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
             "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
@@ -332,10 +356,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", str(tmp_path / "wrong-sdk"))
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
-        monkeypatch.setenv("DEVECO_SDK_HOME", "")
-        monkeypatch.delenv("DEVECO_SDK_HOME", raising=False)
-        monkeypatch.delenv("HARMONYOS_SDK_PATH", raising=False)
-        monkeypatch.delenv("OHOS_SDK_ROOT", raising=False)
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
             "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
@@ -361,6 +382,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
             "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
@@ -393,6 +415,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
 
         # Mock platform.system() to return "Windows"
         monkeypatch.setattr(
@@ -428,6 +451,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
         monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
 
         # Mock platform.system() to return "Linux"
         monkeypatch.setattr(
@@ -441,3 +465,37 @@ class TestHvigorWrapper:
         assert wrapper.hvigorw_js == hvigor
         assert wrapper.sdk_root == deveco / "sdk"
         assert wrapper.java_home == deveco / "jbr"
+
+    def test_java_home_can_be_discovered_from_path(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        path_java_home = tmp_path / "CustomJdk"
+        java = path_java_home / "bin" / "java.exe"
+
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch)
+        monkeypatch.setattr(
+            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+        monkeypatch.setattr(
+            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.shutil.which",
+            lambda name: str(java) if name == "java" else None,
+        )
+
+        wrapper = HvigorWrapper(str(project))
+
+        assert wrapper.java_home == path_java_home
