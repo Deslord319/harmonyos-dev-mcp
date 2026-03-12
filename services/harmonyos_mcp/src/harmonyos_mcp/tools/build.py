@@ -16,13 +16,19 @@ from .device_base import ToolBase
 from .response import error_result, from_action_result, mcp_response, ok_result
 
 MAX_ERRORS = 15
+BUILD_TIMEOUT_HINT = (
+    "HarmonyOS build is a long-running task and often takes more than 10 seconds. "
+    "If the MCP client times out early, increase the tools/call timeout to at least 60 seconds."
+)
 
 
 @mcp_tool(category="build")
 @mcp_response("build_app")
 @ToolBase.handle_tool_error("BUILD_ERROR", hap_path=None, duration=0)
 async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
+    """Build HarmonyOS HAP. This is a long-running task; clients should use a tools/call timeout of at least 60 seconds."""
     start_time = time.time()
+    logger.warning(f"build_app is a long-running task; ensure MCP client timeout is >= 60s (project={project_path}, mode={build_mode})")
     hvigor = HvigorWrapper(project_path)
     raw = await asyncio.to_thread(hvigor.build_hap, build_mode=build_mode)
     elapsed = round(time.time() - start_time, 2)
@@ -31,6 +37,7 @@ async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult
         "hap_path": raw.get("hap_path"),
         "message": f"build {'success' if raw.get('success') else 'failed'}, duration: {ToolBase.format_duration(elapsed)}",
         "duration": elapsed,
+        "hint": BUILD_TIMEOUT_HINT,
         "errors": [],
         "error_count": 0,
     }

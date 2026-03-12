@@ -24,6 +24,7 @@ class TestBuildApp:
         assert sc["tool"] == "build_app"
         assert sc["result"]["hap_path"] == "/path/to/output.hap"
         assert "duration" in sc["result"]
+        assert "long-running task" in sc["result"]["hint"]
         assert sc["result"]["errors"] == []
         assert sc["result"]["error_count"] == 0
 
@@ -39,6 +40,7 @@ class TestBuildApp:
         sc = unwrap_result(await build.build_app("/path/to/project"))
 
         assert sc["ok"] is False
+        assert "long-running task" in sc["result"]["hint"]
         assert sc["result"]["errors"] == []
         assert sc["result"]["error_count"] == 0
         assert sc["error"]["detail"] == "compiler exited with code 1"

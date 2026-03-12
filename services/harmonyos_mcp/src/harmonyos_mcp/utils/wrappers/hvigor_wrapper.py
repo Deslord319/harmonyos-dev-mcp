@@ -42,7 +42,7 @@ class HvigorWrapper:
 
         self.node_exe = self._find_node_executable()
         self.hvigorw_js = self._find_hvigor_wrapper()
-        self.sdk_root = self._resolve_sdk_root()
+        self.sdk_root = self._find_sdk_root()
         self.java_home = self._find_java_home()
         self.hvigor_user_home = self._resolve_hvigor_user_home()
 
@@ -133,22 +133,6 @@ class HvigorWrapper:
 
         return None
 
-    @staticmethod
-    def _normalize_sdk_root(candidate: Path) -> Optional[Path]:
-        if not candidate.exists():
-            return None
-
-        if candidate.is_dir() and any(
-            child.is_dir() and (child / "sdk-pkg.json").exists()
-            for child in candidate.iterdir()
-        ):
-            return candidate
-
-        if candidate.is_dir() and (candidate / "sdk-pkg.json").exists():
-            return candidate.parent
-
-        return None
-
     def _find_node_executable(self) -> Path:
         if Config.NODE_PATH and Path(Config.NODE_PATH).exists():
             return Path(Config.NODE_PATH)
@@ -184,33 +168,14 @@ class HvigorWrapper:
                 return candidate
         return candidates[0]
 
-    def _resolve_sdk_root(self) -> Path:
-        candidates: List[Path] = []
-
-        for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH"):
-            env_value = os.getenv(env_name)
-            if env_value:
-                candidates.append(Path(env_value).expanduser())
-
-        if Config.HARMONYOS_SDK_PATH:
-            candidates.append(Path(Config.HARMONYOS_SDK_PATH))
-
-        local_sdk_dir = Config._read_local_properties_path(self.project_path, "sdk.dir")
-        if local_sdk_dir:
-            candidates.append(Path(local_sdk_dir).expanduser())
-
-        candidates.extend([
+    def _find_sdk_root(self) -> Path:
+        candidates = [
             self.deveco_path / "sdk",
             self.deveco_path / "Contents" / "sdk",
-            Path.home() / "HarmonyOS" / "sdk",
-            Path.home() / "harmonyos" / "sdk",
-        ])
-
+        ]
         for candidate in candidates:
-            normalized = self._normalize_sdk_root(candidate)
-            if normalized:
-                return normalized
-
+            if candidate.exists():
+                return candidate
         return candidates[0]
 
     def _find_java_home(self) -> Optional[Path]:

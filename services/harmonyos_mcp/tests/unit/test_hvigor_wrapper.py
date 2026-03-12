@@ -94,32 +94,6 @@ class TestHvigorWrapper:
         assert wrapper.sdk_root == deveco / "Contents" / "sdk"
         assert wrapper.java_home == deveco / "Contents" / "jbr" / "Contents" / "Home"
 
-    def test_project_sdk_dir_is_normalized_to_sdk_root(self, tmp_path, monkeypatch):
-        project = tmp_path / "MyApplication"
-        project.mkdir()
-        _write_file(project / "local.properties", f"sdk.dir={tmp_path / 'sdk' / 'default'}\n")
-
-        sdk_pkg = tmp_path / "sdk" / "default" / "sdk-pkg.json"
-        _write_file(sdk_pkg, "{}")
-
-        deveco = tmp_path / "DevEco-Studio.app"
-        node = deveco / "Contents" / "tools" / "node" / "bin" / "node"
-        hvigor = deveco / "Contents" / "tools" / "hvigor" / "bin" / "hvigorw.js"
-        java = deveco / "Contents" / "jbr" / "Contents" / "Home" / "bin" / "java"
-        _write_file(node)
-        _write_file(hvigor)
-        _write_file(java)
-
-        monkeypatch.setattr(Config, "NODE_PATH", None)
-        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
-        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
-        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
-        _isolate_discovery_env(monkeypatch, clear_path_java=True)
-
-        wrapper = HvigorWrapper(str(project))
-
-        assert wrapper.sdk_root == tmp_path / "sdk"
-
     def test_config_tool_paths_are_preferred_when_present(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
         project.mkdir()
@@ -335,36 +309,6 @@ class TestHvigorWrapper:
 
         assert result["success"] is False
         assert "超时" in result["stderr"]
-
-    def test_resolve_sdk_root_prefers_local_properties(self, tmp_path, monkeypatch):
-        project = tmp_path / "MyApplication"
-        project.mkdir()
-
-        sdk_root = tmp_path / "sdk"
-        _write_file(sdk_root / "default" / "sdk-pkg.json", "{}")
-        _write_file(project / "local.properties", f"sdk.dir={sdk_root / 'default'}\n")
-
-        deveco = tmp_path / "DevEco Studio"
-        node = deveco / "tools" / "node" / "node.exe"
-        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
-        java = deveco / "jbr" / "bin" / "java.exe"
-        _write_file(node)
-        _write_file(hvigor)
-        _write_file(java)
-
-        monkeypatch.setattr(Config, "NODE_PATH", None)
-        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
-        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", str(tmp_path / "wrong-sdk"))
-        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
-        _isolate_discovery_env(monkeypatch, clear_path_java=True)
-        monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
-            lambda: "Windows"
-        )
-
-        wrapper = HvigorWrapper(str(project))
-
-        assert wrapper.sdk_root == sdk_root
 
     def test_init_raises_when_sdk_root_missing(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
