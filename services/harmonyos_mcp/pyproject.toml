@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "harmonyos-mcp"
+name = "harmonyos-dev-mcp"
 version = "0.7.0"
 requires-python = ">=3.10"
 dependencies = [
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-harmonyos-mcp = "harmonyos_mcp:main"
+harmonyos-dev-mcp = "harmonyos_mcp:main"
 
 [tool.uv.sources]
 harmonyos-mcp-common = { workspace = true }
