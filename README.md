@@ -175,17 +175,17 @@ await client.call_tool("wait_element", {
 
 ### OpenCode 配置
 
-在一下目录创建 `%APPDATA%/.opencode/mcp.json`：
+在一下目录创建 `~/.conifg/opencode/opencode.jsonc`：
 
 ```json
 {
-  "mcpServers": {
-    "harmonyos": {
-      "command": "uv",
-      "args": ["run", "harmonyos-dev-mcp"],
-      "cwd": ".",
+  "mcp": {
+    "harmonyos-dev-mcp": {
+      "type": "local",
+      "command": ["uv", "run", "harmonyos-dev-mcp"],
+      "enabled": true,
+      "timeout": 60000,
       "env": {
-        "PYTHONUNBUFFERED": "1"
       }
     }
   }
