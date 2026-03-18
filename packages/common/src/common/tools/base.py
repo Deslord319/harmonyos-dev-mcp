@@ -5,8 +5,9 @@
 支持 async/sync 双模式装饰器，兼容 FastMCP 异步事件循环。
 
 注意：设备相关方法 (get_device_id, with_device) 不在此模块中，
-它们是 harmonyos_mcp 的域特定扩展。
+它们是 harmonyos_dev_mcp 的域特定扩展。
 """
+
 import functools
 import inspect
 import os
@@ -88,10 +89,10 @@ class ToolBase:
         Raises:
             ValueError: 路径包含危险字符时
         """
-        if '\x00' in path:
+        if "\x00" in path:
             raise ValueError(f"路径包含非法空字节: {path!r}")
         normalized = os.path.normpath(path)
-        if '..' in normalized.split(os.sep):
+        if ".." in normalized.split(os.sep):
             raise ValueError(f"路径包含目录遍历: {path!r}")
         return True
 
@@ -114,6 +115,7 @@ class ToolBase:
             async def my_tool(local_dir: str, repo_url: str):
                 ...
         """
+
         def decorator(func):
             def _do_validate(kwargs):
                 for param_name, rules in param_rules.items():
@@ -121,19 +123,19 @@ class ToolBase:
                     if value is None:
                         continue
                     for rule in rules:
-                        if rule == 'path' and isinstance(value, str):
+                        if rule == "path" and isinstance(value, str):
                             ToolBase.validate_path(value)
-                        elif rule == 'nonempty':
+                        elif rule == "nonempty":
                             if not value:
                                 raise ValueError(f"参数 '{param_name}' 不能为空")
-                        elif rule.startswith('max_length:'):
-                            max_len = int(rule.split(':')[1])
+                        elif rule.startswith("max_length:"):
+                            max_len = int(rule.split(":")[1])
                             if isinstance(value, str) and len(value) > max_len:
                                 raise ValueError(
                                     f"参数 '{param_name}' 长度 {len(value)} 超过最大限制 {max_len}"
                                 )
-                        elif rule.startswith('int_range:'):
-                            parts = rule.split(':')[1].split(',')
+                        elif rule.startswith("int_range:"):
+                            parts = rule.split(":")[1].split(",")
                             lo, hi = int(parts[0]), int(parts[1])
                             if isinstance(value, int) and not (lo <= value <= hi):
                                 raise ValueError(
@@ -141,17 +143,22 @@ class ToolBase:
                                 )
 
             if inspect.iscoroutinefunction(func):
+
                 @functools.wraps(func)
                 async def async_wrapper(*args, **kwargs):
                     _do_validate(kwargs)
                     return await func(*args, **kwargs)
+
                 return async_wrapper
             else:
+
                 @functools.wraps(func)
                 def sync_wrapper(*args, **kwargs):
                     _do_validate(kwargs)
                     return func(*args, **kwargs)
+
                 return sync_wrapper
+
         return decorator
 
     @staticmethod
@@ -173,8 +180,10 @@ class ToolBase:
                 manager = get_compile_manager()
                 return await asyncio.to_thread(manager.clone_library, repo_url)
         """
+
         def decorator(func):
             if inspect.iscoroutinefunction(func):
+
                 @functools.wraps(func)
                 async def async_wrapper(*args, **kwargs):
                     try:
@@ -186,8 +195,10 @@ class ToolBase:
                             error_result.setdefault("result", {})
                             error_result["result"].setdefault(k, v)
                         return error_result
+
                 return async_wrapper
             else:
+
                 @functools.wraps(func)
                 def wrapper(*args, **kwargs):
                     try:
@@ -199,5 +210,7 @@ class ToolBase:
                             error_result.setdefault("result", {})
                             error_result["result"].setdefault(k, v)
                         return error_result
+
                 return wrapper
+
         return decorator

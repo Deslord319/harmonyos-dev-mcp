@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from loguru import logger
 
-from harmonyos_mcp.config import Config
+from harmonyos_dev_mcp.config import Config
 
 
 class HvigorWrapper:

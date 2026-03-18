@@ -9,7 +9,7 @@ class TestBuildApp:
     @patch("harmonyos_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
     async def test_build_success(self, mock_hvigor_cls, unwrap_result):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         mock_hvigor = MagicMock()
         mock_hvigor.build_hap.return_value = {
@@ -31,7 +31,7 @@ class TestBuildApp:
     @patch("harmonyos_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
     async def test_build_failure(self, mock_hvigor_cls, unwrap_result):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         mock_hvigor = MagicMock()
         mock_hvigor.build_hap.return_value = {"success": False, "stderr": "compiler exited with code 1"}
@@ -48,7 +48,7 @@ class TestBuildApp:
     @patch("harmonyos_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
     async def test_build_with_release_mode(self, mock_hvigor_cls):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         mock_hvigor = MagicMock()
         mock_hvigor.build_hap.return_value = {"success": True}
@@ -60,7 +60,7 @@ class TestBuildApp:
     @patch("harmonyos_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
     async def test_build_failure_uses_current_process_output_only(self, mock_hvigor_cls, unwrap_result):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         mock_hvigor = MagicMock()
         mock_hvigor.build_hap.return_value = {
@@ -84,7 +84,7 @@ class TestBuildApp:
 class TestInstallApp:
     @pytest.mark.asyncio
     async def test_install_success(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         sc = unwrap_result(await build.install_app("/path/to/app.hap", device_id="device_001"))
@@ -96,7 +96,7 @@ class TestInstallApp:
 
     @pytest.mark.asyncio
     async def test_install_to_specific_device(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         sc = unwrap_result(await build.install_app("/path/to/app.hap", device_id="device_002"))
@@ -106,8 +106,8 @@ class TestInstallApp:
 
     @pytest.mark.asyncio
     async def test_install_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
-        from harmonyos_mcp.tools.device_base import ToolBase
+        from harmonyos_dev_mcp.tools import build
+        from harmonyos_dev_mcp.tools.device_base import ToolBase
 
         monkeypatch.setattr(
             ToolBase,
@@ -134,7 +134,7 @@ class TestInstallApp:
     async def test_install_detects_business_failure_even_when_command_returns_success(
         self, mock_hdc: MagicMock, unwrap_result, monkeypatch
     ):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         mock_hdc.install_app.return_value = {
@@ -156,7 +156,7 @@ class TestInstallApp:
 class TestRunApp:
     @pytest.mark.asyncio
     async def test_auto_detect_ability(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         sc = unwrap_result(await build.run_app("com.example.app"))
@@ -168,7 +168,7 @@ class TestRunApp:
 
     @pytest.mark.asyncio
     async def test_use_specified_ability(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         sc = unwrap_result(
@@ -181,7 +181,7 @@ class TestRunApp:
 
     @pytest.mark.asyncio
     async def test_use_default_ability_when_detection_fails(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         mock_hdc.get_main_ability.return_value = {"success": False, "error": "Package not found"}
@@ -194,8 +194,8 @@ class TestRunApp:
 
     @pytest.mark.asyncio
     async def test_run_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
-        from harmonyos_mcp.tools.device_base import ToolBase
+        from harmonyos_dev_mcp.tools import build
+        from harmonyos_dev_mcp.tools.device_base import ToolBase
 
         monkeypatch.setattr(build, "get_hdc", lambda: no_device_mock)
         monkeypatch.setattr(
@@ -221,7 +221,7 @@ class TestRunApp:
     async def test_run_command_success_but_window_unverified_has_neutral_detail(
         self, mock_hdc: MagicMock, unwrap_result, monkeypatch
     ):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         mock_hdc.start_app.return_value = {
@@ -242,7 +242,7 @@ class TestRunApp:
 class TestUninstallApp:
     @pytest.mark.asyncio
     async def test_uninstall_success(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         sc = unwrap_result(await build.uninstall_app("com.example.app", device_id="device_001"))
@@ -253,7 +253,7 @@ class TestUninstallApp:
 
     @pytest.mark.asyncio
     async def test_uninstall_from_specific_device(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         await build.uninstall_app("com.example.app", device_id="device_002")
@@ -263,7 +263,7 @@ class TestUninstallApp:
     async def test_uninstall_detects_business_failure_even_when_command_returns_success(
         self, mock_hdc: MagicMock, unwrap_result, monkeypatch
     ):
-        from harmonyos_mcp.tools import build
+        from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         mock_hdc.uninstall_app.return_value = {

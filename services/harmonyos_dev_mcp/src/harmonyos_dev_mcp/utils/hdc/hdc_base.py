@@ -8,8 +8,8 @@ import subprocess
 from typing import List, Optional, Dict, Any
 from loguru import logger
 
-from harmonyos_mcp.config import Config
-from harmonyos_mcp.utils.retry import retry, is_transient_hdc_failure
+from harmonyos_dev_mcp.config import Config
+from harmonyos_dev_mcp.utils.retry import retry, is_transient_hdc_failure
 
 
 class HdcBase:

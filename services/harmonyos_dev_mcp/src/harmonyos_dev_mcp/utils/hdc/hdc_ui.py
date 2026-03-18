@@ -4,9 +4,9 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
-from harmonyos_mcp.config import Config
-from harmonyos_mcp.utils.parsers.window_manager import parse_window_list_output
-from harmonyos_mcp.utils.selectors.window_selector import resolve_window_target as select_window_target
+from harmonyos_dev_mcp.config import Config
+from harmonyos_dev_mcp.utils.parsers.window_manager import parse_window_list_output
+from harmonyos_dev_mcp.utils.selectors.window_selector import resolve_window_target as select_window_target
 
 
 class HdcUI:

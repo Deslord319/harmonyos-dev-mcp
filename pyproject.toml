@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/common", "services/harmonyos_mcp"]
+members = ["packages/common", "services/harmonyos_dev_mcp"]
 
 [tool.uv.sources]
 harmonyos-dev-mcp = { workspace = true }
@@ -26,14 +26,14 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["services/harmonyos_mcp/tests"]
+testpaths = ["services/harmonyos_dev_mcp/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
 [tool.coverage.run]
-source = ["packages/common", "services/harmonyos_mcp", "services/harmonyos_compile_mcp"]
+source = ["packages/common", "services/harmonyos_dev_mcp", "services/harmonyos_compile_mcp"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",

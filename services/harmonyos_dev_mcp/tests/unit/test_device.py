@@ -8,7 +8,7 @@ import pytest
 class TestListDevices:
     @pytest.mark.asyncio
     async def test_returns_device_list(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import general
+        from harmonyos_dev_mcp.tools import general
 
         sc = unwrap_result(await general.list_devices())
 
@@ -20,7 +20,7 @@ class TestListDevices:
 
     @pytest.mark.asyncio
     async def test_handles_empty_devices(self, no_device_mock: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import general
+        from harmonyos_dev_mcp.tools import general
 
         sc = unwrap_result(await general.list_devices())
 
@@ -30,7 +30,7 @@ class TestListDevices:
 
     @pytest.mark.asyncio
     async def test_handles_exception(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import general
+        from harmonyos_dev_mcp.tools import general
 
         mock_hdc.list_devices_with_info.side_effect = Exception("Connection failed")
 
@@ -43,7 +43,7 @@ class TestListDevices:
 class TestQueryPackage:
     @pytest.mark.asyncio
     async def test_main_ability_uses_recommended_candidate_fields(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import general
+        from harmonyos_dev_mcp.tools import general
 
         mock_hdc.get_main_ability.return_value = {
             "success": True,
@@ -59,7 +59,7 @@ class TestQueryPackage:
 
     @pytest.mark.asyncio
     async def test_permissions_query_returns_permissions_payload(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import general
+        from harmonyos_dev_mcp.tools import general
 
         mock_hdc.get_package_permissions.return_value = {
             "success": True,
@@ -77,7 +77,7 @@ class TestQueryPackage:
 class TestUiTree:
     @pytest.mark.asyncio
     async def test_list_windows_maps_rect_to_bounds(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         sc = unwrap_result(await e2e.list_windows())
 
@@ -88,7 +88,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_list_windows_filters_by_bundle_name(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": True,
@@ -119,7 +119,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_list_windows_bundle_filter_can_return_empty(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         sc = unwrap_result(await e2e.list_windows(bundle_name="com.example.missing"))
 
@@ -129,7 +129,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_list_windows_marks_unresolved_bundle_name(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": True,
@@ -155,7 +155,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_list_windows_returns_parse_error(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": False,
@@ -173,7 +173,7 @@ class TestUiTree:
     async def test_get_ui_tree_returns_list_windows_error_when_window_query_fails_for_targeted_lookup(
         self, mock_hdc: MagicMock, unwrap_result
     ):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {"success": False, "error": "wm failed", "error_code": "LIST_WINDOWS_ERROR"}
 
@@ -187,7 +187,7 @@ class TestUiTree:
     async def test_get_ui_tree_returns_no_windows_when_targeted_lookup_window_list_empty(
         self, mock_hdc: MagicMock, unwrap_result
     ):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {"success": True, "windows": [], "count": 0}
 
@@ -198,7 +198,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_without_target_does_not_query_windows(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         sc = unwrap_result(await e2e.get_ui_tree())
 
@@ -211,7 +211,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_with_bundle_name_validates_target_window(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         sc = unwrap_result(await e2e.get_ui_tree(bundle_name="com.example.app"))
 
@@ -226,7 +226,7 @@ class TestUiTree:
     async def test_get_ui_tree_rejects_bundle_when_not_explicitly_resolved(
         self, mock_hdc: MagicMock, unwrap_result
     ):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": True,
@@ -249,7 +249,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_with_window_id_validates_window_exists(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         sc = unwrap_result(await e2e.get_ui_tree(window_id=1))
 
@@ -260,7 +260,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_rejects_unknown_window_id(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         sc = unwrap_result(await e2e.get_ui_tree(window_id=999))
 
@@ -269,7 +269,7 @@ class TestUiTree:
 
     @pytest.mark.asyncio
     async def test_get_ui_tree_rejects_window_bundle_mismatch(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools import e2e
+        from harmonyos_dev_mcp.tools import e2e
 
         mock_hdc.get_window_list.return_value = {
             "success": True,
@@ -294,7 +294,7 @@ class TestUiTree:
 class TestLogsQuery:
     @pytest.mark.asyncio
     async def test_direct_logs_input(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools.log import logs_query
+        from harmonyos_dev_mcp.tools.log import logs_query
 
         test_logs = [
             "01-31 10:00:00.123  1000  2000 E MyApp: test error",
@@ -308,7 +308,7 @@ class TestLogsQuery:
 
     @pytest.mark.asyncio
     async def test_level_filter(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools.log import logs_query
+        from harmonyos_dev_mcp.tools.log import logs_query
 
         test_logs = [
             "01-31 10:00:00.123  1000  2000 E MyApp: error",
@@ -322,7 +322,7 @@ class TestLogsQuery:
 
     @pytest.mark.asyncio
     async def test_seconds_accepts_numeric_string(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools.log import logs_query
+        from harmonyos_dev_mcp.tools.log import logs_query
 
         test_logs = [
             "01-31 10:00:00.123  1000  2000 E MyApp: error",
@@ -335,7 +335,7 @@ class TestLogsQuery:
 
     @pytest.mark.asyncio
     async def test_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools.log import logs_query
+        from harmonyos_dev_mcp.tools.log import logs_query
 
         sc = unwrap_result(await logs_query())
 
@@ -344,7 +344,7 @@ class TestLogsQuery:
 
     @pytest.mark.asyncio
     async def test_package_name_requires_running_app(self, mock_hdc: MagicMock, unwrap_result):
-        from harmonyos_mcp.tools.log import logs_query
+        from harmonyos_dev_mcp.tools.log import logs_query
 
         mock_hdc.get_app_pid.return_value = None
 

@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from loguru import logger
 
-from harmonyos_mcp.config import Config
+from harmonyos_dev_mcp.config import Config
 
 
 class HdcDevice:

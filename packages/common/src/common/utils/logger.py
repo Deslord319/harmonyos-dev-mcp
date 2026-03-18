@@ -11,6 +11,7 @@
 - 日志目录大小限制
 - 参数化应用名称（支持多服务器独立日志）
 """
+
 import sys
 from pathlib import Path
 from typing import Tuple
@@ -19,7 +20,7 @@ from loguru import logger
 
 
 def _find_project_root(
-    marker_files: Tuple[str, ...] = ("pyproject.toml", ".git", "setup.py")
+    marker_files: Tuple[str, ...] = ("pyproject.toml", ".git", "setup.py"),
 ) -> Path:
     """
     从当前文件向上查找包含标记文件的目录作为项目根目录
@@ -42,14 +43,14 @@ _PROJECT_ROOT = _find_project_root()
 _LOG_DIR = _PROJECT_ROOT / "logs"
 
 # 日志配置常量
-LOG_ROTATION_SIZE = "100 MB"      # 单文件轮转大小
-LOG_ROTATION_TIME = "1 day"       # 按时间轮转
-LOG_RETENTION = "7 days"          # 保留天数
-LOG_COMPRESSION = "gz"            # 压缩格式
-LOG_MAX_DIR_SIZE_MB = 500         # 日志目录最大大小（MB）
+LOG_ROTATION_SIZE = "100 MB"  # 单文件轮转大小
+LOG_ROTATION_TIME = "1 day"  # 按时间轮转
+LOG_RETENTION = "7 days"  # 保留天数
+LOG_COMPRESSION = "gz"  # 压缩格式
+LOG_MAX_DIR_SIZE_MB = 500  # 日志目录最大大小（MB）
 
 
-def setup_logger(app_name: str = "harmonyos_mcp", log_level: str = "INFO"):
+def setup_logger(app_name: str = "harmonyos_dev_mcp", log_level: str = "INFO"):
     """
     配置日志系统
 
@@ -129,10 +130,7 @@ def cleanup_old_logs(max_age_days: int = 7, max_dir_size_mb: int = None):
     dir_size_mb = get_log_dir_size_mb()
     if dir_size_mb > max_dir_size_mb:
         # 获取所有日志文件，按修改时间排序（最旧的在前）
-        log_files = sorted(
-            _LOG_DIR.glob("*.log*"),
-            key=lambda f: f.stat().st_mtime
-        )
+        log_files = sorted(_LOG_DIR.glob("*.log*"), key=lambda f: f.stat().st_mtime)
 
         for log_file in log_files:
             if dir_size_mb <= max_dir_size_mb:
@@ -162,7 +160,5 @@ def get_log_dir_size_mb() -> float:
     if not _LOG_DIR.exists():
         return 0.0
 
-    total_size = sum(
-        f.stat().st_size for f in _LOG_DIR.glob("*") if f.is_file()
-    )
+    total_size = sum(f.stat().st_size for f in _LOG_DIR.glob("*") if f.is_file())
     return total_size / (1024 * 1024)

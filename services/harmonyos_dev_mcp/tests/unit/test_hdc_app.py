@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 class TestHdcAppPidBundleCache:
     def test_get_bundle_name_by_pid_uses_cache_and_refreshes_ttl(self, monkeypatch):
-        from harmonyos_mcp.utils.hdc.hdc_app import HdcApp
+        from harmonyos_dev_mcp.utils.hdc.hdc_app import HdcApp
 
         app = HdcApp()
         app.execute_shell = MagicMock(return_value={"success": True, "stdout": "com.example.settings\x00", "stderr": ""})
@@ -22,7 +22,7 @@ class TestHdcAppPidBundleCache:
         assert expires_at == 104.0
 
     def test_get_bundle_name_by_pid_requeries_after_expiration(self, monkeypatch):
-        from harmonyos_mcp.utils.hdc.hdc_app import HdcApp
+        from harmonyos_dev_mcp.utils.hdc.hdc_app import HdcApp
 
         app = HdcApp()
         app.execute_shell = MagicMock(return_value={"success": True, "stdout": "com.example.settings\x00", "stderr": ""})
@@ -38,7 +38,7 @@ class TestHdcAppPidBundleCache:
         assert app.execute_shell.call_count == 2
 
     def test_get_bundle_name_by_pid_caches_none_results(self, monkeypatch):
-        from harmonyos_mcp.utils.hdc.hdc_app import HdcApp
+        from harmonyos_dev_mcp.utils.hdc.hdc_app import HdcApp
 
         app = HdcApp()
         app.execute_shell = MagicMock(side_effect=[

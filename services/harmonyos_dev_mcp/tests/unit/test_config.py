@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from harmonyos_mcp.config import Config
+from harmonyos_dev_mcp.config import Config
 
 
 class TestConfigHelpers:

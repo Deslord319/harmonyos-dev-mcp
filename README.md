@@ -22,8 +22,8 @@ mcp_ho_dev/
 │   └── common/
 │       └── src/common/
 ├── services/
-│   ├── harmonyos_mcp/
-│   │   ├── src/harmonyos_mcp/
+│   ├── harmonyos_dev_mcp/
+│   │   ├── src/harmonyos_dev_mcp/
 │   │   │   ├── tools/
 │   │   │   └── utils/
 │   │   └── docs/
@@ -221,13 +221,13 @@ tail -f logs/harmonyos-dev-mcp.stderr.log
 
 ```bash
 # 单元测试
-uv run pytest services/harmonyos_mcp/tests/unit -v
+uv run pytest services/harmonyos_dev_mcp/tests/unit -v
 
 # 配置测试
-uv run pytest services/harmonyos_mcp/tests/unit/test_config.py -v
+uv run pytest services/harmonyos_dev_mcp/tests/unit/test_config.py -v
 
 # E2E 工具测试
-uv run pytest services/harmonyos_mcp/tests/unit/test_e2e_tools.py -v
+uv run pytest services/harmonyos_dev_mcp/tests/unit/test_e2e_tools.py -v
 ```
 
 ### 构建包
@@ -236,8 +236,8 @@ uv run pytest services/harmonyos_mcp/tests/unit/test_e2e_tools.py -v
 # 构建 common 包
 cd packages/common && uv build
 
-# 构建 harmonyos_mcp 包
-cd services/harmonyos_mcp && uv build
+# 构建 harmonyos_dev_mcp 包
+cd services/harmonyos_dev_mcp && uv build
 ```
 
 ## License
@@ -264,6 +264,6 @@ Apache License 2.0
 ## 测试建议
 
 ```bash
-PYTHONPATH=packages/common/src;services/harmonyos_mcp/src pytest services/harmonyos_mcp/tests/unit -q
-PYTHONPATH=packages/common/src;services/harmonyos_mcp/src pytest packages/common/tests -q
+PYTHONPATH=packages/common/src;services/harmonyos_dev_mcp/src pytest services/harmonyos_dev_mcp/tests/unit -q
+PYTHONPATH=packages/common/src;services/harmonyos_dev_mcp/src pytest packages/common/tests -q
 ```

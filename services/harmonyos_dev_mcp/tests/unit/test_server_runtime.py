@@ -24,7 +24,7 @@ def test_run_server_allows_overriding_banner():
 
 @pytest.mark.asyncio
 async def test_list_devices_round_trips_through_fastmcp_client(mock_hdc):
-    from harmonyos_mcp.server import mcp
+    from harmonyos_dev_mcp.server import mcp
 
     async with Client(mcp) as client:
         result = await client.call_tool_mcp("list_devices", {})
@@ -42,7 +42,7 @@ async def test_list_devices_round_trips_through_fastmcp_client(mock_hdc):
 
 @pytest.mark.asyncio
 async def test_e2e_tool_schemas_are_exposed_via_fastmcp(mock_hdc):
-    from harmonyos_mcp.server import mcp
+    from harmonyos_dev_mcp.server import mcp
 
     async with Client(mcp) as client:
         tools = await client.list_tools()

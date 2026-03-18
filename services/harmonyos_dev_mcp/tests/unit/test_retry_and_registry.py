@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from harmonyos_mcp.utils.retry import is_transient_hdc_failure, retry
+from harmonyos_dev_mcp.utils.retry import is_transient_hdc_failure, retry
 from common.tools.registry import clear_registry, get_registered_tools, get_tool_summary, mcp_tool
 
 
@@ -210,8 +210,8 @@ class TestRegistry:
 
 class TestRealToolRegistration:
     def test_all_tools_registered(self):
-        from harmonyos_mcp.tools import build, e2e, general, ui  # noqa: F401
-        from harmonyos_mcp.tools.log import query as log_query  # noqa: F401
+        from harmonyos_dev_mcp.tools import build, e2e, general, ui  # noqa: F401
+        from harmonyos_dev_mcp.tools.log import query as log_query  # noqa: F401
 
         tools = get_registered_tools()
         summary = get_tool_summary()
@@ -223,8 +223,8 @@ class TestRealToolRegistration:
         )
 
     def test_categories_correct(self):
-        from harmonyos_mcp.tools import build, e2e, general, ui  # noqa: F401
-        from harmonyos_mcp.tools.log import query as log_query  # noqa: F401
+        from harmonyos_dev_mcp.tools import build, e2e, general, ui  # noqa: F401
+        from harmonyos_dev_mcp.tools.log import query as log_query  # noqa: F401
 
         summary = get_tool_summary()
         expected = {

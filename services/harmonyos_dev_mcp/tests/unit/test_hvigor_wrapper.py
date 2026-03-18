@@ -3,8 +3,8 @@ from subprocess import CompletedProcess
 import tempfile
 import subprocess
 
-from harmonyos_mcp.config import Config
-from harmonyos_mcp.utils.wrappers.hvigor_wrapper import HvigorWrapper
+from harmonyos_dev_mcp.config import Config
+from harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper import HvigorWrapper
 
 
 def _write_file(path: Path, content: str = ""):

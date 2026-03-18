@@ -21,7 +21,7 @@ def pytest_configure(config):
 @pytest.fixture(autouse=True)
 def reset_container():
     yield
-    from harmonyos_mcp.container import container
+    from harmonyos_dev_mcp.container import container
 
     container.reset()
     import harmonyos_mcp.container as container_mod
@@ -31,9 +31,9 @@ def reset_container():
 
 @pytest.fixture
 def mock_hdc() -> Generator[MagicMock, None, None]:
-    import harmonyos_mcp  # noqa: F401
-    from harmonyos_mcp.utils.hdc import HdcWrapper
-    from harmonyos_mcp.container import container
+    import harmonyos_dev_mcp  # noqa: F401
+    from harmonyos_dev_mcp.utils.hdc import HdcWrapper
+    from harmonyos_dev_mcp.container import container
     import harmonyos_mcp.container as container_mod
 
     mock = MagicMock(spec=HdcWrapper)
@@ -176,9 +176,9 @@ def no_device_mock(mock_hdc: MagicMock) -> MagicMock:
 
 @pytest.fixture
 def mock_ui_operations() -> Generator[MagicMock, None, None]:
-    import harmonyos_mcp  # noqa: F401
-    from harmonyos_mcp.utils.wrappers.ui_operations import UiTestWrapper
-    from harmonyos_mcp.container import container
+    import harmonyos_dev_mcp  # noqa: F401
+    from harmonyos_dev_mcp.utils.wrappers.ui_operations import UiTestWrapper
+    from harmonyos_dev_mcp.container import container
     import harmonyos_mcp.container as container_mod
 
     mock = MagicMock(spec=UiTestWrapper)
