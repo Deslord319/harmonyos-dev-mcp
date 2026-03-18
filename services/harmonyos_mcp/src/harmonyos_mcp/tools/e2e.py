@@ -15,7 +15,7 @@ from ..utils.normalizers.window import normalize_windows
 from ..utils.ui_common import normalize_bundle_name
 from ..utils.uitree_parser import UITreeParser
 from .device_base import ToolBase
-from .response import error_result, from_action_result, mcp_response, ok_result
+from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 
 
 async def _resolve_target_window(

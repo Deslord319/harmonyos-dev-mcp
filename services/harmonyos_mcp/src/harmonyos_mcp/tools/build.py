@@ -13,7 +13,7 @@ from ..container import get_hdc
 from ..types import BuildResult, InstallResult, RunAppResult, UninstallResult
 from ..utils.wrappers.hvigor_wrapper import HvigorWrapper
 from .device_base import ToolBase
-from .response import error_result, from_action_result, mcp_response, ok_result
+from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 
 MAX_ERRORS = 15
 BUILD_TIMEOUT_HINT = (

@@ -4,7 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "harmonyos-dev-mcp"
-version = "0.7.0"
+version = "0.7.1"
+description = "HarmonyOS 设备自动化与 E2E 测试 MCP 服务器 - 提供设备管理、应用构建部署、UI 自动化和端到端测试工具"
 requires-python = ">=3.10"
 dependencies = [
     "harmonyos-mcp-common",
@@ -14,6 +15,34 @@ dependencies = [
     "psutil>=5.9.0",
     "loguru>=0.7.0",
     "typing-extensions>=4.8.0",
+]
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "huduanmu", email = "mu@huduan.cn" }
+]
+keywords = [
+    "harmonyos",
+    "mcp",
+    "automation",
+    "e2e-testing",
+    "device-management",
+    "ui-automation",
+    "hdc",
+    "devops",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Hardware",
 ]
 
 [project.scripts]

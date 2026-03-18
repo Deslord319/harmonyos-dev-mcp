@@ -8,7 +8,7 @@ from common.tools.registry import mcp_tool
 from ..container import get_hdc
 from ..types import ListDevicesResult, QueryPackageResult
 from .device_base import ToolBase
-from .response import error_result, from_action_result, mcp_response, ok_result
+from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 
 _LIST_ERROR_DEFAULTS = {"packages": [], "count": 0}
 _ABILITIES_ERROR_DEFAULTS = {"abilities": [], "modules": [], "main_ability": None, "ability_count": 0}

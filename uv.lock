@@ -4,8 +4,7 @@ requires-python = ">=3.10"
 
 [manifest]
 members = [
-    "harmonyos-compile-mcp",
-    "harmonyos-mcp",
+    "harmonyos-dev-mcp",
     "harmonyos-mcp-common",
     "mcp-ho-dev-workspace",
 ]
@@ -664,27 +663,8 @@ wheels = [
 ]
 
 [[package]]
-name = "harmonyos-compile-mcp"
-version = "0.7.0"
-source = { editable = "services/harmonyos_compile_mcp" }
-dependencies = [
-    { name = "fastmcp" },
-    { name = "harmonyos-mcp-common" },
-    { name = "loguru" },
-    { name = "typing-extensions" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastmcp", specifier = ">=3.0.0" },
-    { name = "harmonyos-mcp-common", editable = "packages/common" },
-    { name = "loguru", specifier = ">=0.7.0" },
-    { name = "typing-extensions", specifier = ">=4.8.0" },
-]
-
-[[package]]
-name = "harmonyos-mcp"
-version = "0.7.0"
+name = "harmonyos-dev-mcp"
+version = "0.7.1"
 source = { editable = "services/harmonyos_mcp" }
 dependencies = [
     { name = "fastmcp" },
@@ -709,7 +689,7 @@ requires-dist = [
 
 [[package]]
 name = "harmonyos-mcp-common"
-version = "0.7.0"
+version = "0.7.1"
 source = { editable = "packages/common" }
 dependencies = [
     { name = "fastmcp" },
@@ -1053,8 +1033,8 @@ name = "mcp-ho-dev-workspace"
 version = "0.7.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "harmonyos-compile-mcp" },
-    { name = "harmonyos-mcp" },
+    { name = "harmonyos-dev-mcp" },
+    { name = "harmonyos-mcp-common" },
 ]
 
 [package.dev-dependencies]
@@ -1069,8 +1049,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "harmonyos-compile-mcp", editable = "services/harmonyos_compile_mcp" },
-    { name = "harmonyos-mcp", editable = "services/harmonyos_mcp" },
+    { name = "harmonyos-dev-mcp", editable = "services/harmonyos_mcp" },
+    { name = "harmonyos-mcp-common", editable = "packages/common" },
 ]
 
 [package.metadata.requires-dev]

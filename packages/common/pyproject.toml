@@ -4,9 +4,33 @@ build-backend = "hatchling.build"
 
 [project]
 name = "harmonyos-mcp-common"
-version = "0.7.0"
+version = "0.7.1"
+description = "HarmonyOS MCP 通用组件库 - 提供 MCP 服务器基础架构、工具注册、容器管理和通用工具类"
 requires-python = ">=3.10"
 dependencies = ["loguru>=0.7.0", "typing-extensions>=4.8.0", "fastmcp>=0.1.0"]
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "huduanmu", email = "mu@huduan.cn" }
+]
+keywords = [
+    "harmonyos",
+    "mcp",
+    "common",
+    "utilities",
+    "framework",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/common"]

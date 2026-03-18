@@ -13,7 +13,7 @@ from ...config import LogSecurityConfig
 from ...container import get_hdc
 from ...types import LogsQueryResult
 from ..device_base import ToolBase
-from ..response import error_result, from_action_result, mcp_response, ok_result
+from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 from .crash_parser import CrashParser
 from .historian import _check_and_cleanup_cache, fetch_historical_logs
 from .parser import LogParser

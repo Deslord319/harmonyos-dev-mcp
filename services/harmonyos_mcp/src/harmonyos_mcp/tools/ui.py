@@ -21,7 +21,7 @@ from ..types import (
 )
 from ..utils.normalizers.element import attach_element_metadata, build_lookup_hint, compact_candidate_handles
 from .device_base import ToolBase
-from .response import error_result, from_action_result, mcp_response
+from common.tools.response import error_result, from_action_result, mcp_response
 
 
 def _with_success_message(raw: Any, message: str) -> Any:

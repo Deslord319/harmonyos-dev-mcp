@@ -1,4 +1,9 @@
-"""Unified MCP response envelope for harmonyos_mcp tools."""
+"""
+Unified MCP response envelope for HarmonyOS MCP tools.
+
+Provides decorators and helper functions to wrap tool outputs
+into MCP-standard response format.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +22,7 @@ def mcp_response(tool: str):
 
     def decorator(func: Callable):
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 started = time.perf_counter()
@@ -76,10 +82,10 @@ def _duration_ms(started: float) -> int:
 
 def _to_mcp_result(envelope: Dict[str, Any]) -> Dict[str, Any]:
     if envelope["ok"]:
-        text = f'{envelope["tool"]}: ok'
+        text = f"{envelope['tool']}: ok"
     else:
         detail = envelope.get("error", {}).get("detail") or "Operation failed"
-        text = f'{envelope["tool"]}: {detail}'
+        text = f"{envelope['tool']}: {detail}"
     return {
         "content": [{"type": "text", "text": text}],
         "structuredContent": envelope,
@@ -87,9 +93,7 @@ def _to_mcp_result(envelope: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _normalize_result(
-    tool: str, raw: Any, request_id: str, duration_ms: int
-) -> Dict[str, Any]:
+def _normalize_result(tool: str, raw: Any, request_id: str, duration_ms: int) -> Dict[str, Any]:
     # Already full MCP-shaped.
     if isinstance(raw, dict) and {"content", "structuredContent", "isError"} <= set(raw.keys()):
         structured = raw.get("structuredContent", {})
@@ -139,9 +143,7 @@ def _merge_meta(existing: Any, request_id: str, duration_ms: int) -> Dict[str, A
     return merged
 
 
-def _ok_envelope(
-    tool: str, result: Any, request_id: str, duration_ms: int
-) -> Dict[str, Any]:
+def _ok_envelope(tool: str, result: Any, request_id: str, duration_ms: int) -> Dict[str, Any]:
     return {
         "tool": tool,
         "ok": True,
@@ -200,16 +202,20 @@ def from_action_result(
         return ok_result(raw if raw is not None else default_result)
 
     if "success" not in raw:
-        merged = {} if default_result is None else (
-            dict(default_result) if isinstance(default_result, dict) else default_result
+        merged = (
+            {}
+            if default_result is None
+            else (dict(default_result) if isinstance(default_result, dict) else default_result)
         )
         if isinstance(merged, dict):
             merged.update(raw)
             return ok_result(merged)
         return ok_result(raw)
 
-    merged = {} if default_result is None else (
-        dict(default_result) if isinstance(default_result, dict) else default_result
+    merged = (
+        {}
+        if default_result is None
+        else (dict(default_result) if isinstance(default_result, dict) else default_result)
     )
     if isinstance(merged, dict):
         for k, v in raw.items():
