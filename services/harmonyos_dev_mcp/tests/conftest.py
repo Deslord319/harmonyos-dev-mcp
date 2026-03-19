@@ -1,4 +1,4 @@
-﻿"""Pytest fixtures for harmonyos_dev_mcp tests."""
+"""Pytest fixtures for harmonyos_dev_mcp tests."""
 
 import sys
 from typing import Generator
@@ -183,9 +183,9 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
 
     mock = MagicMock(spec=UiTestWrapper)
 
-    mock.click.return_value = {"success": True, "x": 100, "y": 200, "message": "鐐瑰嚮鎴愬姛"}
-    mock.double_click.return_value = {"success": True, "x": 100, "y": 200, "message": "鍙岀偣鎴愬姛"}
-    mock.long_click.return_value = {"success": True, "x": 100, "y": 200, "message": "闀挎寜鎴愬姛"}
+    mock.click.return_value = {"success": True, "x": 100, "y": 200, "message": "点击成功"}
+    mock.double_click.return_value = {"success": True, "x": 100, "y": 200, "message": "双点成功"}
+    mock.long_click.return_value = {"success": True, "x": 100, "y": 200, "message": "长按成功"}
     mock.swipe.return_value = {"success": True, "from_x": 1, "from_y": 2, "to_x": 3, "to_y": 4}
     mock.swipe_direction.return_value = {
         "success": True,
@@ -194,10 +194,10 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
         "to_x": 3,
         "to_y": 4,
         "direction": "up",
-        "message": "婊戝姩鎴愬姛",
+        "message": "滑动成功",
     }
-    mock.input_text.return_value = {"success": True, "text": "ok", "x": 100, "y": 200, "message": "鏂囨湰杈撳叆鎴愬姛"}
-    mock.press_key.return_value = {"success": True, "key": "Home", "message": "鎸夐敭鎴愬姛"}
+    mock.input_text.return_value = {"success": True, "text": "ok", "x": 100, "y": 200, "message": "文本输入成功"}
+    mock.press_key.return_value = {"success": True, "key": "Home", "message": "按键成功"}
     mock.find_element.return_value = {
         "success": True,
         "window_id": 1,

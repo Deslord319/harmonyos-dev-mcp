@@ -2,7 +2,7 @@
 
 **HarmonyOS 设备自动化与 E2E 测试 MCP 服务**
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](services/harmonyos_dev_mcp/pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.7.2-blue)](services/harmonyos_dev_mcp/pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-5.0+-green)](https://developer.huawei.com/consumer/cn/harmonyos/)
 
