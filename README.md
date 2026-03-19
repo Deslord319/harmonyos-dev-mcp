@@ -2,27 +2,164 @@
 
 **HarmonyOS 设备自动化与 E2E 测试 MCP 服务**
 
-[![Version](https://img.shields.io/badge/version-0.7.2-blue)](services/harmonyos_dev_mcp/pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.7.3-blue)](services/harmonyos_dev_mcp/pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-5.0+-green)](https://developer.huawei.com/consumer/cn/harmonyos/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-当前社区主线只包含 `harmonyos_dev_mcp` 服务。`services/harmonyos_compile_mcp/` 目录暂为预留，不属于当前 workspace，也不作为对外发布内容。
+> **HarmonyOS MCP 服务端工程**，提供设备自动化、应用部署、UI 交互和 E2E 测试辅助能力。
+> 
+> 当前社区主线只包含 `harmonyos_dev_mcp` 服务。`services/harmonyos_compile_mcp/` 目录暂为预留，不属于当前 workspace 发布内容。
+
+---
 
 ## 目录结构
 
 ```text
 mcp_ho_dev/
 ├── packages/
-│   └── common/
-│       └── src/common/
+│   └── common/                      # 通用组件库 (harmonyos-mcp-common)
+│       ├── src/common/
+│       │   ├── config/              # 配置管理
+│       │   ├── server/              # MCP 服务器基类
+│       │   ├── tools/               # 工具注册与响应
+│       │   ├── types/               # 类型定义
+│       │   └── utils/               # 工具函数
+│       ├── tests/
+│       ├── pyproject.toml
+│       └── README.md
 ├── services/
-│   └── harmonyos_dev_mcp/
-│       ├── docs/
+│   └── harmonyos_dev_mcp/           # HarmonyOS 开发 MCP 服务
 │       ├── src/harmonyos_dev_mcp/
-│       └── tests/
-├── pyproject.toml
+│       │   ├── tools/
+│       │   │   ├── build.py         # 构建/部署工具
+│       │   │   ├── device_support.py
+│       │   │   ├── e2e.py           # E2E 测试工具
+│       │   │   ├── general.py       # 通用工具
+│       │   │   ├── log/
+│       │   │   │   ├── query.py     # 日志查询
+│       │   │   │   ├── parser.py
+│       │   │   │   └── historian.py
+│       │   │   └── ui.py            # UI 交互工具
+│       │   ├── utils/
+│       │   │   ├── hdc/             # HDC 封装层
+│       │   │   ├── normalizers/     # 数据标准化
+│       │   │   ├── parsers/         # 解析器
+│       │   │   └── wrappers/        # 外部工具封装
+│       │   ├── config.py
+│       │   ├── container.py
+│       │   ├── server.py
+│       │   └── types.py
+│       ├── docs/                    # 使用文档
+│       ├── tests/
+│       │   └── unit/
+│       ├── pyproject.toml
+│       └── README.md
+├── pyproject.toml                   # Workspace 配置
+├── uv.lock
 └── README.md
 ```
+
+---
+
+## 功能特性
+
+### 1. 设备自动化
+- **设备管理** - 真机/模拟器设备发现、连接状态查询
+- **应用部署** - HAP 包安装、卸载、启动
+- **UI 交互** - 元素查找、点击、长按、输入、滑动、拖拽
+- **屏幕截图** - 全局/元素级截图
+
+### 2. E2E 测试支持 ⭐
+- **UI 树查询** - 获取完整 UI 层级结构
+- **窗口管理** - 列出所有窗口、窗口切换
+- **元素等待** - 智能等待元素出现/消失
+- **自动重试** - 内置重试机制，提升测试稳定性
+
+### 3. 构建工具链
+- **自动化构建** - 调用 Hvigor 构建 HAP 包
+- **错误解析** - 自动提取编译错误并分类
+- **超时控制** - 支持长时构建任务
+
+### 4. 日志审计
+- **安全事件查询** - 查询设备安全日志
+- **实时日志** - 支持实时日志采样
+- **历史日志** - 支持回退到历史日志
+- **崩溃解析** - 自动解析崩溃日志
+
+---
+
+## 工具列表
+
+共 **18 个工具**，分为 4 类：
+
+| 分类 | 工具 | 功能描述 |
+|------|------|----------|
+| **General** | `list_devices` | 列出已连接的 HarmonyOS 设备 |
+| (3 个) | `query_package` | 查询应用安装状态、权限、Ability 信息 |
+| | `logs_query` | 查询安全审计日志、崩溃日志 |
+| **Build** | `build_app` | 构建 HAP 包（支持 debug 模式） |
+| (4 个) | `install_app` | 安装应用到设备 |
+| | `run_app` | 启动应用（支持自动检测主 Ability） |
+| | `uninstall_app` | 从设备卸载应用 |
+| **UI** | `screenshot` | 屏幕截图（支持区域截图） |
+| (8 个) | `click_element` | 点击元素（支持坐标/句柄/文本查找） |
+| | `long_press_element` | 长按元素 |
+| | `input_text` | 输入文本到文本框 |
+| | `swipe` | 滑动操作（支持方向/坐标） |
+| | `drag` | 拖拽操作 |
+| | `press_key` | 按键操作（音量、电源等） |
+| | `find_element` | 查找元素（文本/类型/ID） |
+| **E2E** ⭐ | `get_ui_tree` | 获取 UI 树结构（支持窗口过滤） |
+| (3 个) | `list_windows` | 列出所有窗口（支持应用过滤） |
+| | `wait_element` | 等待元素出现/消失（支持超时） |
+
+---
+
+## 响应结构
+
+所有工具返回统一的 MCP 标准格式：
+
+### 成功响应
+```json
+{
+  "content": [{"type": "text", "text": "..."}],
+  "structuredContent": {
+    "tool": "tool_name",
+    "ok": true,
+    "result": {
+      "device_id": "3QC0124C11000711",
+      "packages": ["com.example.app"],
+      "count": 1
+    },
+    "error": null,
+    "meta": {
+      "request_id": "uuid-xxx",
+      "timestamp": "2026-03-19T00:00:00.000000+00:00",
+      "duration_ms": 123
+    }
+  },
+  "isError": false
+}
+```
+
+### 错误响应
+```json
+{
+  "tool": "run_app",
+  "ok": false,
+  "result": {
+    "device_id": "3QC0124C11000711",
+    "bundle_name": "com.example.myapplication"
+  },
+  "error": {
+    "code": "RUN_APP_FAILED",
+    "detail": "应用窗口未出现（可能 ability_name 或 module_name 错误）"
+  }
+}
+```
+
+---
 
 ## 快速开始
 
@@ -32,7 +169,7 @@ mcp_ho_dev/
 uv sync --all-packages
 ```
 
-### 2. 启动服务
+### 2. 启动 MCP Server
 
 ```bash
 uv run harmonyos-dev-mcp
@@ -42,39 +179,118 @@ uv run harmonyos-dev-mcp
 
 ```bash
 hdc list targets
+# 输出示例：3QC0124C11000711
 ```
 
-## 工具列表
+---
 
-当前提供 18 个工具，分为 4 类：
+## 使用示例
 
-| 分类 | 工具 |
-|------|------|
-| General | `list_devices` `query_package` `logs_query` |
-| Build | `build_app` `install_app` `run_app` `uninstall_app` |
-| UI | `screenshot` `click_element` `long_press_element` `input_text` `swipe` `drag` `press_key` `find_element` |
-| E2E | `get_ui_tree` `list_windows` `wait_element` |
+### 查询已安装应用
+
+```python
+result = await client.call_tool("query_package", {
+    "device_id": "3QC0124C11000711",
+    "info_type": "list"
+})
+# 返回：{"packages": ["com.example.app"], "count": 1}
+```
+
+### 查询应用详情（Ability 列表）
+
+```python
+result = await client.call_tool("query_package", {
+    "device_id": "3QC0124C11000711",
+    "bundle_name": "com.example.app",
+    "info_type": "abilities"
+})
+# 返回：{"abilities": [...], "modules": [...], "main_ability": {...}}
+```
+
+### 点击 UI 元素
+
+```python
+# 方式 1: 通过文本查找并点击
+await client.call_tool("click_element", {
+    "device_id": "3QC0124C11000711",
+    "text": "确定"
+})
+
+# 方式 2: 使用元素句柄（推荐）
+element = await client.call_tool("find_element", {
+    "device_id": "3QC0124C11000711",
+    "text": "登录"
+})
+await client.call_tool("click_element", {
+    "device_id": "3QC0124C11000711",
+    "element_handle": element["structuredContent"]["result"]["elements"][0]
+})
+```
+
+### 获取 UI 树
+
+```python
+ui_tree = await client.call_tool("get_ui_tree", {
+    "device_id": "3QC0124C11000711"
+})
+# 返回：{"ui_tree": {...}, "node_count": 42}
+```
+
+### 等待元素出现
+
+```python
+result = await client.call_tool("wait_element", {
+    "device_id": "3QC0124C11000711",
+    "text": "欢迎",
+    "timeout_ms": 10000,
+    "interval_ms": 300
+})
+# 返回：{"state": "found", "satisfied": true, "elapsed_ms": 1200, "element": {...}}
+```
+
+### 构建并安装应用
+
+```python
+# 构建
+build_result = await client.call_tool("build_app", {
+    "project_path": "C:/Projects/MyApp"
+})
+hap_path = build_result["structuredContent"]["result"]["hap_path"]
+
+# 安装
+await client.call_tool("install_app", {
+    "device_id": "3QC0124C11000711",
+    "hap_path": hap_path
+})
+
+# 启动
+await client.call_tool("run_app", {
+    "device_id": "3QC0124C11000711",
+    "bundle_name": "com.example.myapplication",
+    "auto_detect": true
+})
+```
+
+---
 
 ## 环境要求
 
-| 工具 | 版本 |
-|------|------|
-| Python | 3.12+ |
-| DevEco Studio | 5.0+ |
-| hdc | 最新版 |
-| uv | 最新版 |
+| 工具 | 版本 | 说明 |
+|------|------|------|
+| Python | 3.12+ | 运行环境 |
+| DevEco Studio | 5.0+ | HarmonyOS SDK |
+| hdc | 最新版 | 设备连接工具 |
+| uv | 最新版 | Python 包管理 |
+
+---
 
 ## MCP 客户端配置
 
-OpenCode 配置文件路径：
+### OpenCode 配置
 
-```text
-~/.config/opencode/opencode.jsonc
-```
+配置文件路径：`~/.config/opencode/opencode.jsonc`
 
-示例：
-
-```json
+```jsonc
 {
   "mcp": {
     "harmonyos-dev-mcp": {
@@ -88,54 +304,153 @@ OpenCode 配置文件路径：
 }
 ```
 
-`build_app` timeout guidance:
-- minimum: `60000` ms
-- recommended for cold builds: `120000` ms
+### 超时建议
+
+- **常规工具**: `30000` ms (30 秒)
+- **`build_app`**: 最少 `60000` ms，冷构建推荐 `120000` ms
+- **`logs_query`**: 根据日志量调整，建议 `60000` ms
+
+---
+
+## 工具调用注意事项
+
+### `query_package`
+- `info_type` 仅支持：`list`、`abilities`、`main_ability`、`permissions`
+- `info_type="basic"` 不受支持
+- 查询 `abilities`/`main_ability`/`permissions` 时必须提供 `bundle_name`
+
+### `input_text`
+- `element_handle` 必须传对象，推荐复用 `find_element` 或 `wait_element` 返回的句柄
+- **不要**把 `element_handle` 作为 JSON 字符串传入
+
+**正确示例：**
+```json
+{
+  "element_handle": {
+    "window_id": 80,
+    "id": "420",
+    "compid": "80:420",
+    "type": "TextInput"
+  },
+  "text": "security"
+}
+```
+
+**错误示例：**
+```json
+{
+  "element_handle": "{\"window_id\":80,\"id\":\"420\"}",
+  "text": "security"
+}
+```
+
+### `build_app`
+- 当前仅支持 `build_mode="debug"`
+- 是长时任务，确保 MCP 客户端超时设置 >= 60 秒
+
+### `logs_query`
+- 支持 `mode="errors"`（默认）和 `mode="markers"`
+- 默认实时采样，不回退到历史日志（除非 `fallback_to_historical=true`）
+- `package_name` 不再默认缩减为单个 pid
+
+---
+
+## 故障排查
+
+### MCP Server 无法启动
+
+```bash
+# 手动测试启动
+uv run harmonyos-dev-mcp
+
+# 检查设备连接
+hdc list targets
+
+# 查看日志
+cat logs/harmonyos-dev-mcp.stderr.log
+```
+
+### 工具调用超时
+
+1. 确保设备已连接且屏幕已解锁
+2. 检查 DevEco Studio / SDK / `hdc` 路径配置
+3. 增加 MCP 客户端超时时间（建议 60 秒+）
+
+### 构建失败
+
+```bash
+# 检查 Hvigor 路径
+# 查看构建输出中的错误信息
+# 确认项目路径正确
+```
+
+---
 
 ## 开发
 
-运行主线单测：
+### 运行测试
 
 ```bash
+# 单元测试
 uv run pytest services/harmonyos_dev_mcp/tests/unit -v
+
+# 带覆盖率
+uv run pytest services/harmonyos_dev_mcp/tests/unit -v --cov=harmonyos_dev_mcp
 ```
 
-构建包：
+### 构建包
 
 ```bash
+# 构建 common 包
 cd packages/common
 uv build
 
+# 构建 harmonyos-dev-mcp 包
 cd ../../services/harmonyos_dev_mcp
 uv build
 ```
 
-## 故障排查
+产物输出到 `dist/` 目录。
 
-无法启动服务时，优先检查：
+### 发布到 PyPI
 
-- `uv run harmonyos-dev-mcp` 是否能本地直接启动
-- `hdc list targets` 是否能看到设备
-- `logs/` 目录下是否生成当前服务日志文件
+```bash
+# 设置 Token
+export UV_PUBLISH_TOKEN="pypi-xxx"
 
-工具调用超时时，优先检查：
+# 发布
+uv publish dist/*
+```
 
-- 设备是否已连接且屏幕已解锁
-- DevEco Studio / SDK / `hdc` 路径是否可用
-- MCP 客户端超时时间是否至少为 60 秒
+---
 
 ## 相关文档
 
-- `services/harmonyos_dev_mcp/docs/logs_query.md`
-- `services/harmonyos_dev_mcp/docs/query_package.md`
+- [`docs/logs_query.md`](services/harmonyos_dev_mcp/docs/logs_query.md) - 日志查询详细文档
+- [`docs/query_package.md`](services/harmonyos_dev_mcp/docs/query_package.md) - 包查询详细文档
 
-## MCP 调用注意事项
+---
 
-- `query_package.info_type` 仅支持 `list`、`abilities`、`main_ability`、`permissions`。
-- `query_package.info_type="basic"` 不受支持。
-- `input_text.element_handle` 必须直接传对象，推荐复用 `find_element` 或 `wait_element` 返回的 `element_handle`。
-- 不要把 `input_text.element_handle` 作为 JSON 字符串传入。
+## 版本历史
+
+| 版本 | 日期 | 更新内容 |
+|------|------|----------|
+| 0.7.3 | 2026-03-19 | 添加 `harmonyos-dev-mcp` README 到包发布 |
+| 0.7.2 | 2026-03-19 | 更新作者邮箱，发布到 PyPI |
+| 0.7.0 | - | 新增 E2E 测试工具，改进窗口解析和构建体验 |
+
+---
 
 ## License
 
 Apache License 2.0
+
+---
+
+## 联系方式
+
+- **作者**: huduanmu
+- **邮箱**: 772927148@qq.com
+- **PyPI**: 
+  - [harmonyos-mcp-common](https://pypi.org/project/harmonyos-mcp-common/)
+  - [harmonyos-dev-mcp](https://pypi.org/project/harmonyos-dev-mcp/)

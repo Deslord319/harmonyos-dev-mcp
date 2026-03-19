@@ -4,8 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "harmonyos-dev-mcp"
-version = "0.7.2"
+version = "0.7.3"
 requires-python = ">=3.12"
+readme = "README.md"
+authors = [
+    { name = "huduanmu", email = "772927148@qq.com" }
+]
 dependencies = [
     "harmonyos-mcp-common",
     "fastmcp>=3.0.0",
