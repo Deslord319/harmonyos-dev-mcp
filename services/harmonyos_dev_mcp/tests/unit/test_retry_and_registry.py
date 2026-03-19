@@ -1,4 +1,4 @@
-"""
+﻿"""
 Tests for retry behavior and tool registration.
 """
 
@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from harmonyos_dev_mcp.utils.retry import is_transient_hdc_failure, retry
+from common.utils.retry import is_transient_error, retry
 from common.tools.registry import clear_registry, get_registered_tools, get_tool_summary, mcp_tool
 
 
@@ -113,19 +113,19 @@ class TestRetry:
 
 class TestIsTransientHdcFailure:
     def test_success_result_not_transient(self):
-        assert is_transient_hdc_failure({"success": True}) is False
+        assert is_transient_error({"success": True}) is False
 
     def test_timeout_is_transient(self):
-        assert is_transient_hdc_failure({"success": False, "stderr": "命令执行超时(30秒"}) is True
+        assert is_transient_error({"success": False, "stderr": "command timed out (30s)"}) is True
 
     def test_connection_refused_is_transient(self):
-        assert is_transient_hdc_failure({"success": False, "stderr": "Connect server failed"}) is True
+        assert is_transient_error({"success": False, "stderr": "Connect server failed"}) is True
 
     def test_permanent_error_not_transient(self):
-        assert is_transient_hdc_failure({"success": False, "stderr": "Invalid command syntax"}) is False
+        assert is_transient_error({"success": False, "stderr": "Invalid command syntax"}) is False
 
     def test_empty_stderr_not_transient(self):
-        assert is_transient_hdc_failure({"success": False, "stderr": ""}) is False
+        assert is_transient_error({"success": False, "stderr": ""}) is False
 
 
 class TestRegistry:
@@ -236,3 +236,4 @@ class TestRealToolRegistration:
         assert summary["categories"] == expected, (
             f"Category mismatch. Expected: {expected}, actual: {summary['categories']}"
         )
+

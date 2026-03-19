@@ -14,7 +14,7 @@ from ..utils.normalizers.element import normalize_element
 from ..utils.normalizers.window import normalize_windows
 from ..utils.ui_common import normalize_bundle_name
 from ..utils.uitree_parser import UITreeParser
-from .device_base import ToolBase
+from .device_support import DeviceToolSupport
 from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 
 
@@ -65,7 +65,7 @@ def _validate_search_target(
 
 @mcp_tool(category="e2e")
 @mcp_response("get_ui_tree")
-@ToolBase.handle_tool_error(
+@DeviceToolSupport.handle_tool_error(
     "GET_UI_TREE_ERROR",
     window_id=0,
     validated_window_id=None,
@@ -74,7 +74,7 @@ def _validate_search_target(
     ui_tree={},
     node_count=0,
 )
-@ToolBase.with_device(
+@DeviceToolSupport.with_device(
     window_id=0,
     validated_window_id=None,
     validation_applied=False,
@@ -141,8 +141,8 @@ async def get_ui_tree(
 
 @mcp_tool(category="e2e")
 @mcp_response("list_windows")
-@ToolBase.handle_tool_error("LIST_WINDOWS_ERROR", windows=[], count=0)
-@ToolBase.with_device(windows=[], count=0)
+@DeviceToolSupport.handle_tool_error("LIST_WINDOWS_ERROR", windows=[], count=0)
+@DeviceToolSupport.with_device(windows=[], count=0)
 async def list_windows(
     device_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
@@ -169,8 +169,8 @@ async def list_windows(
 
 @mcp_tool(category="e2e")
 @mcp_response("wait_element")
-@ToolBase.handle_tool_error("WAIT_ELEMENT_ERROR", state="found", satisfied=False, elapsed_ms=0, element=None)
-@ToolBase.with_device(state="found", satisfied=False, elapsed_ms=0, element=None)
+@DeviceToolSupport.handle_tool_error("WAIT_ELEMENT_ERROR", state="found", satisfied=False, elapsed_ms=0, element=None)
+@DeviceToolSupport.with_device(state="found", satisfied=False, elapsed_ms=0, element=None)
 async def wait_element(
     device_id: Optional[str] = None,
     bundle_name: Optional[str] = None,

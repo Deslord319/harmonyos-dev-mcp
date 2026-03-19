@@ -1,4 +1,4 @@
-﻿"""Pytest fixtures for harmonyos_mcp tests."""
+﻿"""Pytest fixtures for harmonyos_dev_mcp tests."""
 
 import sys
 from typing import Generator
@@ -24,7 +24,7 @@ def reset_container():
     from harmonyos_dev_mcp.container import container
 
     container.reset()
-    import harmonyos_mcp.container as container_mod
+    import harmonyos_dev_mcp.container as container_mod
 
     container_mod._registered = False
 
@@ -34,7 +34,7 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
     import harmonyos_dev_mcp  # noqa: F401
     from harmonyos_dev_mcp.utils.hdc import HdcWrapper
     from harmonyos_dev_mcp.container import container
-    import harmonyos_mcp.container as container_mod
+    import harmonyos_dev_mcp.container as container_mod
 
     mock = MagicMock(spec=HdcWrapper)
 
@@ -179,7 +179,7 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
     import harmonyos_dev_mcp  # noqa: F401
     from harmonyos_dev_mcp.utils.wrappers.ui_operations import UiTestWrapper
     from harmonyos_dev_mcp.container import container
-    import harmonyos_mcp.container as container_mod
+    import harmonyos_dev_mcp.container as container_mod
 
     mock = MagicMock(spec=UiTestWrapper)
 
@@ -240,3 +240,4 @@ def unwrap_result():
         return sc
 
     return _unwrap
+

@@ -1,24 +1,25 @@
-﻿"""General HarmonyOS MCP tools."""
+"""General HarmonyOS MCP tools."""
 
 import asyncio
-from typing import Literal, Optional
+from typing import Optional
 
 from common.tools.registry import mcp_tool
+from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 
 from ..container import get_hdc
 from ..types import ListDevicesResult, QueryPackageResult
-from .device_base import ToolBase
-from common.tools.response import error_result, from_action_result, mcp_response, ok_result
+from .device_support import DeviceToolSupport
 
 _LIST_ERROR_DEFAULTS = {"packages": [], "count": 0}
 _ABILITIES_ERROR_DEFAULTS = {"abilities": [], "modules": [], "main_ability": None, "ability_count": 0}
 _MAIN_ABILITY_ERROR_DEFAULTS = {"ability_name": "", "module_name": ""}
 _PERMISSIONS_ERROR_DEFAULTS = {"requested_permissions": [], "permission_count": 0}
+_ALLOWED_QUERY_INFO_TYPES = ("list", "abilities", "main_ability", "permissions")
 
 
 @mcp_tool(category="general")
 @mcp_response("list_devices")
-@ToolBase.handle_tool_error("DEVICE_LIST_ERROR", devices=[], count=0)
+@DeviceToolSupport.handle_tool_error("DEVICE_LIST_ERROR", devices=[], count=0)
 async def list_devices() -> ListDevicesResult:
     hdc = get_hdc()
     devices = await asyncio.to_thread(hdc.list_devices_with_info)
@@ -27,20 +28,27 @@ async def list_devices() -> ListDevicesResult:
 
 @mcp_tool(category="general")
 @mcp_response("query_package")
-@ToolBase.handle_tool_error("QUERY_PACKAGE_ERROR", info_type="list", **_LIST_ERROR_DEFAULTS)
-@ToolBase.with_device(info_type="list", **_LIST_ERROR_DEFAULTS)
+@DeviceToolSupport.handle_tool_error("QUERY_PACKAGE_ERROR", info_type="list", **_LIST_ERROR_DEFAULTS)
+@DeviceToolSupport.with_device(info_type="list", **_LIST_ERROR_DEFAULTS)
 async def query_package(
     device_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
     keyword: Optional[str] = None,
-    info_type: Literal["list", "abilities", "main_ability", "permissions"] = "list",
+    info_type: str = "list",
 ) -> QueryPackageResult:
     hdc = get_hdc()
+
+    if info_type not in _ALLOWED_QUERY_INFO_TYPES:
+        return error_result(
+            "INVALID_INFO_TYPE",
+            'invalid info_type. supported values: list, abilities, main_ability, permissions; "basic" is not supported',
+            result={"device_id": device_id, "info_type": info_type},
+        )
 
     if info_type in ("abilities", "main_ability", "permissions") and not bundle_name:
         return error_result(
             "MISSING_BUNDLE_NAME",
-            f'info_type="{info_type}" requires bundle_name',
+            f'info_type="{info_type}" requires bundle_name. supported values: list, abilities, main_ability, permissions',
             result={"device_id": device_id, "info_type": info_type},
         )
 
@@ -156,6 +164,6 @@ async def query_package(
 
     return error_result(
         "INVALID_INFO_TYPE",
-        f"unsupported info_type: {info_type}",
+        'invalid info_type. supported values: list, abilities, main_ability, permissions; "basic" is not supported',
         result={"device_id": device_id, "info_type": info_type},
     )

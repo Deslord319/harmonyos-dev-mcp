@@ -12,7 +12,7 @@ from common.tools.registry import mcp_tool
 from ..container import get_hdc
 from ..types import BuildResult, InstallResult, RunAppResult, UninstallResult
 from ..utils.wrappers.hvigor_wrapper import HvigorWrapper
-from .device_base import ToolBase
+from .device_support import DeviceToolSupport
 from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 
 MAX_ERRORS = 15
@@ -24,7 +24,7 @@ BUILD_TIMEOUT_HINT = (
 
 @mcp_tool(category="build")
 @mcp_response("build_app")
-@ToolBase.handle_tool_error("BUILD_ERROR", hap_path=None, duration=0)
+@DeviceToolSupport.handle_tool_error("BUILD_ERROR", hap_path=None, duration=0)
 async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
     """Build HarmonyOS HAP. This is a long-running task; clients should use a tools/call timeout of at least 60 seconds."""
     start_time = time.time()
@@ -35,7 +35,7 @@ async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult
 
     payload: dict = {
         "hap_path": raw.get("hap_path"),
-        "message": f"build {'success' if raw.get('success') else 'failed'}, duration: {ToolBase.format_duration(elapsed)}",
+        "message": f"build {'success' if raw.get('success') else 'failed'}, duration: {DeviceToolSupport.format_duration(elapsed)}",
         "duration": elapsed,
         "hint": BUILD_TIMEOUT_HINT,
         "errors": [],
@@ -148,8 +148,8 @@ def _classify_error(message: str) -> str:
 
 @mcp_tool(category="build")
 @mcp_response("install_app")
-@ToolBase.handle_tool_error("INSTALL_ERROR", hap_path="")
-@ToolBase.with_device(hap_path="")
+@DeviceToolSupport.handle_tool_error("INSTALL_ERROR", hap_path="")
+@DeviceToolSupport.with_device(hap_path="")
 async def install_app(hap_path: str, device_id: Optional[str] = None) -> InstallResult:
     hdc = get_hdc()
     raw = await asyncio.to_thread(hdc.install_app, device_id, hap_path)
@@ -165,7 +165,7 @@ async def install_app(hap_path: str, device_id: Optional[str] = None) -> Install
 
 @mcp_tool(category="build")
 @mcp_response("run_app")
-@ToolBase.handle_tool_error(
+@DeviceToolSupport.handle_tool_error(
     "RUN_APP_ERROR",
     bundle_name="",
     ability_name="",
@@ -175,7 +175,7 @@ async def install_app(hap_path: str, device_id: Optional[str] = None) -> Install
     window_found=False,
     window=None,
 )
-@ToolBase.with_device(
+@DeviceToolSupport.with_device(
     bundle_name="",
     ability_name="",
     module_name="entry",
@@ -276,8 +276,8 @@ def _resolve_ability(
 
 @mcp_tool(category="build")
 @mcp_response("uninstall_app")
-@ToolBase.handle_tool_error("UNINSTALL_ERROR", bundle_name="")
-@ToolBase.with_device(bundle_name="")
+@DeviceToolSupport.handle_tool_error("UNINSTALL_ERROR", bundle_name="")
+@DeviceToolSupport.with_device(bundle_name="")
 async def uninstall_app(bundle_name: str, device_id: Optional[str] = None) -> UninstallResult:
     hdc = get_hdc()
     raw = await asyncio.to_thread(hdc.uninstall_app, device_id, bundle_name)

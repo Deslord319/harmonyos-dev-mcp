@@ -11,11 +11,11 @@ class BaseResult(TypedDict, total=False):
     tool: str
     ok: bool
     result: Any
-    error: MCPError | None
+    error: MCPErrorPayload | None
     meta: MCPMeta
 
 
-class MCPError(TypedDict, total=False):
+class MCPErrorPayload(TypedDict, total=False):
     """Unified error object in structuredContent."""
 
     code: str
@@ -36,7 +36,7 @@ class MCPStructuredContent(TypedDict, total=False):
     tool: str
     ok: bool
     result: Any
-    error: MCPError | None
+    error: MCPErrorPayload | None
     meta: MCPMeta
 
 

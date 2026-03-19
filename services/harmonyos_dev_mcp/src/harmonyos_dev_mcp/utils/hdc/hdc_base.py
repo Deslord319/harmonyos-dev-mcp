@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from loguru import logger
 
 from harmonyos_dev_mcp.config import Config
-from harmonyos_dev_mcp.utils.retry import retry, is_transient_hdc_failure
+from common.utils.retry import is_transient_error, retry
 
 
 class HdcBase:
@@ -59,7 +59,7 @@ class HdcBase:
         
         logger.info(f"初始化HdcWrapper, hdc路径: {self.hdc_path}")
 
-    @retry(should_retry=is_transient_hdc_failure)
+    @retry(should_retry=is_transient_error)
     def _execute_command(self, args: List[str], timeout: int = None) -> Dict[str, Any]:
         """
         执行hdc命令

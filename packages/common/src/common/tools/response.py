@@ -93,6 +93,11 @@ def _to_mcp_result(envelope: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def to_mcp_result(envelope: Dict[str, Any]) -> Dict[str, Any]:
+    """Public wrapper for MCP top-level result conversion."""
+    return _to_mcp_result(envelope)
+
+
 def _normalize_result(tool: str, raw: Any, request_id: str, duration_ms: int) -> Dict[str, Any]:
     # Already full MCP-shaped.
     if isinstance(raw, dict) and {"content", "structuredContent", "isError"} <= set(raw.keys()):
@@ -143,6 +148,11 @@ def _merge_meta(existing: Any, request_id: str, duration_ms: int) -> Dict[str, A
     return merged
 
 
+def merge_meta(existing: Any, request_id: str, duration_ms: int) -> Dict[str, Any]:
+    """Public wrapper for meta merging."""
+    return _merge_meta(existing, request_id, duration_ms)
+
+
 def _ok_envelope(tool: str, result: Any, request_id: str, duration_ms: int) -> Dict[str, Any]:
     return {
         "tool": tool,
@@ -182,6 +192,26 @@ def error_result(
         },
         "meta": {},
     }
+
+
+def extract_error_info(result: dict) -> tuple[str, str] | None:
+    """Extract error detail and code from a standardized MCP envelope."""
+    structured = result
+    if isinstance(result.get("structuredContent"), dict):
+        structured = result["structuredContent"]
+
+    if "ok" not in structured:
+        return None
+    if structured.get("ok", True):
+        return None
+
+    error_obj = structured.get("error")
+    if not isinstance(error_obj, dict):
+        return ("Unknown error", "UNKNOWN")
+
+    error_msg = str(error_obj.get("detail") or "Unknown error")
+    error_code = str(error_obj.get("code") or "UNKNOWN")
+    return error_msg, error_code
 
 
 def from_action_result(
@@ -249,3 +279,20 @@ def _error_envelope(
         },
         "meta": _meta(request_id, duration_ms),
     }
+
+
+def error_envelope(
+    tool: str,
+    code: str,
+    detail: str,
+    request_id: str,
+    duration_ms: int,
+) -> Dict[str, Any]:
+    """Public wrapper for standardized failed envelopes."""
+    return _error_envelope(
+        tool=tool,
+        code=code,
+        detail=detail,
+        request_id=request_id,
+        duration_ms=duration_ms,
+    )

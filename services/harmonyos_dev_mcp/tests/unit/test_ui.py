@@ -197,6 +197,17 @@ class TestSwipe:
 
 
 class TestInputText:
+    async def test_input_rejects_json_string_handle(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools import ui
+
+        sc = unwrap_result(
+            await ui.input_text(element_handle='{"window_id":1,"id":"btn_login"}', text="Hello World")
+        )
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_ELEMENT_HANDLE"
+        assert "Do not pass a JSON string" in sc["error"]["detail"]
+
     async def test_input_by_coordinates(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):
         from harmonyos_dev_mcp.tools import ui
 

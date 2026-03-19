@@ -6,7 +6,7 @@ import pytest
 
 
 class TestBuildApp:
-    @patch("harmonyos_mcp.tools.build.HvigorWrapper")
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
     async def test_build_success(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
@@ -28,7 +28,7 @@ class TestBuildApp:
         assert sc["result"]["errors"] == []
         assert sc["result"]["error_count"] == 0
 
-    @patch("harmonyos_mcp.tools.build.HvigorWrapper")
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
     async def test_build_failure(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
@@ -45,7 +45,7 @@ class TestBuildApp:
         assert sc["result"]["error_count"] == 0
         assert sc["error"]["detail"] == "compiler exited with code 1"
 
-    @patch("harmonyos_mcp.tools.build.HvigorWrapper")
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
     async def test_build_with_release_mode(self, mock_hvigor_cls):
         from harmonyos_dev_mcp.tools import build
@@ -57,7 +57,7 @@ class TestBuildApp:
         await build.build_app("/path/to/project", build_mode="release")
         mock_hvigor.build_hap.assert_called_once_with(build_mode="release")
 
-    @patch("harmonyos_mcp.tools.build.HvigorWrapper")
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
     async def test_build_failure_uses_current_process_output_only(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
@@ -107,10 +107,10 @@ class TestInstallApp:
     @pytest.mark.asyncio
     async def test_install_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_dev_mcp.tools import build
-        from harmonyos_dev_mcp.tools.device_base import ToolBase
+        from harmonyos_dev_mcp.tools.device_support import DeviceToolSupport
 
         monkeypatch.setattr(
-            ToolBase,
+            DeviceToolSupport,
             "get_device_id",
             staticmethod(
                 lambda device_id=None: (
@@ -195,11 +195,11 @@ class TestRunApp:
     @pytest.mark.asyncio
     async def test_run_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_dev_mcp.tools import build
-        from harmonyos_dev_mcp.tools.device_base import ToolBase
+        from harmonyos_dev_mcp.tools.device_support import DeviceToolSupport
 
         monkeypatch.setattr(build, "get_hdc", lambda: no_device_mock)
         monkeypatch.setattr(
-            ToolBase,
+            DeviceToolSupport,
             "get_device_id",
             staticmethod(
                 lambda device_id=None: (

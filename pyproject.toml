@@ -33,7 +33,7 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
 [tool.coverage.run]
-source = ["packages/common", "services/harmonyos_dev_mcp", "services/harmonyos_compile_mcp"]
+source = ["packages/common", "services/harmonyos_dev_mcp"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",

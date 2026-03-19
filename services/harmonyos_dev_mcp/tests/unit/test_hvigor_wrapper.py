@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 from subprocess import CompletedProcess
 import tempfile
 import subprocess
@@ -22,7 +22,7 @@ def _isolate_discovery_env(monkeypatch, *, clear_java=True, clear_path_java=Fals
 
     if clear_path_java:
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.shutil.which",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.shutil.which",
             lambda name: None,
         )
 
@@ -58,7 +58,7 @@ class TestHvigorWrapper:
             classmethod(lambda cls, path: path == deveco),
         )
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
         )
 
@@ -115,7 +115,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
         _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
         )
 
@@ -157,7 +157,7 @@ class TestHvigorWrapper:
             captured["text"] = text
             return CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-        monkeypatch.setattr("harmonyos_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
         result = wrapper.build_hap()
@@ -194,7 +194,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
         _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
         )
 
@@ -206,7 +206,7 @@ class TestHvigorWrapper:
 
         wrapper = HvigorWrapper(str(project))
 
-        assert wrapper.hvigor_user_home == tmp_path / "temp" / "harmonyos_mcp" / "hvigor_home"
+        assert wrapper.hvigor_user_home == tmp_path / "temp" / "harmonyos_dev_mcp" / "hvigor_home"
 
     def test_init_raises_when_no_writable_hvigor_home(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
@@ -228,7 +228,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
         _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
         )
         monkeypatch.setattr(HvigorWrapper, "_is_writable_dir", staticmethod(lambda path: False))
@@ -268,7 +268,7 @@ class TestHvigorWrapper:
                 stderr="> hvigor ERROR: BUILD FAILED in 2 s 600 ms",
             )
 
-        monkeypatch.setattr("harmonyos_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
         result = wrapper.build_hap()
@@ -295,20 +295,20 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
         _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
         )
 
         def fake_run(*args, **kwargs):
             raise subprocess.TimeoutExpired(cmd="hvigor", timeout=kwargs["timeout"])
 
-        monkeypatch.setattr("harmonyos_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
         result = wrapper.build_hap()
 
         assert result["success"] is False
-        assert "超时" in result["stderr"]
+        assert "瓒呮椂" in result["stderr"]
 
     def test_init_raises_when_sdk_root_missing(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
@@ -328,7 +328,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
         _isolate_discovery_env(monkeypatch, clear_path_java=True)
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
         )
 
@@ -363,7 +363,7 @@ class TestHvigorWrapper:
 
         # Mock platform.system() to return "Windows"
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
         )
 
@@ -399,7 +399,7 @@ class TestHvigorWrapper:
 
         # Mock platform.system() to return "Linux"
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Linux"
         )
 
@@ -432,14 +432,15 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
         _isolate_discovery_env(monkeypatch)
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
             lambda: "Windows"
         )
         monkeypatch.setattr(
-            "harmonyos_mcp.utils.wrappers.hvigor_wrapper.shutil.which",
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.shutil.which",
             lambda name: str(java) if name == "java" else None,
         )
 
         wrapper = HvigorWrapper(str(project))
 
         assert wrapper.java_home == path_java_home
+

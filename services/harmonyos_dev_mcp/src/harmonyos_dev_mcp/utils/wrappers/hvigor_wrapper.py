@@ -1,11 +1,4 @@
-r"""
-hvigor构建工具封装
-
-说明:
-- 使用 DevEco Studio 自带的 hvigorw.js 进行构建
-- 需要配合 DevEco Studio 自带的 Node.js 使用
-- 支持通过环境变量 DEVECO_STUDIO_PATH 配置 DevEco Studio 路径
-"""
+﻿"""Wrapper around the DevEco hvigor build toolchain."""
 import subprocess
 import os
 import platform
@@ -19,21 +12,15 @@ from harmonyos_dev_mcp.config import Config
 
 
 class HvigorWrapper:
-    """hvigor构建系统封装类"""
+    """hvigor build wrapper."""
 
     def __init__(self, project_path: str, deveco_path: Optional[str] = None):
-        """
-        初始化hvigor包装器
-
-        Args:
-            project_path: HarmonyOS项目路径
-            deveco_path: DevEco Studio安装路径（可选，优先使用环境变量或自动检测）
-        """
+        """Initialize the wrapper for a HarmonyOS project."""
         self.project_path = Path(project_path).resolve()
         if not self.project_path.exists():
             raise ValueError(f"项目路径不存在: {project_path}")
 
-        # 查找DevEco Studio路径（优先级：参数覆盖 > 已初始化配置 > 自动发现）
+        # 查找 DevEco Studio 路径（优先级：参数覆盖 > 已初始化配置 > 自动发现）
         self.deveco_path = self._find_deveco_studio(deveco_path)
         if not self.deveco_path:
             raise ValueError(
@@ -46,22 +33,22 @@ class HvigorWrapper:
         self.java_home = self._find_java_home()
         self.hvigor_user_home = self._resolve_hvigor_user_home()
 
-        # 验证工具存在
+        # 楠岃瘉宸ュ叿瀛樺湪
         if not self.node_exe.exists():
-            raise ValueError(f"未找到 Node.js: {self.node_exe}")
+            raise ValueError(f"鏈壘鍒?Node.js: {self.node_exe}")
         if not self.hvigorw_js.exists():
-            raise ValueError(f"未找到 hvigorw.js: {self.hvigorw_js}")
+            raise ValueError(f"鏈壘鍒?hvigorw.js: {self.hvigorw_js}")
         if not self.sdk_root.exists():
-            raise ValueError(f"未找到 HarmonyOS SDK 根目录: {self.sdk_root}")
+            raise ValueError(f"鏈壘鍒?HarmonyOS SDK 鏍圭洰褰? {self.sdk_root}")
         if self.java_home and not self.java_home.exists():
-            raise ValueError(f"未找到 Java Home: {self.java_home}")
+            raise ValueError(f"鏈壘鍒?Java Home: {self.java_home}")
 
-        logger.info(f"初始化 HvigorWrapper")
-        logger.info(f"  项目路径: {project_path}")
-        logger.info(f"  DevEco 路径: {self.deveco_path}")
+        logger.info(f"鍒濆鍖?HvigorWrapper")
+        logger.info(f"  椤圭洰璺緞: {project_path}")
+        logger.info(f"  DevEco 璺緞: {self.deveco_path}")
         logger.info(f"  Node.js: {self.node_exe}")
         logger.info(f"  hvigorw.js: {self.hvigorw_js}")
-        logger.info(f"  SDK 根路径: {self.sdk_root}")
+        logger.info(f"  SDK 鏍硅矾寰? {self.sdk_root}")
         if self.java_home:
             logger.info(f"  JAVA_HOME: {self.java_home}")
         logger.info(f"  HVIGOR_USER_HOME: {self.hvigor_user_home}")
@@ -90,30 +77,30 @@ class HvigorWrapper:
         if self._is_writable_dir(preferred):
             return preferred
 
-        fallback = Path(tempfile.gettempdir()) / "harmonyos_mcp" / "hvigor_home"
+        fallback = Path(tempfile.gettempdir()) / "harmonyos_dev_mcp" / "hvigor_home"
         if self._is_writable_dir(fallback):
             logger.warning(
-                f"项目目录不可写，HVIGOR_USER_HOME 回退到临时目录: {fallback}"
+                f"椤圭洰鐩綍涓嶅彲鍐欙紝HVIGOR_USER_HOME 鍥為€€鍒颁复鏃剁洰褰? {fallback}"
             )
             return fallback
 
         raise PermissionError(
-            f"HVIGOR_USER_HOME 不可写，项目路径与临时目录均不可用: {preferred}, {fallback}"
+            f"HVIGOR_USER_HOME 涓嶅彲鍐欙紝椤圭洰璺緞涓庝复鏃剁洰褰曞潎涓嶅彲鐢? {preferred}, {fallback}"
         )
 
     def _find_deveco_studio(self, custom_path: Optional[str] = None) -> Optional[Path]:
         """
-        查找 DevEco Studio 安装路径
+        鏌ユ壘 DevEco Studio 瀹夎璺緞
 
-        优先级：参数 > Config > 自动发现
+        浼樺厛绾э細鍙傛暟 > Config > 鑷姩鍙戠幇
         """
-        # 1. 使用传入的自定义路径
+        # 1. 浣跨敤浼犲叆鐨勮嚜瀹氫箟璺緞
         if custom_path:
             path = Path(custom_path)
             if Config._is_valid_deveco_path(path):
                 return path
 
-        # 2. 使用 Config 中已检测的路径
+        # 2. 浣跨敤 Config 涓凡妫€娴嬬殑璺緞
         if Config.DEVECO_STUDIO_PATH:
             path = Path(Config.DEVECO_STUDIO_PATH)
             if Config._is_valid_deveco_path(path):
@@ -123,12 +110,12 @@ class HvigorWrapper:
         detected = Config._detect_deveco_studio_path()
         if detected:
             path = Path(detected)
-            logger.info(f"自动检测到 DevEco Studio: {path}")
+            logger.info(f"鑷姩妫€娴嬪埌 DevEco Studio: {path}")
             return path
 
         for path in Config._get_deveco_search_paths():
             if Config._is_valid_deveco_path(path):
-                logger.info(f"自动检测到 DevEco Studio: {path}")
+                logger.info(f"鑷姩妫€娴嬪埌 DevEco Studio: {path}")
                 return path
 
         return None
@@ -218,18 +205,18 @@ class HvigorWrapper:
         return None
 
     def _ensure_local_properties(self):
-        """确保local.properties配置正确（仅用于OpenHarmony项目）
+        """纭繚local.properties閰嶇疆姝ｇ‘锛堜粎鐢ㄤ簬OpenHarmony椤圭洰锛?
         
-        注意: HarmonyOS项目（runtimeOS=HarmonyOS）不读取local.properties，
-        而是通过DEVECO_SDK_HOME环境变量定位SDK。该方法已由_execute_command中
-        设置DEVECO_SDK_HOME替代，保留供可能需要的OpenHarmony项目使用。
+        娉ㄦ剰: HarmonyOS椤圭洰锛坮untimeOS=HarmonyOS锛変笉璇诲彇local.properties锛?
+        鑰屾槸閫氳繃DEVECO_SDK_HOME鐜鍙橀噺瀹氫綅SDK銆傝鏂规硶宸茬敱_execute_command涓?
+        璁剧疆DEVECO_SDK_HOME鏇夸唬锛屼繚鐣欎緵鍙兘闇€瑕佺殑OpenHarmony椤圭洰浣跨敤銆?
         """
         local_props = self.project_path / "local.properties"
-        # SDK路径应该指向default目录，hvigor会在子目录中查找SDK组件
+        # SDK璺緞搴旇鎸囧悜default鐩綍锛宧vigor浼氬湪瀛愮洰褰曚腑鏌ユ壘SDK缁勪欢
         sdk_dir = self.deveco_path / "sdk" / "default"
         nodejs_dir = self.deveco_path / "tools" / "node"
 
-        # 读取现有配置
+        # 璇诲彇鐜版湁閰嶇疆
         existing_config = {}
         if local_props.exists():
             with open(local_props, 'r', encoding='utf-8') as f:
@@ -239,7 +226,7 @@ class HvigorWrapper:
                         key, value = line.split('=', 1)
                         existing_config[key.strip()] = value.strip()
 
-        # 更新配置
+        # 鏇存柊閰嶇疆
         needs_update = False
         if existing_config.get('sdk.dir') != str(sdk_dir).replace('\\', '\\\\'):
             needs_update = True
@@ -247,11 +234,11 @@ class HvigorWrapper:
             needs_update = True
 
         if needs_update:
-            logger.info(f"更新local.properties配置")
+            logger.info(f"鏇存柊local.properties閰嶇疆")
             with open(local_props, 'w', encoding='utf-8') as f:
                 f.write("# This file is automatically generated by HarmonyOS MCP Server\n")
                 f.write("# Do not modify this file manually\n\n")
-                # 使用正斜杠路径，这是跨平台的标准格式
+                # 浣跨敤姝ｆ枩鏉犺矾寰勶紝杩欐槸璺ㄥ钩鍙扮殑鏍囧噯鏍煎紡
                 sdk_path = str(sdk_dir).replace('\\', '/')
                 nodejs_path = str(nodejs_dir).replace('\\', '/')
                 f.write(f"sdk.dir={sdk_path}\n")
@@ -259,17 +246,17 @@ class HvigorWrapper:
     
     def _execute_command(self, args: List[str], timeout: int = None) -> Dict[str, Any]:
         """
-        执行hvigor命令
+        鎵цhvigor鍛戒护
 
         Args:
-            args: 命令参数列表（不包含node和hvigorw.js）
-            timeout: 超时时间(秒)
+            args: 鍛戒护鍙傛暟鍒楄〃锛堜笉鍖呭惈node鍜宧vigorw.js锛?
+            timeout: 瓒呮椂鏃堕棿(绉?
 
         Returns:
-            包含returncode, stdout, stderr的字典
+            鍖呭惈returncode, stdout, stderr鐨勫瓧鍏?
         """
-        # Windows 下 hvigor daemon 会在构建完成后长时间阻塞进程退出，
-        # 直接导致 MCP 调用超时，因此统一禁用 daemon。
+        # Windows 涓?hvigor daemon 浼氬湪鏋勫缓瀹屾垚鍚庨暱鏃堕棿闃诲杩涚▼閫€鍑猴紝
+        # 鐩存帴瀵艰嚧 MCP 璋冪敤瓒呮椂锛屽洜姝ょ粺涓€绂佺敤 daemon銆?
         effective_args = list(args)
         if (
             platform.system() == "Windows"
@@ -278,18 +265,18 @@ class HvigorWrapper:
         ):
             effective_args.append("--no-daemon")
 
-        # 构建完整命令: node hvigorw.js [args]
+        # 鏋勫缓瀹屾暣鍛戒护: node hvigorw.js [args]
         cmd = [str(self.node_exe), str(self.hvigorw_js)] + effective_args
         timeout = timeout or Config.BUILD_TIMEOUT
 
-        logger.debug(f"执行构建命令: {' '.join(cmd)}")
+        logger.debug(f"鎵ц鏋勫缓鍛戒护: {' '.join(cmd)}")
 
-        # 设置正确的 DEVECO_SDK_HOME 环境变量
-        # hvigor 的 HarmonyOS SDK 解析流程:
-        #   1. HarmonyOS 项目不读取 local.properties（property-get.js._readFile 返回空）
-        #   2. 通过 DEVECO_SDK_HOME 环境变量定位 SDK 根目录
-        #   3. SDK scanner 在该目录下搜索 <子目录>/sdk-pkg.json 来发现 SDK 版本
-        #   4. 因此 DEVECO_SDK_HOME 应指向 sdk/ 目录（其下有 default/sdk-pkg.json）
+        # 璁剧疆姝ｇ‘鐨?DEVECO_SDK_HOME 鐜鍙橀噺
+        # hvigor 鐨?HarmonyOS SDK 瑙ｆ瀽娴佺▼:
+        #   1. HarmonyOS 椤圭洰涓嶈鍙?local.properties锛坧roperty-get.js._readFile 杩斿洖绌猴級
+        #   2. 閫氳繃 DEVECO_SDK_HOME 鐜鍙橀噺瀹氫綅 SDK 鏍圭洰褰?
+        #   3. SDK scanner 鍦ㄨ鐩綍涓嬫悳绱?<瀛愮洰褰?/sdk-pkg.json 鏉ュ彂鐜?SDK 鐗堟湰
+        #   4. 鍥犳 DEVECO_SDK_HOME 搴旀寚鍚?sdk/ 鐩綍锛堝叾涓嬫湁 default/sdk-pkg.json锛?
         env = os.environ.copy()
         env['DEVECO_SDK_HOME'] = str(self.sdk_root)
         env['HVIGOR_USER_HOME'] = str(self.hvigor_user_home)
@@ -322,16 +309,16 @@ class HvigorWrapper:
                 'success': command_success
             }
         except subprocess.TimeoutExpired:
-            # 超时了，记录错误
-            logger.error(f"构建命令执行超时({timeout}秒)")
+            # 瓒呮椂浜嗭紝璁板綍閿欒
+            logger.error(f"鏋勫缓鍛戒护鎵ц瓒呮椂({timeout}绉?")
             return {
                 'returncode': -1,
                 'stdout': '',
-                'stderr': f'构建超时({timeout}秒)',
+                'stderr': f'鏋勫缓瓒呮椂({timeout}绉?',
                 'success': False
             }
         except Exception as e:
-            logger.error(f"构建命令执行失败: {e}")
+            logger.error(f"鏋勫缓鍛戒护鎵ц澶辫触: {e}")
             return {
                 'returncode': -1,
                 'stdout': '',
@@ -346,37 +333,37 @@ class HvigorWrapper:
 
     def _kill_process_tree(self, pid: int):
         """
-        终止进程及其所有子进程
+        缁堟杩涚▼鍙婂叾鎵€鏈夊瓙杩涚▼
 
         Args:
-            pid: 进程ID
+            pid: 杩涚▼ID
         """
         try:
             if platform.system() == 'Windows':
-                # 在 Windows 上使用 taskkill 终止进程树
+                # 鍦?Windows 涓婁娇鐢?taskkill 缁堟杩涚▼鏍?
                 subprocess.run(
                     ['taskkill', '/F', '/T', '/PID', str(pid)],
                     capture_output=True,
                     timeout=5
                 )
             else:
-                # 在 Unix 系统上使用 kill
+                # 鍦?Unix 绯荤粺涓婁娇鐢?kill
                 import signal
                 os.killpg(os.getpgid(pid), signal.SIGTERM)
         except Exception as e:
-            logger.error(f"终止进程树失败: {e}")
+            logger.error(f"缁堟杩涚▼鏍戝け璐? {e}")
     
     def clean(self, product: str = "default") -> Dict[str, Any]:
         """
-        清理构建产物
+        娓呯悊鏋勫缓浜х墿
 
         Args:
-            product: 产品名称（品类）
+            product: 浜у搧鍚嶇О锛堝搧绫伙級
 
         Returns:
-            构建结果
+            鏋勫缓缁撴灉
         """
-        logger.info("清理构建产物")
+        logger.info("娓呯悊鏋勫缓浜х墿")
         args = [
             '--no-daemon',
             '--sync',
@@ -388,24 +375,24 @@ class HvigorWrapper:
         result = self._execute_command(args)
 
         if result['success']:
-            logger.info("清理成功")
+            logger.info("娓呯悊鎴愬姛")
         else:
-            logger.error(f"清理失败: {result['stderr']}")
+            logger.error(f"娓呯悊澶辫触: {result['stderr']}")
 
         return result
 
     def build_har(self, module_name: str, product: str = "default") -> Dict[str, Any]:
         """
-        构建HAR包
+        鏋勫缓HAR鍖?
 
         Args:
-            module_name: 模块名称
-            product: 产品名称（品类）
+            module_name: 妯″潡鍚嶇О
+            product: 浜у搧鍚嶇О锛堝搧绫伙級
 
         Returns:
-            构建结果,包含HAR包路径
+            鏋勫缓缁撴灉,鍖呭惈HAR鍖呰矾寰?
         """
-        logger.info(f"构建HAR包 (模块: {module_name}, 产品: {product})")
+        logger.info(f"鏋勫缓HAR鍖?(妯″潡: {module_name}, 浜у搧: {product})")
 
         args = [
             '--no-daemon',
@@ -421,27 +408,27 @@ class HvigorWrapper:
         result = self._execute_command(args)
 
         if result['success']:
-            # 查找生成的HAR包
+            # 鏌ユ壘鐢熸垚鐨凥AR鍖?
             har_path = self._find_build_output('har', module_name)
             result['har_path'] = str(har_path) if har_path else None
-            logger.info(f"HAR包构建成功: {result['har_path']}")
+            logger.info(f"HAR鍖呮瀯寤烘垚鍔? {result['har_path']}")
         else:
-            logger.error(f"HAR包构建失败: {result['stderr']}")
+            logger.error(f"HAR鍖呮瀯寤哄け璐? {result['stderr']}")
 
         return result
 
     def build_hap(self, build_mode: str = "debug", product: str = "default") -> Dict[str, Any]:
         """
-        构建HAP包
+        鏋勫缓HAP鍖?
 
         Args:
-            build_mode: 构建模式 (debug/release)
-            product: 产品名称（品类）
+            build_mode: 鏋勫缓妯″紡 (debug/release)
+            product: 浜у搧鍚嶇О锛堝搧绫伙級
 
         Returns:
-            构建结果,包含HAP包路径
+            鏋勫缓缁撴灉,鍖呭惈HAP鍖呰矾寰?
         """
-        logger.info(f"构建HAP包 (模式: {build_mode}, 产品: {product})")
+        logger.info(f"鏋勫缓HAP鍖?(妯″紡: {build_mode}, 浜у搧: {product})")
 
         args = [
             '--no-daemon',
@@ -456,27 +443,27 @@ class HvigorWrapper:
         result = self._execute_command(args)
 
         if result['success']:
-            # 查找生成的HAP包
+            # 鏌ユ壘鐢熸垚鐨凥AP鍖?
             hap_path = self._find_build_output('hap', build_mode)
             result['hap_path'] = str(hap_path) if hap_path else None
-            logger.info(f"HAP包构建成功: {result['hap_path']}")
+            logger.info(f"HAP鍖呮瀯寤烘垚鍔? {result['hap_path']}")
         else:
-            logger.error(f"HAP包构建失败: {result['stderr']}")
+            logger.error(f"HAP鍖呮瀯寤哄け璐? {result['stderr']}")
         
         return result
 
     def build_app(self, build_mode: str = "debug", product: str = "default") -> Dict[str, Any]:
         """
-        构建APP包（最终上架包）
+        鏋勫缓APP鍖咃紙鏈€缁堜笂鏋跺寘锛?
 
         Args:
-            build_mode: 构建模式 (debug/release)
-            product: 产品名称（品类）
+            build_mode: 鏋勫缓妯″紡 (debug/release)
+            product: 浜у搧鍚嶇О锛堝搧绫伙級
 
         Returns:
-            构建结果,包含APP包路径
+            鏋勫缓缁撴灉,鍖呭惈APP鍖呰矾寰?
         """
-        logger.info(f"构建APP包 (模式: {build_mode}, 产品: {product})")
+        logger.info(f"鏋勫缓APP鍖?(妯″紡: {build_mode}, 浜у搧: {product})")
 
         args = [
             '--no-daemon',
@@ -490,33 +477,33 @@ class HvigorWrapper:
         result = self._execute_command(args)
 
         if result['success']:
-            # 查找生成的APP包
+            # 鏌ユ壘鐢熸垚鐨凙PP鍖?
             app_path = self._find_build_output('app', build_mode)
             result['app_path'] = str(app_path) if app_path else None
-            logger.info(f"APP包构建成功: {result['app_path']}")
+            logger.info(f"APP鍖呮瀯寤烘垚鍔? {result['app_path']}")
         else:
-            logger.error(f"APP包构建失败: {result['stderr']}")
+            logger.error(f"APP鍖呮瀯寤哄け璐? {result['stderr']}")
 
         return result
 
     def _find_build_output(self, output_type: str, search_key: str = "") -> Optional[Path]:
         """
-        查找构建输出文件
+        鏌ユ壘鏋勫缓杈撳嚭鏂囦欢
 
         Args:
-            output_type: 输出类型 (har/hap/app)
-            search_key: 搜索关键字（模块名或构建模式）
+            output_type: 杈撳嚭绫诲瀷 (har/hap/app)
+            search_key: 鎼滅储鍏抽敭瀛楋紙妯″潡鍚嶆垨鏋勫缓妯″紡锛?
 
         Returns:
-            输出文件路径
+            杈撳嚭鏂囦欢璺緞
         """
-        # 常见的输出路径
+        # 甯歌鐨勮緭鍑鸿矾寰?
         output_dirs = [
             self.project_path / 'build',
             self.project_path / 'entry' / 'build',
         ]
 
-        # 如果是HAR，还要搜索模块目录
+        # 濡傛灉鏄疕AR锛岃繕瑕佹悳绱㈡ā鍧楃洰褰?
         if output_type == 'har' and search_key:
             output_dirs.append(self.project_path / search_key / 'build')
 
@@ -524,7 +511,7 @@ class HvigorWrapper:
             if not output_dir.exists():
                 continue
 
-            # 查找对应类型的文件
+            # 鏌ユ壘瀵瑰簲绫诲瀷鐨勬枃浠?
             extension = f'.{output_type}'
             for file in output_dir.rglob(f'*{extension}'):
                 return file
@@ -533,10 +520,10 @@ class HvigorWrapper:
 
     def get_build_info(self) -> Dict[str, Any]:
         """
-        获取构建信息
+        鑾峰彇鏋勫缓淇℃伅
 
         Returns:
-            构建信息字典
+            鏋勫缓淇℃伅瀛楀吀
         """
         info = {
             'project_path': str(self.project_path),
@@ -548,3 +535,4 @@ class HvigorWrapper:
         }
 
         return info
+

@@ -5,7 +5,7 @@ from harmonyos_dev_mcp.config import Config
 
 class TestConfigHelpers:
     def test_get_deveco_search_paths_includes_macos_defaults(self, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Darwin")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Darwin")
         monkeypatch.setattr(Path, "home", lambda: Path("/Users/tester"))
         monkeypatch.delenv("DevEco Studio", raising=False)
 
@@ -15,7 +15,7 @@ class TestConfigHelpers:
         assert Path("/Users/tester/Applications/DevEco-Studio.app") in paths
 
     def test_get_deveco_search_paths_prefers_env_hint(self, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Darwin")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Darwin")
         monkeypatch.setattr(Path, "home", lambda: Path("/Users/tester"))
         monkeypatch.setenv("DevEco Studio", "/custom/DevEco-Studio.app:/ignored/bin")
 
@@ -24,7 +24,7 @@ class TestConfigHelpers:
         assert paths[0] == Path("/custom/DevEco-Studio.app")
 
     def test_get_deveco_search_paths_includes_windows_registry_candidates(self, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
         monkeypatch.setenv("LOCALAPPDATA", r"D:\Users\tester\AppData\Local")
         monkeypatch.setenv("ProgramFiles", r"D:\Apps")
         monkeypatch.setenv("ProgramFiles(x86)", r"E:\AppsX86")
@@ -60,7 +60,7 @@ class TestConfigHelpers:
         assert result == [Path("/opt/DevEco-Studio"), Path("/opt/DevEco Studio")]
 
     def test_is_valid_deveco_path_accepts_hvigor_layout(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Linux")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Linux")
         deveco = tmp_path / "DevEco-Studio"
         (deveco / "tools" / "hvigor" / "bin").mkdir(parents=True)
         (deveco / "tools" / "hvigor" / "bin" / "hvigorw.js").write_text("// hvigor", encoding="utf-8")
@@ -68,14 +68,14 @@ class TestConfigHelpers:
         assert Config._is_valid_deveco_path(deveco) is True
 
     def test_is_valid_deveco_path_rejects_empty_directory(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
 
         assert Config._is_valid_deveco_path(tmp_path) is False
 
 
 class TestDevEcoDetection:
     def test_detect_deveco_uses_valid_env_override(self, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
         monkeypatch.setenv("DEVECO_STUDIO_PATH", r"D:\Custom\DevEco")
         monkeypatch.delenv("DevEco Studio", raising=False)
         monkeypatch.setattr(
@@ -89,7 +89,7 @@ class TestDevEcoDetection:
         assert detected == r"D:\Custom\DevEco"
 
     def test_detect_deveco_falls_back_to_search_paths_when_env_invalid(self, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
         monkeypatch.setenv("DEVECO_STUDIO_PATH", r"D:\Broken\DevEco")
         monkeypatch.delenv("DevEco Studio", raising=False)
         monkeypatch.setattr(
@@ -108,7 +108,7 @@ class TestDevEcoDetection:
         assert detected == r"E:\Huawei\DevEco Studio"
 
     def test_detect_deveco_returns_existing_env_path_as_last_resort(self, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
         monkeypatch.setenv("DEVECO_STUDIO_PATH", r"D:\Existing\UnknownLayout")
         monkeypatch.delenv("DevEco Studio", raising=False)
         monkeypatch.setattr(
@@ -128,7 +128,7 @@ class TestDevEcoDetection:
         assert detected == r"D:\Existing\UnknownLayout"
 
     def test_detect_deveco_prefers_valid_registry_path(self, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
         monkeypatch.delenv("DEVECO_STUDIO_PATH", raising=False)
         monkeypatch.delenv("DevEco Studio", raising=False)
         monkeypatch.setattr(
@@ -153,7 +153,7 @@ class TestSdkDetection:
         monkeypatch.setenv("DEVECO_SDK_HOME", r"D:\sdk")
         monkeypatch.delenv("HARMONYOS_SDK_PATH", raising=False)
         monkeypatch.setattr(
-            "harmonyos_mcp.config.shutil.which",
+            "harmonyos_dev_mcp.config.shutil.which",
             lambda name: r"F:\DevEco\sdk\default\openharmony\toolchains\hdc.exe" if name == "hdc" else None,
         )
         monkeypatch.setattr(
@@ -192,9 +192,9 @@ class TestSdkDetection:
         assert detected == r"E:\sdk"
 
     def test_detect_sdk_root_can_derive_from_hdc_on_path(self, monkeypatch):
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
         monkeypatch.setattr(
-            "harmonyos_mcp.config.shutil.which",
+            "harmonyos_dev_mcp.config.shutil.which",
             lambda name: r"C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe" if name == "hdc" else None,
         )
         monkeypatch.setattr(
@@ -229,14 +229,14 @@ class TestConfigInit:
             "BUILD_TIMEOUT": Config.BUILD_TIMEOUT,
             "INSTALL_TIMEOUT": Config.INSTALL_TIMEOUT,
         }
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
         monkeypatch.setenv("BUILD_TIMEOUT", "321")
         monkeypatch.setenv("INSTALL_TIMEOUT", "123")
         monkeypatch.delenv("DEVECO_STUDIO_PATH", raising=False)
         monkeypatch.delenv("HARMONYOS_SDK_PATH", raising=False)
         monkeypatch.delenv("HDC_PATH", raising=False)
         monkeypatch.delenv("HILOGTOOL_PATH", raising=False)
-        monkeypatch.setattr("harmonyos_mcp.config.ConfigBase.init", classmethod(lambda cls: None))
+        monkeypatch.setattr("harmonyos_dev_mcp.config.ConfigBase.init", classmethod(lambda cls: None))
         monkeypatch.setattr(
             Config,
             "_detect_deveco_studio_path",
@@ -248,7 +248,7 @@ class TestConfigInit:
             classmethod(lambda cls, deveco_path: r"C:\DevEco\sdk"),
         )
         monkeypatch.setattr(
-            "harmonyos_mcp.config.Path.exists",
+            "harmonyos_dev_mcp.config.Path.exists",
             lambda self: str(self) in {
                 r"C:\DevEco\sdk\openharmony\toolchains\hdc.exe",
                 r"C:\DevEco\tools\node\node.exe",
@@ -256,7 +256,7 @@ class TestConfigInit:
                 r"C:\DevEco\sdk\toolchains\hilogtool.exe",
             },
         )
-        monkeypatch.setattr("harmonyos_mcp.config.shutil.which", lambda name: None)
+        monkeypatch.setattr("harmonyos_dev_mcp.config.shutil.which", lambda name: None)
 
         try:
             Config.init()
@@ -282,18 +282,18 @@ class TestConfigInit:
             "HILOGTOOL_PATH": Config.HILOGTOOL_PATH,
             "NODE_PATH": Config.NODE_PATH,
         }
-        monkeypatch.setattr("harmonyos_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
         monkeypatch.setenv("DEVECO_STUDIO_PATH", r"D:\Explicit\DevEco")
         monkeypatch.setenv("HARMONYOS_SDK_PATH", r"D:\Explicit\DevEco\sdk")
         monkeypatch.setenv("HDC_PATH", r"D:\Explicit\DevEco\sdk\toolchains\hdc.exe")
-        monkeypatch.setattr("harmonyos_mcp.config.ConfigBase.init", classmethod(lambda cls: None))
+        monkeypatch.setattr("harmonyos_dev_mcp.config.ConfigBase.init", classmethod(lambda cls: None))
         monkeypatch.setattr(
             Config,
             "_is_valid_deveco_path",
             classmethod(lambda cls, path: str(path) == r"D:\Explicit\DevEco"),
         )
-        monkeypatch.setattr("harmonyos_mcp.config.shutil.which", lambda name: None)
-        monkeypatch.setattr("harmonyos_mcp.config.Path.exists", lambda self: False)
+        monkeypatch.setattr("harmonyos_dev_mcp.config.shutil.which", lambda name: None)
+        monkeypatch.setattr("harmonyos_dev_mcp.config.Path.exists", lambda self: False)
 
         try:
             Config.init()

@@ -2,6 +2,7 @@
 
 from loguru import logger
 
+from common.utils.logger import setup_logger
 from common.server.base import create_server, run_server
 
 from .config import Config
@@ -10,9 +11,7 @@ from .tools.log.query import logs_query  # noqa: F401
 
 
 def _setup_logger() -> None:
-    from .utils.logger import setup_logger
-
-    setup_logger()
+    setup_logger(app_name="harmonyos_dev_mcp", log_level=Config.LOG_LEVEL)
 
 
 def _on_startup() -> None:

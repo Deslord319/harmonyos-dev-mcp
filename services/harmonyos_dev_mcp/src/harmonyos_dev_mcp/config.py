@@ -6,7 +6,6 @@ HarmonyOS MCP 配置管理
 import os
 import platform
 import shutil
-import re
 from pathlib import Path
 from typing import Optional, List, Iterable
 from loguru import logger
@@ -44,20 +43,6 @@ class Config(ConfigBase):
         if (path / "sdk-pkg.json").exists():
             return path.parent
 
-        return None
-
-    @staticmethod
-    def _read_local_properties_path(project_path: Path, key: str) -> Optional[str]:
-        local_props = project_path / "local.properties"
-        if not local_props.exists():
-            return None
-
-        pattern = re.compile(rf"^{re.escape(key)}=(.*)$")
-        with local_props.open("r", encoding="utf-8", errors="ignore") as file:
-            for line in file:
-                match = pattern.match(line.strip())
-                if match:
-                    return match.group(1).strip().replace("\\\\", "\\")
         return None
 
     @classmethod
@@ -336,21 +321,6 @@ class Config(ConfigBase):
             logger.info(f"hvigor 路径: {cls.HVIGOR_PATH}")
         if cls.HILOGTOOL_PATH:
             logger.info(f"hilogtool 路径: {cls.HILOGTOOL_PATH}")
-
-    @classmethod
-    def get_config_info(cls) -> dict:
-        info = super().get_config_info()
-        info.update({
-            "DEVECO_STUDIO_PATH": cls.DEVECO_STUDIO_PATH,
-            "HARMONYOS_SDK_PATH": cls.HARMONYOS_SDK_PATH,
-            "HDC_PATH": cls.HDC_PATH,
-            "NODE_PATH": cls.NODE_PATH,
-            "HVIGOR_PATH": cls.HVIGOR_PATH,
-            "HILOGTOOL_PATH": cls.HILOGTOOL_PATH,
-            "DEFAULT_DEVICE_ID": cls.DEFAULT_DEVICE_ID,
-        })
-        return info
-
 
 class LogSecurityConfig:
     """日志安全配置"""

@@ -5,13 +5,13 @@ from __future__ import annotations
 import inspect
 from functools import wraps
 from typing import Callable, Optional
-from datetime import datetime, timezone
 
 from fastmcp import FastMCP
 from loguru import logger
 
 from common.exceptions import MCPError
 from common.tools.registry import get_registered_tools, get_tool_summary
+from common.tools.response import error_envelope, extract_error_info, to_mcp_result
 
 
 def create_server(
@@ -35,47 +35,16 @@ def create_server(
     logger.info(f"Registered {summary['total']} tools, categories: {summary['categories']}")
     return server
 
-
-def _extract_error_info(result: dict) -> Optional[tuple[str, str]]:
-    """Extract error message/code from MCP standard envelope only."""
-    structured = result
-    if isinstance(result.get("structuredContent"), dict):
-        structured = result["structuredContent"]
-
-    # Strict mode: only accept MCP-standard fields.
-    if "ok" not in structured:
-        return None
-    if structured.get("ok", True):
-        return None
-
-    error_obj = structured.get("error")
-    if not isinstance(error_obj, dict):
-        return ("Unknown error", "UNKNOWN")
-
-    error_msg = str(error_obj.get("detail") or "Unknown error")
-    error_code = str(error_obj.get("code") or "UNKNOWN")
-    return error_msg, error_code
-
-
 def _error_result(tool_name: str, code: str, detail: str) -> dict:
-    return {
-        "content": [{"type": "text", "text": f"{tool_name}: {detail}"}],
-        "structuredContent": {
-            "tool": tool_name,
-            "ok": False,
-            "result": None,
-            "error": {
-                "code": code,
-                "detail": detail,
-            },
-            "meta": {
-                "request_id": "server-error",
-                "duration_ms": 0,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            },
-        },
-        "isError": True,
-    }
+    return to_mcp_result(
+        error_envelope(
+            tool=tool_name,
+            code=code,
+            detail=detail,
+            request_id="server-error",
+            duration_ms=0,
+        )
+    )
 
 
 def _wrap_with_error_handler(func, on_error: Optional[Callable] = None):
@@ -88,7 +57,7 @@ def _wrap_with_error_handler(func, on_error: Optional[Callable] = None):
             try:
                 result = await func(*args, **kwargs)
                 if isinstance(result, dict):
-                    error_info = _extract_error_info(result)
+                    error_info = extract_error_info(result)
                     if error_info:
                         error_msg, error_code = error_info
                         logger.error(f"Tool {func.__name__} failed [{error_code}]: {error_msg}")
@@ -113,7 +82,7 @@ def _wrap_with_error_handler(func, on_error: Optional[Callable] = None):
         try:
             result = func(*args, **kwargs)
             if isinstance(result, dict):
-                error_info = _extract_error_info(result)
+                error_info = extract_error_info(result)
                 if error_info:
                     error_msg, error_code = error_info
                     logger.error(f"Tool {func.__name__} failed [{error_code}]: {error_msg}")

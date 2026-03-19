@@ -1,4 +1,4 @@
-"""Shared result and payload type definitions for harmonyos_mcp."""
+﻿"""Shared result and payload type definitions for harmonyos_dev_mcp."""
 
 from typing import List, Literal, Optional, TypedDict
 
@@ -238,3 +238,4 @@ class LogsQueryResult(BaseResult, total=False):
     saved_path: str
     dict_used: bool
     files_count: int
+

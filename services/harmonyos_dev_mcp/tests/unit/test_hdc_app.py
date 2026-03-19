@@ -9,7 +9,7 @@ class TestHdcAppPidBundleCache:
         app.execute_shell = MagicMock(return_value={"success": True, "stdout": "com.example.settings\x00", "stderr": ""})
 
         times = iter([100.0, 100.0, 101.0, 101.0])
-        monkeypatch.setattr("harmonyos_mcp.utils.hdc.hdc_app.time.monotonic", lambda: next(times))
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.hdc.hdc_app.time.monotonic", lambda: next(times))
 
         first = app.get_bundle_name_by_pid("device_001", 123)
         second = app.get_bundle_name_by_pid("device_001", 123)
@@ -28,7 +28,7 @@ class TestHdcAppPidBundleCache:
         app.execute_shell = MagicMock(return_value={"success": True, "stdout": "com.example.settings\x00", "stderr": ""})
 
         times = iter([100.0, 100.0, 104.2, 104.2, 104.2, 104.2])
-        monkeypatch.setattr("harmonyos_mcp.utils.hdc.hdc_app.time.monotonic", lambda: next(times))
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.hdc.hdc_app.time.monotonic", lambda: next(times))
 
         first = app.get_bundle_name_by_pid("device_001", 123)
         second = app.get_bundle_name_by_pid("device_001", 123)
@@ -47,7 +47,7 @@ class TestHdcAppPidBundleCache:
         ])
 
         times = iter([100.0, 100.0, 101.0, 101.0])
-        monkeypatch.setattr("harmonyos_mcp.utils.hdc.hdc_app.time.monotonic", lambda: next(times))
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.hdc.hdc_app.time.monotonic", lambda: next(times))
 
         first = app.get_bundle_name_by_pid("device_001", 999)
         second = app.get_bundle_name_by_pid("device_001", 999)

@@ -42,6 +42,17 @@ class TestListDevices:
 
 class TestQueryPackage:
     @pytest.mark.asyncio
+    async def test_invalid_info_type_returns_supported_values(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools import general
+
+        sc = unwrap_result(await general.query_package(bundle_name="com.example.app", info_type="basic"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_INFO_TYPE"
+        assert "list, abilities, main_ability, permissions" in sc["error"]["detail"]
+        assert '"basic" is not supported' in sc["error"]["detail"]
+
+    @pytest.mark.asyncio
     async def test_main_ability_uses_recommended_candidate_fields(self, mock_hdc: MagicMock, unwrap_result):
         from harmonyos_dev_mcp.tools import general
 

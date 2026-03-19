@@ -20,7 +20,7 @@ from ..types import (
     SwipeResult,
 )
 from ..utils.normalizers.element import attach_element_metadata, build_lookup_hint, compact_candidate_handles
-from .device_base import ToolBase
+from .device_support import DeviceToolSupport
 from common.tools.response import error_result, from_action_result, mcp_response
 
 
@@ -85,12 +85,12 @@ def _resolved_result(
 
 async def _resolve_handle_coords(
     device_id: str,
-    element_handle: Dict[str, Any],
+    element_handle: Any,
 ) -> Tuple[bool, Union[Dict[str, Any], dict]]:
     if not isinstance(element_handle, dict):
         return False, error_result(
             "INVALID_ELEMENT_HANDLE",
-            "element_handle must be an object",
+            "element_handle must be an object taken directly from find_element/wait_element. Do not pass a JSON string.",
             result={"elements": [], "count": 0},
         )
 
@@ -223,8 +223,8 @@ async def _resolve_element_coords(
 
 @mcp_tool(category="ui")
 @mcp_response("click_element")
-@ToolBase.handle_tool_error("CLICK_ERROR", x=0, y=0)
-@ToolBase.with_device(x=0, y=0)
+@DeviceToolSupport.handle_tool_error("CLICK_ERROR", x=0, y=0)
+@DeviceToolSupport.with_device(x=0, y=0)
 async def click_element(
     device_id: Optional[str] = None,
     x: Optional[int] = None,
@@ -307,8 +307,8 @@ async def click_element(
 
 @mcp_tool(category="ui")
 @mcp_response("long_press_element")
-@ToolBase.handle_tool_error("LONG_PRESS_ERROR")
-@ToolBase.with_device()
+@DeviceToolSupport.handle_tool_error("LONG_PRESS_ERROR")
+@DeviceToolSupport.with_device()
 async def long_press_element(
     device_id: Optional[str] = None,
     x: Optional[int] = None,
@@ -385,8 +385,8 @@ async def long_press_element(
 
 @mcp_tool(category="ui")
 @mcp_response("swipe")
-@ToolBase.handle_tool_error("SWIPE_ERROR", from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
-@ToolBase.with_device(from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
+@DeviceToolSupport.handle_tool_error("SWIPE_ERROR", from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
+@DeviceToolSupport.with_device(from_x=0, from_y=0, to_x=0, to_y=0, direction=None)
 async def swipe(
     device_id: Optional[str] = None,
     from_x: Optional[int] = None,
@@ -431,14 +431,14 @@ async def swipe(
 
 @mcp_tool(category="ui")
 @mcp_response("input_text")
-@ToolBase.handle_tool_error("INPUT_TEXT_ERROR", text="", x=0, y=0)
-@ToolBase.with_device(text="", x=0, y=0)
+@DeviceToolSupport.handle_tool_error("INPUT_TEXT_ERROR", text="", x=0, y=0)
+@DeviceToolSupport.with_device(text="", x=0, y=0)
 async def input_text(
     device_id: Optional[str] = None,
     x: Optional[int] = None,
     y: Optional[int] = None,
     text: Optional[str] = None,
-    element_handle: Optional[Dict[str, Any]] = None,
+    element_handle: Optional[Any] = None,
     element_text: Optional[str] = None,
     element_type: Optional[str] = None,
     bundle_name: Optional[str] = None,
@@ -521,8 +521,8 @@ async def input_text(
 
 @mcp_tool(category="ui")
 @mcp_response("press_key")
-@ToolBase.handle_tool_error("PRESS_KEY_ERROR", key="")
-@ToolBase.with_device(key="")
+@DeviceToolSupport.handle_tool_error("PRESS_KEY_ERROR", key="")
+@DeviceToolSupport.with_device(key="")
 async def press_key(device_id: Optional[str] = None, key: Optional[str] = None) -> PressKeyResult:
     if not key:
         return error_result("MISSING_KEY", "key is required", result={"key": ""})
@@ -540,8 +540,8 @@ async def press_key(device_id: Optional[str] = None, key: Optional[str] = None) 
 
 @mcp_tool(category="ui")
 @mcp_response("find_element")
-@ToolBase.handle_tool_error("FIND_ELEMENT_ERROR", elements=[], count=0)
-@ToolBase.with_device(elements=[], count=0)
+@DeviceToolSupport.handle_tool_error("FIND_ELEMENT_ERROR", elements=[], count=0)
+@DeviceToolSupport.with_device(elements=[], count=0)
 async def find_element(
     device_id: Optional[str] = None,
     text: Optional[str] = None,
@@ -601,9 +601,9 @@ async def find_element(
 
 @mcp_tool(category="ui")
 @mcp_response("screenshot")
-@ToolBase.handle_tool_error("SCREENSHOT_ERROR")
-@ToolBase.with_device()
-@ToolBase.validate_params(local_path=["path"])
+@DeviceToolSupport.handle_tool_error("SCREENSHOT_ERROR")
+@DeviceToolSupport.with_device()
+@DeviceToolSupport.validate_params(local_path=["path"])
 async def screenshot(
     device_id: Optional[str] = None,
     local_path: Optional[str] = None,
@@ -644,8 +644,8 @@ async def screenshot(
 
 @mcp_tool(category="ui")
 @mcp_response("drag")
-@ToolBase.handle_tool_error("DRAG_ERROR")
-@ToolBase.with_device()
+@DeviceToolSupport.handle_tool_error("DRAG_ERROR")
+@DeviceToolSupport.with_device()
 async def drag(
     device_id: Optional[str] = None,
     from_x: Optional[int] = None,

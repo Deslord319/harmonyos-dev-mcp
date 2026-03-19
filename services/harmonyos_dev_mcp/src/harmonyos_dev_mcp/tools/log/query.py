@@ -12,7 +12,7 @@ from common.tools.registry import mcp_tool
 from ...config import LogSecurityConfig
 from ...container import get_hdc
 from ...types import LogsQueryResult
-from ..device_base import ToolBase
+from ..device_support import DeviceToolSupport
 from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 from .crash_parser import CrashParser
 from .historian import _check_and_cleanup_cache, fetch_historical_logs
@@ -165,7 +165,7 @@ def _collect_lines(
         return _load_lines_from_files(paths, filters), device_id or "", "file", {}, None
 
     hdc = get_hdc()
-    ok, resolved_device = ToolBase.get_device_id(device_id)
+    ok, resolved_device = DeviceToolSupport.get_device_id(device_id)
     if not ok:
         raise LogQueryError(
             "DEVICE_NOT_FOUND",

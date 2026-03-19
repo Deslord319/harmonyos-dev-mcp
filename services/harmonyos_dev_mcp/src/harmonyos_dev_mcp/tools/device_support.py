@@ -1,15 +1,20 @@
-﻿import functools
+import functools
 import inspect
-from loguru import logger
-from common.tools.base import ToolBase as _CommonToolBase
 
-class ToolBase(_CommonToolBase):
+from loguru import logger
+
+from common.tools.base import ToolBase
+
+
+class DeviceToolSupport(ToolBase):
     @staticmethod
     def get_device_id(device_id=None):
         if device_id:
             return True, device_id
+
         try:
             from ..container import get_hdc
+
             hdc = get_hdc()
             devices = hdc.list_devices()
             if not devices:
@@ -21,13 +26,13 @@ class ToolBase(_CommonToolBase):
                     "meta": {},
                 }
             return True, devices[0]
-        except Exception as e:
-            logger.error(f'Failed to get device list: {e}')
+        except Exception as exc:
+            logger.error(f"Failed to get device list: {exc}")
             return False, {
                 "tool": "with_device",
                 "ok": False,
                 "result": {},
-                "error": {"code": "DEVICE_LIST_ERROR", "detail": str(e)},
+                "error": {"code": "DEVICE_LIST_ERROR", "detail": str(exc)},
                 "meta": {},
             }
 
@@ -35,30 +40,33 @@ class ToolBase(_CommonToolBase):
     def with_device(**error_fields):
         def decorator(func):
             if inspect.iscoroutinefunction(func):
+
                 @functools.wraps(func)
                 async def async_wrapper(*args, **kwargs):
-                    device_id = kwargs.get('device_id')
-                    ok, device = ToolBase.get_device_id(device_id)
+                    device_id = kwargs.get("device_id")
+                    ok, device = DeviceToolSupport.get_device_id(device_id)
                     if not ok:
-                        for k, v in error_fields.items():
+                        for key, value in error_fields.items():
                             device.setdefault("result", {})
-                            device["result"].setdefault(k, v)
+                            device["result"].setdefault(key, value)
                         return device
-                    kwargs['device_id'] = device
+                    kwargs["device_id"] = device
                     return await func(*args, **kwargs)
-                return async_wrapper
-            else:
-                @functools.wraps(func)
-                def wrapper(*args, **kwargs):
-                    device_id = kwargs.get('device_id')
-                    ok, device = ToolBase.get_device_id(device_id)
-                    if not ok:
-                        for k, v in error_fields.items():
-                            device.setdefault("result", {})
-                            device["result"].setdefault(k, v)
-                        return device
-                    kwargs['device_id'] = device
-                    return func(*args, **kwargs)
-                return wrapper
-        return decorator
 
+                return async_wrapper
+
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                device_id = kwargs.get("device_id")
+                ok, device = DeviceToolSupport.get_device_id(device_id)
+                if not ok:
+                    for key, value in error_fields.items():
+                        device.setdefault("result", {})
+                        device["result"].setdefault(key, value)
+                    return device
+                kwargs["device_id"] = device
+                return func(*args, **kwargs)
+
+            return wrapper
+
+        return decorator
