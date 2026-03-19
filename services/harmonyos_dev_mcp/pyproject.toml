@@ -12,9 +12,7 @@ authors = [
 ]
 dependencies = [
     "harmonyos-mcp-common",
-    "fastmcp>=3.0.0",
     "loguru>=0.7.0",
-    "typing-extensions>=4.8.0",
 ]
 
 [project.scripts]
