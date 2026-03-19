@@ -17,8 +17,8 @@ from common.tools.response import error_result, from_action_result, mcp_response
 
 MAX_ERRORS = 15
 BUILD_TIMEOUT_HINT = (
-    "HarmonyOS build is a long-running task and often takes more than 10 seconds. "
-    "If the MCP client times out early, increase the tools/call timeout to at least 60 seconds."
+    "HarmonyOS build is a long-running task. "
+    "Set MCP tools/call timeout to at least 60 seconds; 120 seconds is recommended for cold builds."
 )
 
 
@@ -26,7 +26,7 @@ BUILD_TIMEOUT_HINT = (
 @mcp_response("build_app")
 @DeviceToolSupport.handle_tool_error("BUILD_ERROR", hap_path=None, duration=0)
 async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
-    """Build HarmonyOS HAP. This is a long-running task; clients should use a tools/call timeout of at least 60 seconds."""
+    """Build HarmonyOS HAP. Set MCP tools/call timeout to at least 60 seconds; 120 seconds is recommended for cold builds."""
     if build_mode != "debug":
         return error_result(
             "INVALID_BUILD_MODE",
@@ -35,7 +35,10 @@ async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult
         )
 
     start_time = time.time()
-    logger.warning(f"build_app is a long-running task; ensure MCP client timeout is >= 60s (project={project_path}, mode={build_mode})")
+    logger.warning(
+        f"build_app is a long-running task; ensure MCP client timeout is >= 60s, "
+        f"preferably 120s for cold builds (project={project_path}, mode={build_mode})"
+    )
     hvigor = HvigorWrapper(project_path)
     raw = await asyncio.to_thread(hvigor.build_hap, build_mode=build_mode)
     elapsed = round(time.time() - start_time, 2)
@@ -56,6 +59,8 @@ async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult
     payload["errors"] = errors[:MAX_ERRORS]
     payload["error_count"] = len(errors)
     detail = _extract_detailed_error_output(raw) or "build failed"
+    if raw.get("error_code") == "BUILD_TIMEOUT":
+        detail = f"{detail}. {BUILD_TIMEOUT_HINT}"
     return error_result(raw.get("error_code", "BUILD_FAILED"), detail, result=payload)
 
 

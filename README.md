@@ -81,12 +81,16 @@ OpenCode 配置文件路径：
       "type": "local",
       "command": ["uv", "run", "harmonyos-dev-mcp"],
       "enabled": true,
-      "timeout": 60000,
+      "timeout": 120000,
       "env": {}
     }
   }
 }
 ```
+
+`build_app` timeout guidance:
+- minimum: `60000` ms
+- recommended for cold builds: `120000` ms
 
 ## 开发
 

@@ -47,6 +47,26 @@ class TestBuildApp:
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
+    async def test_build_timeout_error_includes_timeout_guidance(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build_hap.return_value = {
+            "success": False,
+            "error_code": "BUILD_TIMEOUT",
+            "stderr": "build timed out after 600s",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        sc = unwrap_result(await build.build_app("/path/to/project"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "BUILD_TIMEOUT"
+        assert "at least 60 seconds" in sc["error"]["detail"]
+        assert "120 seconds is recommended" in sc["error"]["detail"]
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
     async def test_build_rejects_non_debug_mode(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
 
