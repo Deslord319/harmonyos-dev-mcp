@@ -202,40 +202,59 @@ class ListWindowsResult(DeviceResult):
 
 
 LogLevel = Literal["D", "I", "W", "E", "F"]
+LogQueryMode = Literal["errors", "markers"]
 
 
 class LogsFilterConfig(TypedDict, total=False):
+    mode: LogQueryMode
     level: LogLevel
     tag: str
+    tag_search: str
     keyword: str
+    domain: str
     pid: int
     package_name: str
     seconds: int
     start_time: str
     end_time: str
-    time_expr: str
-    time_range: Optional[dict]
+    marker_keywords: List[str]
 
-
-class Finding(TypedDict, total=False):
+class LogQueryItem(TypedDict, total=False):
     type: str
     severity: int
+    score: int
     timestamp: Optional[str]
     level: Optional[str]
     tag: Optional[str]
     pid: Optional[int]
     message: str
     raw_line: str
+    context_before: List[str]
+    context_after: List[str]
+    matched_keywords: List[str]
+    match_strength: str
+    matched_keyword_types: dict
+    group_key: str
+    group_score: int
+    related_items: List[dict]
     error_keywords: List[str]
     suspicious_keywords: List[str]
 
 
 class LogsQueryResult(BaseResult, total=False):
+    query_mode: LogQueryMode
     device_id: str
-    source: str
-    findings: List[Finding]
+    source_attempted: List[str]
+    source_used: str
+    fallback_triggered: bool
+    matched: bool
+    match_count: int
+    group_count: int
+    items: List[LogQueryItem]
     filters_applied: LogsFilterConfig
     saved_path: str
     dict_used: bool
+    dict_status: str
     files_count: int
+    crash_info: dict
 

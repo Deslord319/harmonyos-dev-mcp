@@ -1,141 +1,142 @@
-# logs_query
+# `logs_query`
 
-统一日志查询工具，覆盖：
-- 实时日志抓取
-- 历史日志抓取（按时间自动切换）
-- 本地文件分析
-- 过滤、统计、诊断、崩溃信息聚合
-- 可选快照保存
+Unified log query tool with two query modes:
 
-## 参数
+- `mode="errors"`: default mode for effective error and suspicious-log extraction
+- `mode="markers"`: marker lookup for confirming whether a business action completed
 
-### 数据源参数
+## Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
+### Sources
+| Parameter | Type | Default | Notes |
 |---|---|---|---|
-| `device_id` | string | `null` | 设备 ID |
-| `logs` | string[] | `null` | 直接传入日志行，优先级最高 |
-| `input_file` | string | `null` | 单个本地日志文件 |
-| `input_files` | string[] | `null` | 多个本地日志文件 |
+| `device_id` | string | `null` | Target device ID |
+| `logs` | string[] | `null` | Inline raw log lines; highest priority |
+| `input_file` | string | `null` | Single local log file |
+| `input_files` | string[] | `null` | Multiple local log files |
 
-优先级：`logs` > `input_file/input_files` > 设备读取。
+Priority: `logs` > `input_file/input_files` > device capture
 
-### 过滤参数
-
-| 参数 | 类型 | 默认值 | 说明 |
+### Query parameters
+| Parameter | Type | Default | Notes |
 |---|---|---|---|
-| `lines` | int | `100` | 返回最大行数 |
-| `level` | string | `null` | `D/I/W/E/F` |
-| `tag` | string | `null` | 解析后 tag 精确过滤 |
-| `tag_search` | string | `null` | 原始行搜索 tag 关键字 |
-| `keyword` | string | `null` | 原始行关键字 |
-| `domain` | string | `null` | hilog domain |
-| `pid` | int | `null` | 进程 ID |
-| `package_name` | string | `null` | 包名（自动查 PID） |
+| `mode` | string | `errors` | Supported values: `errors`, `markers` |
+| `lines` | int | `100` | Maximum returned result items |
+| `level` | string | `null` | Minimum level filter: `D/I/W/E/F` |
+| `tag` | string | `null` | Structured tag filter |
+| `tag_search` | string | `null` | Raw-line tag text filter |
+| `keyword` | string | `null` | Raw-line keyword filter |
+| `domain` | string | `null` | hilog domain filter |
+| `pid` | int | `null` | Strict process ID filter |
+| `package_name` | string | `null` | Business package relevance filter; does not collapse to a single PID by default |
+| `marker_keywords` | string[] | `null` | Extra business markers when `mode="markers"` |
+| `realtime_wait_ms` | int | `1000` | Short realtime sampling window |
+| `context_lines` | int | `0` | Context lines before and after each matched item |
 
-### 时间参数
-
-| 参数 | 类型 | 说明 |
+### Time parameters
+| Parameter | Type | Notes |
 |---|---|---|
-| `start_time` | string | `HH:MM:SS` 或 `YYYY-MM-DD HH:MM:SS` |
-| `end_time` | string | 同上 |
-| `seconds` | int | 最近 N 秒 |
-| `time_expr` | string | 自然语言时间表达（例如“最近10分钟”） |
+| `start_time` | string | `HH:MM:SS` or `YYYY-MM-DD HH:MM:SS` |
+| `end_time` | string | Same as above |
+| `seconds` | int | Last N seconds |
+| `time_expr` | string | Natural-language time expression |
+| `fallback_to_historical` | bool | Defaults to `false`; when realtime misses, optionally query historical logs |
 
-说明：当查询窗口超过实时缓冲覆盖范围时，自动切换历史日志读取。
+Notes:
+- Realtime logs are used first by default.
+- Explicit `start_time/end_time` prefers historical logs.
+- Historical fallback is disabled by default because of cost.
 
-### 分析与输出参数
+## Result shape
 
-| 参数 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `analysis_type` | string | `summary` | `summary/custom` |
-| `custom_regex` | string | `null` | `analysis_type=custom` 时生效 |
-| `save_path` | string | `null` | 结果落盘路径 |
-| `include_diagnostics` | bool | `false` | 返回过滤统计信息 |
-| `include_crash` | bool | `false` | 聚合 crash 信息 |
-
-## 返回结构
-
-外层统一 MCP，业务结果在 `structuredContent`。
-
-成功：
+Successful calls return `structuredContent.result` with fields like:
 
 ```json
 {
-  "tool": "logs_query",
-  "ok": true,
-  "result": {
-    "device_id": "3QC0124C11000711",
-    "source": "realtime_buffer",
-    "logs": ["03-05 15:41:03.543 ..."],
-    "total_lines": 1,
-    "truncated": false,
-    "filters_applied": {"level": "E"},
-    "analysis_type": "summary",
-    "analysis": {"level_stats": {"E": 1}},
-    "total_entries_analyzed": 1
+  "query_mode": "markers",
+  "device_id": "3QC0124C11000711",
+  "source_attempted": ["realtime_buffer"],
+  "source_used": "realtime_buffer",
+  "fallback_triggered": false,
+  "matched": true,
+  "match_count": 3,
+  "group_count": 1,
+  "filters_applied": {
+    "mode": "markers",
+    "package_name": "com.huawei.securitytool",
+    "marker_keywords": ["saveResult", "resCode is 0"]
   },
-  "error": null
+  "items": [
+    {
+      "type": "marker_success",
+      "timestamp": "2026-03-19T15:20:11.130000",
+      "level": "I",
+      "tag": "A03D00/com.huawei.securitytool/JSAPP",
+      "pid": 40683,
+      "message": "[picker] getDocumentPickerSaveResult saveResult: errorcode is = 0",
+      "raw_line": "03-19 15:20:11.130 ...",
+      "matched_keywords": ["saveResult", "resCode is 0"],
+      "match_strength": "strong",
+      "score": 120,
+      "context_before": [],
+      "context_after": []
+    }
+  ]
 }
 ```
 
-失败：
+Semantics:
+- `errors` mode with no match: no effective errors or suspicious items found
+- `markers` mode with no match: target markers were not found; this does not prove the business action failed
+- `match_count`: raw marker hits before grouping
+- `group_count`: returned grouped marker items in `items`
 
-```json
-{
-  "tool": "logs_query",
-  "ok": false,
-  "result": {
-    "logs": [],
-    "total_lines": 0,
-    "truncated": false
-  },
-  "error": {
-    "code": "APP_NOT_RUNNING",
-    "detail": "app not running or pid not found: com.example.app"
-  }
-}
-```
+## Recommended usage
 
-`error` 仅保留 `code/detail`。
-
-## 典型调用
-
-### 最近错误日志
-
+### Recent errors
 ```json
 {
   "name": "logs_query",
   "arguments": {
+    "mode": "errors",
     "level": "E",
-    "lines": 300
+    "lines": 200
   }
 }
 ```
 
-### 指定包最近 10 分钟
-
+### Confirm an export/save action
 ```json
 {
   "name": "logs_query",
   "arguments": {
-    "package_name": "com.example.myapplication",
-    "time_expr": "最近10分钟",
-    "include_diagnostics": true
+    "mode": "markers",
+    "package_name": "com.huawei.securitytool",
+    "marker_keywords": ["saveResult", "resCode is 0", "selecturi"],
+    "seconds": 30,
+    "realtime_wait_ms": 1500,
+    "context_lines": 1
   }
 }
 ```
 
-### 保存快照
-
+### Retry with historical logs only when needed
 ```json
 {
   "name": "logs_query",
   "arguments": {
-    "package_name": "com.example.myapplication",
-    "lines": 500,
-    "save_path": "C:/Users/mu/Desktop/hilog_snapshot.txt"
+    "mode": "markers",
+    "package_name": "com.huawei.securitytool",
+    "marker_keywords": ["saveResult", "resCode is 0"],
+    "seconds": 120,
+    "fallback_to_historical": true
   }
 }
 ```
 
+## Notes
+
+- `logs_query` returns filtered analysis items, not a full raw log stream.
+- `package_name` is a relevance hint, not a default single-PID restriction.
+- `mode="markers"` works best with explicit business markers.
+- Wide markers such as `success` or `completed` are intentionally treated as weak signals.

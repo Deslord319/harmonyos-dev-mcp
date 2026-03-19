@@ -28,6 +28,9 @@ uv run harmonyos-dev-mcp
 - `build_app` is a long-running tool.
 - Set MCP `tools/call timeout` to at least `60s`.
 - For cold builds, `120s` is the recommended timeout.
+- `logs_query` supports `mode="errors"` and `mode="markers"`.
+- `logs_query` defaults to realtime sampling and does not fallback to historical logs unless `fallback_to_historical=true`.
+- `logs_query.package_name` is no longer reduced to a single pid by default.
 - `query_package.info_type` only supports `list`, `abilities`, `main_ability`, and `permissions`.
 - `query_package.info_type="basic"` is not supported.
 - `input_text.element_handle` must be an object returned by `find_element` or `wait_element`.

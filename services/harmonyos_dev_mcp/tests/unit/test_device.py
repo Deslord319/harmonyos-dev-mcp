@@ -343,8 +343,11 @@ class TestLogsQuery:
         sc = unwrap_result(await logs_query(logs=test_logs))
 
         assert sc["ok"] is True
-        assert sc["result"]["source"] == "direct"
-        assert len(sc["result"]["findings"]) == 1
+        assert sc["result"]["query_mode"] == "errors"
+        assert sc["result"]["source_used"] == "direct"
+        assert sc["result"]["matched"] is True
+        assert len(sc["result"]["items"]) == 1
+        assert sc["result"]["items"][0]["type"] == "error"
 
     @pytest.mark.asyncio
     async def test_level_filter(self, mock_hdc: MagicMock, unwrap_result):
@@ -358,7 +361,7 @@ class TestLogsQuery:
         sc = unwrap_result(await logs_query(logs=test_logs, level="E"))
 
         assert sc["ok"] is True
-        assert len(sc["result"]["findings"]) == 1
+        assert len(sc["result"]["items"]) == 1
 
     @pytest.mark.asyncio
     async def test_seconds_accepts_numeric_string(self, mock_hdc: MagicMock, unwrap_result):
@@ -374,6 +377,61 @@ class TestLogsQuery:
         assert sc["result"]["filters_applied"]["seconds"] == 30
 
     @pytest.mark.asyncio
+    async def test_markers_mode_finds_success_markers(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        test_logs = [
+            "2026-03-19 10:00:00.123  40683  40683 I A03D00/com.huawei.securitytool/JSAPP: [picker] getDocumentPickerSaveResult saveResult: errorcode is = 0, selecturi is = file://docs/storage/Users/currentUser/Download/demo.txt",
+            "2026-03-19 10:00:00.456  40683  40683 I picker: resCode is 0",
+        ]
+
+        sc = unwrap_result(
+            await logs_query(
+                logs=test_logs,
+                mode="markers",
+                package_name="com.huawei.securitytool",
+                context_lines=1,
+            )
+        )
+
+        assert sc["ok"] is True
+        assert sc["result"]["query_mode"] == "markers"
+        assert sc["result"]["matched"] is True
+        assert sc["result"]["match_count"] == 2
+        assert sc["result"]["group_count"] == 2
+        assert sc["result"]["items"][0]["type"] == "marker_success"
+        assert "saveResult" in sc["result"]["items"][0]["matched_keywords"]
+        assert sc["result"]["items"][0]["match_strength"] == "strong"
+        assert sc["result"]["items"][0]["score"] > 0
+
+    @pytest.mark.asyncio
+    async def test_errors_mode_does_not_flag_success_errorcode_zero(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        test_logs = [
+            "2026-03-19 10:00:00.123  40683  40683 I A03D00/com.huawei.securitytool/JSAPP: [picker] getDocumentPickerSaveResult saveResult: errorcode is = 0",
+            "2026-03-19 10:00:01.123  40683  40683 E MyApp: actual failure happened",
+        ]
+
+        sc = unwrap_result(await logs_query(logs=test_logs))
+
+        assert sc["ok"] is True
+        assert sc["result"]["matched"] is True
+        assert sc["result"]["match_count"] == 1
+        assert sc["result"]["group_count"] == 1
+        assert sc["result"]["items"][0]["message"] == "actual failure happened"
+
+    @pytest.mark.asyncio
+    async def test_invalid_mode_returns_clear_error(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        sc = unwrap_result(await logs_query(logs=["01-31 10:00:00.123  1  1 I Tag: ok"], mode="raw"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_QUERY_MODE"
+        assert "errors, markers" in sc["error"]["detail"]
+
+    @pytest.mark.asyncio
     async def test_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result):
         from harmonyos_dev_mcp.tools.log import logs_query
 
@@ -383,13 +441,242 @@ class TestLogsQuery:
         assert sc["error"]["detail"]
 
     @pytest.mark.asyncio
-    async def test_package_name_requires_running_app(self, mock_hdc: MagicMock, unwrap_result):
+    async def test_package_name_no_longer_requires_running_app(self, mock_hdc: MagicMock, unwrap_result):
         from harmonyos_dev_mcp.tools.log import logs_query
 
         mock_hdc.get_app_pid.return_value = None
+        mock_hdc.get_realtime_logs.return_value = (
+            "2026-03-19 10:00:00.123  9999  9999 I picker: export completed\n"
+            "2026-03-19 10:00:00.456  9999  9999 I A03D00/com.huawei.securitytool/JSAPP: saveResult success"
+        )
 
-        sc = unwrap_result(await logs_query(package_name="com.huawei.securitytool"))
+        sc = unwrap_result(
+            await logs_query(package_name="com.huawei.securitytool", mode="markers", realtime_wait_ms=0)
+        )
 
-        assert sc["ok"] is False
-        assert sc["error"]["code"] == "APP_NOT_RUNNING"
-        assert "requires the target app to be running" in sc["error"]["detail"]
+        assert sc["ok"] is True
+        assert sc["result"]["matched"] is True
+        assert sc["result"]["source_used"] == "realtime_buffer"
+
+    @pytest.mark.asyncio
+    async def test_markers_mode_filters_weak_success_noise(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        test_logs = [
+            "2026-03-19 10:00:00.100  9677  9677 I A02113/com.ohos.FusionSearch: create db store successfully",
+            "2026-03-19 10:00:00.200  1059  1384 I C01713/resource_schedule_service/SUSPEND_MANAGER: Thaw pid success.",
+        ]
+
+        sc = unwrap_result(await logs_query(logs=test_logs, mode="markers", marker_keywords=["success"]))
+
+        assert sc["ok"] is True
+        assert sc["result"]["matched"] is False
+        assert sc["result"]["match_count"] == 0
+        assert sc["result"]["group_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_markers_mode_does_not_bypass_package_scope_with_broad_marker(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        test_logs = [
+            "2026-03-19 10:00:00.100  9677  9677 I A02113/com.ohos.FusionSearch: export completed successfully",
+        ]
+
+        sc = unwrap_result(
+            await logs_query(
+                logs=test_logs,
+                mode="markers",
+                package_name="com.huawei.securitytool",
+                marker_keywords=["completed"],
+            )
+        )
+
+        assert sc["ok"] is True
+        assert sc["result"]["matched"] is False
+        assert sc["result"]["match_count"] == 0
+        assert sc["result"]["group_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_markers_mode_groups_same_export_file_chain(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        test_logs = [
+            "2026-03-19 10:00:00.123  1370  3158 I C0430A/file_monitor_service/file_monitor_service: [WatchInsert] inode: 1, uri: peripheral_policy_list_20260319_153231_2.csv, uid: 100",
+            "2026-03-19 10:00:00.223  1370  3158 I C0430A/file_monitor_service/file_monitor_service: [EventProc MODIFY] mask: 8, path: peripheral_policy_list_20260319_153231_2.csv",
+            "2026-03-19 10:00:00.323  1700  3051 I C02F36/virus_protection_service/VIRUS_PROTECTION_SERVICE: Start to real-time scan /data/service/el2/100/hmdfs/account/files/Docs/Download/com.huawei.securitytool/peripheral_policy_list_20260319_153231_2.csv",
+        ]
+
+        sc = unwrap_result(
+            await logs_query(
+                logs=test_logs,
+                mode="markers",
+                package_name="com.huawei.securitytool",
+                marker_keywords=["peripheral_policy_list_", "Docs/Download/com.huawei.securitytool", ".csv"],
+                context_lines=1,
+            )
+        )
+
+        assert sc["ok"] is True
+        assert sc["result"]["matched"] is True
+        assert sc["result"]["match_count"] == 1
+        assert sc["result"]["group_count"] == 1
+        assert any(
+            "Docs/Download/com.huawei.securitytool" in item["message"] or "peripheral_policy_list_" in item["message"]
+            for item in sc["result"]["items"]
+        )
+        assert max(item["score"] for item in sc["result"]["items"]) >= 40
+
+    @pytest.mark.asyncio
+    async def test_markers_mode_does_not_merge_same_keyword_across_sources(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        test_logs = [
+            "2026-03-19 10:00:00.123  1370  3158 I C0430A/file_monitor_service/file_monitor_service: [WatchInsert] saveResult completed successfully",
+            "2026-03-19 10:00:01.123  1700  3051 I C02F36/virus_protection_service/VIRUS_PROTECTION_SERVICE: saveResult completed successfully",
+        ]
+
+        sc = unwrap_result(await logs_query(logs=test_logs, mode="markers", marker_keywords=["saveResult"]))
+
+        assert sc["ok"] is True
+        assert sc["result"]["match_count"] == 2
+        assert sc["result"]["group_count"] == 2
+        assert len(sc["result"]["items"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_markers_mode_prioritizes_business_specific_match(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        test_logs = [
+            "2026-03-19 10:00:00.100  9677  9677 I A02113/com.ohos.FusionSearch: export completed successfully",
+            "2026-03-19 10:00:00.200  1700  3051 I C02F36/virus_protection_service/VIRUS_PROTECTION_SERVICE: Start to real-time scan /data/service/el2/100/hmdfs/account/files/Docs/Download/com.huawei.securitytool/peripheral_policy_list_20260319_153231_2.csv",
+        ]
+
+        sc = unwrap_result(
+            await logs_query(
+                logs=test_logs,
+                mode="markers",
+                package_name="com.huawei.securitytool",
+                marker_keywords=["peripheral_policy_list_", "Docs/Download/com.huawei.securitytool", "success"],
+            )
+        )
+
+        assert sc["ok"] is True
+        assert sc["result"]["match_count"] == 1
+        assert sc["result"]["group_count"] == 1
+        assert "peripheral_policy_list_" in sc["result"]["items"][0]["matched_keywords"]
+        assert sc["result"]["items"][0]["score"] >= 40
+
+    @pytest.mark.asyncio
+    async def test_realtime_query_samples_multiple_snapshots(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        mock_hdc.get_realtime_logs.side_effect = [
+            "2026-03-19 10:00:00.000  1  1 I Tag: before",
+            "2026-03-19 10:00:00.100  1  1 I picker: resCode is 0",
+            "2026-03-19 10:00:00.200  1  1 I Tag: after",
+        ]
+
+        sc = unwrap_result(await logs_query(mode="markers", realtime_wait_ms=3))
+
+        assert sc["ok"] is True
+        assert sc["result"]["matched"] is True
+        assert sc["result"]["match_count"] == 1
+        assert sc["result"]["group_count"] == 1
+        assert mock_hdc.get_realtime_logs.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_realtime_miss_does_not_fallback_by_default(self, mock_hdc: MagicMock, monkeypatch, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query, query
+
+        mock_hdc.get_realtime_logs.return_value = "2026-03-19 10:00:00.000  1  1 I Tag: no useful markers"
+        historical_called = False
+
+        def _fake_historical(*args, **kwargs):
+            nonlocal historical_called
+            historical_called = True
+            return {"success": True, "raw_lines": [], "dict_used": False, "dict_status": "unavailable", "files_count": 0}
+
+        monkeypatch.setattr(query, "fetch_historical_logs", _fake_historical)
+
+        sc = unwrap_result(await logs_query(mode="markers", realtime_wait_ms=0))
+
+        assert sc["ok"] is True
+        assert sc["result"]["matched"] is False
+        assert sc["result"]["fallback_triggered"] is False
+        assert sc["result"]["group_count"] == 0
+        assert historical_called is False
+
+    @pytest.mark.asyncio
+    async def test_realtime_miss_can_fallback_to_historical(self, mock_hdc: MagicMock, monkeypatch, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query, query
+
+        mock_hdc.get_realtime_logs.return_value = "2026-03-19 10:00:00.000  1  1 I Tag: no markers"
+
+        def _fake_historical(*args, **kwargs):
+            return {
+                "success": True,
+                "raw_lines": [
+                    "2026-03-19 10:00:01.000  1  1 I A03D00/com.huawei.securitytool/JSAPP: saveResult completed successfully"
+                ],
+                "dict_used": False,
+                "dict_status": "unavailable",
+                "files_count": 1,
+            }
+
+        monkeypatch.setattr(query, "fetch_historical_logs", _fake_historical)
+
+        sc = unwrap_result(
+            await logs_query(
+                mode="markers",
+                package_name="com.huawei.securitytool",
+                realtime_wait_ms=0,
+                fallback_to_historical=True,
+            )
+        )
+
+        assert sc["ok"] is True
+        assert sc["result"]["matched"] is True
+        assert sc["result"]["fallback_triggered"] is True
+        assert sc["result"]["source_used"] == "persist_file"
+        assert sc["result"]["group_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_explicit_pid_remains_strict(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query
+
+        test_logs = [
+            "2026-03-19 10:00:00.000  1000  1000 I picker: resCode is 0",
+            "2026-03-19 10:00:01.000  2000  2000 I picker: resCode is 0",
+        ]
+
+        sc = unwrap_result(await logs_query(logs=test_logs, mode="markers", pid=2000))
+
+        assert sc["ok"] is True
+        assert sc["result"]["match_count"] == 1
+        assert sc["result"]["group_count"] == 1
+        assert sc["result"]["items"][0]["pid"] == 2000
+
+    @pytest.mark.asyncio
+    async def test_explicit_start_time_prefers_historical_source(self, mock_hdc: MagicMock, monkeypatch, unwrap_result):
+        from harmonyos_dev_mcp.tools.log import logs_query, query
+
+        historical_calls = []
+
+        def _fake_historical(*args, **kwargs):
+            historical_calls.append((args, kwargs))
+            return {
+                "success": True,
+                "raw_lines": ["2026-03-19 10:00:01.000  1  1 I picker: resCode is 0"],
+                "dict_used": False,
+                "dict_status": "unavailable",
+                "files_count": 1,
+            }
+
+        monkeypatch.setattr(query, "fetch_historical_logs", _fake_historical)
+
+        sc = unwrap_result(await logs_query(mode="markers", start_time="2026-03-19 09:00:00"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["source_used"] == "persist_file"
+        assert historical_calls
+        mock_hdc.get_realtime_logs.assert_not_called()
