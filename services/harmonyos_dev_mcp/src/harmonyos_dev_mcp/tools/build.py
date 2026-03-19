@@ -27,6 +27,13 @@ BUILD_TIMEOUT_HINT = (
 @DeviceToolSupport.handle_tool_error("BUILD_ERROR", hap_path=None, duration=0)
 async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
     """Build HarmonyOS HAP. This is a long-running task; clients should use a tools/call timeout of at least 60 seconds."""
+    if build_mode != "debug":
+        return error_result(
+            "INVALID_BUILD_MODE",
+            'only build_mode="debug" is currently supported',
+            result={"hap_path": None, "duration": 0, "message": "", "hint": BUILD_TIMEOUT_HINT, "errors": [], "error_count": 0},
+        )
+
     start_time = time.time()
     logger.warning(f"build_app is a long-running task; ensure MCP client timeout is >= 60s (project={project_path}, mode={build_mode})")
     hvigor = HvigorWrapper(project_path)

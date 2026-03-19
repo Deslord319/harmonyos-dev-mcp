@@ -2,6 +2,7 @@
 from subprocess import CompletedProcess
 import tempfile
 import subprocess
+import os
 
 from harmonyos_dev_mcp.config import Config
 from harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper import HvigorWrapper
@@ -171,7 +172,7 @@ class TestHvigorWrapper:
         assert captured["capture_output"] is True
         assert captured["text"] is True
         assert captured["env"]["DEVECO_SDK_HOME"] == str(deveco / "Contents" / "sdk")
-        assert captured["env"]["HVIGOR_USER_HOME"] == str(project / ".hvigor" / "mcp-user-home")
+        assert captured["env"]["HVIGOR_USER_HOME"].startswith(str(project / ".hvigor" / "mcp-user-home-"))
         assert captured["env"]["JAVA_HOME"] == str(deveco / "Contents" / "jbr" / "Contents" / "Home")
 
     def test_execute_command_falls_back_to_temp_hvigor_home_when_project_dir_not_writable(self, tmp_path, monkeypatch):
@@ -199,14 +200,81 @@ class TestHvigorWrapper:
         )
 
         def fake_is_writable_dir(path: Path) -> bool:
-            return str(path) != str(project / ".hvigor" / "mcp-user-home")
+            return ".hvigor" not in str(path)
 
         monkeypatch.setattr(HvigorWrapper, "_is_writable_dir", staticmethod(fake_is_writable_dir))
         monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path / "temp"))
 
         wrapper = HvigorWrapper(str(project))
 
-        assert wrapper.hvigor_user_home == tmp_path / "temp" / "harmonyos_dev_mcp" / "hvigor_home"
+        assert str(wrapper.hvigor_user_home).startswith(str(tmp_path / "temp" / "harmonyos_dev_mcp" / "hvigor_home"))
+
+    def test_hvigor_user_home_is_unique_per_wrapper_instance(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        wrapper1 = HvigorWrapper(str(project))
+        wrapper2 = HvigorWrapper(str(project))
+
+        assert wrapper1.hvigor_user_home != wrapper2.hvigor_user_home
+
+    def test_execute_command_cleans_up_hvigor_user_home(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            Path(env["HVIGOR_USER_HOME"], "cache.txt").write_text("ok", encoding="utf-8")
+            return CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        hvigor_home = wrapper.hvigor_user_home
+
+        result = wrapper.build_hap()
+
+        assert result["success"] is True
+        assert not hvigor_home.exists()
 
     def test_init_raises_when_no_writable_hvigor_home(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
@@ -308,7 +376,73 @@ class TestHvigorWrapper:
         result = wrapper.build_hap()
 
         assert result["success"] is False
-        assert "瓒呮椂" in result["stderr"]
+        assert result["error_code"] == "BUILD_TIMEOUT"
+        assert "timed out" in result["stderr"]
+
+    def test_build_hap_rejects_non_debug_mode(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build_hap(build_mode="release")
+
+        assert result["success"] is False
+        assert result["error_code"] == "INVALID_BUILD_MODE"
+
+    def test_find_build_output_prefers_latest_match(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        older = project / "build" / "outputs" / "old-release.hap"
+        newer = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-unsigned.hap"
+        _write_file(older, "old")
+        _write_file(newer, "new")
+        os.utime(older, (100, 100))
+        os.utime(newer, (200, 200))
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        wrapper = HvigorWrapper(str(project))
+
+        assert wrapper._find_build_output("hap") == newer
 
     def test_init_raises_when_sdk_root_missing(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"

@@ -1,20 +1,18 @@
-"""
-HarmonyOS MCP 配置管理
+"""HarmonyOS MCP configuration."""
 
-支持环境变量、自动检测工具路径。
-"""
 import os
 import platform
 import shutil
 from pathlib import Path
-from typing import Optional, List, Iterable
+from typing import Iterable, List, Optional
+
 from loguru import logger
 
 from common.config.base import ConfigBase
 
 
 class Config(ConfigBase):
-    """HarmonyOS MCP 配置类"""
+    """HarmonyOS MCP configuration."""
 
     DEVECO_STUDIO_PATH: Optional[str] = None
     HARMONYOS_SDK_PATH: Optional[str] = None
@@ -35,11 +33,9 @@ class Config(ConfigBase):
         if not path.exists():
             return None
 
-        # sdk root: contains version subdirectories such as default/sdk-pkg.json
         if any(child.is_dir() and (child / "sdk-pkg.json").exists() for child in path.iterdir()):
             return path
 
-        # version directory: e.g. .../sdk/default
         if (path / "sdk-pkg.json").exists():
             return path.parent
 
@@ -109,7 +105,10 @@ class Config(ConfigBase):
                         if extracted.name.lower() == "bin":
                             extracted = extracted.parent
                         elif extracted.suffix.lower() == ".exe":
-                            extracted = extracted.parent.parent if extracted.parent.name.lower() == "bin" else extracted.parent
+                            if extracted.parent.name.lower() == "bin":
+                                extracted = extracted.parent.parent
+                            else:
+                                extracted = extracted.parent
                         candidates.append(extracted)
             except OSError:
                 continue
@@ -145,33 +144,39 @@ class Config(ConfigBase):
                 candidates.append(hint_path)
 
         if system == "Darwin":
-            candidates.extend([
-                Path("/Applications/DevEco-Studio.app"),
-                Path("/Applications/DevEco Studio.app"),
-                home / "Applications" / "DevEco-Studio.app",
-                home / "Applications" / "DevEco Studio.app",
-            ])
+            candidates.extend(
+                [
+                    Path("/Applications/DevEco-Studio.app"),
+                    Path("/Applications/DevEco Studio.app"),
+                    home / "Applications" / "DevEco-Studio.app",
+                    home / "Applications" / "DevEco Studio.app",
+                ]
+            )
         elif system == "Windows":
             local_app_data = Path(os.getenv("LOCALAPPDATA", home / "AppData" / "Local"))
             program_files = Path(os.getenv("ProgramFiles", r"C:\Program Files"))
             program_files_x86 = Path(os.getenv("ProgramFiles(x86)", r"C:\Program Files (x86)"))
             candidates.extend(cls._get_windows_registry_deveco_paths())
-            candidates.extend([
-                local_app_data / "Programs" / "DevEco Studio",
-                local_app_data / "Programs" / "Huawei" / "DevEco Studio",
-                program_files / "DevEco Studio",
-                program_files / "Huawei" / "DevEco Studio",
-                program_files_x86 / "DevEco Studio",
-                program_files_x86 / "Huawei" / "DevEco Studio",
-            ])
+            candidates.extend(
+                [
+                    local_app_data / "Programs" / "DevEco Studio",
+                    local_app_data / "Programs" / "Huawei" / "DevEco Studio",
+                    program_files / "DevEco Studio",
+                    program_files / "Huawei" / "DevEco Studio",
+                    program_files_x86 / "DevEco Studio",
+                    program_files_x86 / "Huawei" / "DevEco Studio",
+                ]
+            )
         else:
-            candidates.extend([
-                Path("/opt/DevEco-Studio"),
-                Path("/opt/DevEco Studio"),
-                home / "DevEco-Studio",
-                home / "DevEco Studio",
-                home / ".local" / "share" / "DevEco-Studio",
-            ])
+            candidates.extend(
+                [
+                    Path("/opt/DevEco-Studio"),
+                    Path("/opt/DevEco Studio"),
+                    home / "DevEco-Studio",
+                    home / "DevEco Studio",
+                    home / ".local" / "share" / "DevEco-Studio",
+                ]
+            )
 
         return cls._unique_existing_paths(candidates)
 
@@ -206,6 +211,7 @@ class Config(ConfigBase):
     def _derive_sdk_candidates(cls, deveco_path: Optional[str]) -> List[Path]:
         user_home = Path.home()
         candidates: List[Path] = []
+
         for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH"):
             env_value = os.getenv(env_name)
             if env_value:
@@ -213,18 +219,22 @@ class Config(ConfigBase):
 
         if deveco_path:
             deveco = Path(deveco_path)
-            candidates.extend([
-                deveco / "sdk",
-                deveco / "Contents" / "sdk",
-                deveco.parent / "sdk",
-            ])
+            candidates.extend(
+                [
+                    deveco / "sdk",
+                    deveco / "Contents" / "sdk",
+                    deveco.parent / "sdk",
+                ]
+            )
 
-        candidates.extend([
-            user_home / "HarmonyOS" / "sdk",
-            user_home / "harmonyos" / "sdk",
-            user_home / "AppData" / "Local" / "HarmonyOS" / "Sdk",
-            user_home / "AppData" / "Local" / "Huawei" / "Sdk",
-        ])
+        candidates.extend(
+            [
+                user_home / "HarmonyOS" / "sdk",
+                user_home / "harmonyos" / "sdk",
+                user_home / "AppData" / "Local" / "HarmonyOS" / "Sdk",
+                user_home / "AppData" / "Local" / "Huawei" / "Sdk",
+            ]
+        )
 
         hdc_in_path = shutil.which("hdc")
         if hdc_in_path:
@@ -314,16 +324,17 @@ class Config(ConfigBase):
                     break
 
         if cls.HDC_PATH:
-            logger.info(f"hdc 路径: {cls.HDC_PATH}")
+            logger.info(f"hdc path: {cls.HDC_PATH}")
         if cls.NODE_PATH:
-            logger.info(f"Node.js 路径: {cls.NODE_PATH}")
+            logger.info(f"Node.js path: {cls.NODE_PATH}")
         if cls.HVIGOR_PATH:
-            logger.info(f"hvigor 路径: {cls.HVIGOR_PATH}")
+            logger.info(f"hvigor path: {cls.HVIGOR_PATH}")
         if cls.HILOGTOOL_PATH:
-            logger.info(f"hilogtool 路径: {cls.HILOGTOOL_PATH}")
+            logger.info(f"hilogtool path: {cls.HILOGTOOL_PATH}")
+
 
 class LogSecurityConfig:
-    """日志安全配置"""
+    """Log security configuration."""
 
     _ALLOWED_SAVE_PATHS_RELATIVE: List[str] = ["./hm_logs", "./hilog_files"]
     _ALLOWED_SAVE_PATHS_ABS: List[str] = []
@@ -341,7 +352,7 @@ class LogSecurityConfig:
     @classmethod
     def get_allowed_save_paths(cls) -> List[str]:
         if not cls._ALLOWED_SAVE_PATHS_ABS:
-            cls._ALLOWED_SAVE_PATHS_ABS = [os.path.abspath(p) for p in cls._ALLOWED_SAVE_PATHS_RELATIVE]
+            cls._ALLOWED_SAVE_PATHS_ABS = [os.path.abspath(path) for path in cls._ALLOWED_SAVE_PATHS_RELATIVE]
         return cls._ALLOWED_SAVE_PATHS_ABS
 
     @classmethod
@@ -350,11 +361,12 @@ class LogSecurityConfig:
             real_path = os.path.realpath(os.path.abspath(path))
             for allowed in cls.get_allowed_save_paths():
                 if real_path.startswith(allowed + os.sep) or real_path == allowed:
-                    os.makedirs(os.path.dirname(real_path) if os.path.splitext(real_path)[1] else real_path, exist_ok=True)
+                    target = os.path.dirname(real_path) if os.path.splitext(real_path)[1] else real_path
+                    os.makedirs(target, exist_ok=True)
                     return True, real_path
-            return False, f"路径不在白名单内。允许的路径: {cls.get_allowed_save_paths()}"
-        except Exception as e:
-            return False, f"路径验证失败: {e}"
+            return False, f"path is not in the allowlist: {cls.get_allowed_save_paths()}"
+        except Exception as exc:
+            return False, f"path validation failed: {exc}"
 
     @classmethod
     def validate_timeout(cls, timeout: int) -> int:

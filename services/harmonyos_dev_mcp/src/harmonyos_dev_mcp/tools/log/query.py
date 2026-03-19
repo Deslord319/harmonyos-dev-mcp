@@ -2,7 +2,8 @@
 
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -21,6 +22,7 @@ from .time_utils import _build_time_range, _format_file_size, _needs_historical_
 
 CRASH_LOG_DIR = "/data/log/faultlog/faultlogger"
 MAX_INPUT_FILE_SIZE = 200 * 1024 * 1024
+HM_LOG_DIR = Path("./hm_logs")
 
 
 class LogQueryError(Exception):
@@ -104,6 +106,58 @@ def _save_logs(output_path: Optional[str], device_id: str, findings: List[dict],
         raise LogQueryError("SAVE_LOGS_ERROR", f"save logs failed: {e}", {})
 
     return {"saved_path": result_path}
+
+
+def _cleanup_old_saved_logs() -> dict:
+    """Clean expired files under hm_logs."""
+    if not HM_LOG_DIR.exists():
+        return {"cleaned": 0, "freed_bytes": 0}
+
+    cutoff = datetime.now() - timedelta(days=LogSecurityConfig.AUTO_CLEANUP_DAYS)
+    cleaned_count = 0
+    freed_bytes = 0
+
+    for log_file in HM_LOG_DIR.glob("*.txt"):
+        try:
+            file_mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
+            if file_mtime < cutoff:
+                file_size = log_file.stat().st_size
+                log_file.unlink()
+                cleaned_count += 1
+                freed_bytes += file_size
+                logger.info(f"deleted expired saved log snapshot: {log_file}")
+        except Exception as exc:
+            logger.warning(f"failed to clean saved log snapshot {log_file}: {exc}")
+
+    return {"cleaned": cleaned_count, "freed_bytes": freed_bytes}
+
+
+def _check_and_cleanup_saved_logs() -> None:
+    """Keep hm_logs within the configured retention and size limits."""
+    if not HM_LOG_DIR.exists():
+        return
+
+    _cleanup_old_saved_logs()
+
+    max_dir_size_mb = LogSecurityConfig.MAX_CACHE_SIZE_MB
+    files = [path for path in HM_LOG_DIR.glob("*.txt") if path.is_file()]
+    total_size = sum(path.stat().st_size for path in files)
+    total_mb = total_size / 1024 / 1024
+
+    if total_mb <= max_dir_size_mb:
+        return
+
+    for log_file in sorted(files, key=lambda path: path.stat().st_mtime):
+        if total_mb <= max_dir_size_mb:
+            break
+        try:
+            file_size = log_file.stat().st_size
+            log_file.unlink()
+            total_size -= file_size
+            total_mb = total_size / 1024 / 1024
+            logger.info(f"deleted saved log snapshot due to size limit: {log_file}")
+        except Exception as exc:
+            logger.warning(f"failed to trim saved log snapshot {log_file}: {exc}")
 
 
 def _with_device_error_defaults(raw: dict, filters: dict) -> dict:
@@ -262,6 +316,7 @@ def _query_impl(
     include_crash=False,
 ):
     _check_and_cleanup_cache()
+    _check_and_cleanup_saved_logs()
     lines = _coerce_optional_int("lines", lines) or 100
     pid = _coerce_optional_int("pid", pid)
     seconds = _coerce_optional_int("seconds", seconds)

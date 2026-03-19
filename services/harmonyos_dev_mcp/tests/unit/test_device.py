@@ -1,8 +1,11 @@
 ﻿"""Device and log tool tests with standardized MCP response envelope."""
 
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
+
+from harmonyos_dev_mcp.config import LogSecurityConfig
 
 
 class TestListDevices:
@@ -303,6 +306,32 @@ class TestUiTree:
 
 
 class TestLogsQuery:
+    def test_saved_log_cleanup_removes_expired_snapshots(self, monkeypatch, tmp_path):
+        from harmonyos_dev_mcp.tools.log import query
+
+        hm_dir = tmp_path / "hm_logs"
+        hm_dir.mkdir()
+        expired = hm_dir / "hilog_snapshot_old.txt"
+        recent = hm_dir / "hilog_snapshot_new.txt"
+        expired.write_text("old", encoding="utf-8")
+        recent.write_text("new", encoding="utf-8")
+
+        old_time = (datetime.now() - timedelta(days=LogSecurityConfig.AUTO_CLEANUP_DAYS + 1)).timestamp()
+        recent_time = datetime.now().timestamp()
+
+        import os
+
+        os.utime(expired, (old_time, old_time))
+        os.utime(recent, (recent_time, recent_time))
+
+        monkeypatch.setattr(query, "HM_LOG_DIR", hm_dir)
+
+        result = query._cleanup_old_saved_logs()
+
+        assert result["cleaned"] == 1
+        assert not expired.exists()
+        assert recent.exists()
+
     @pytest.mark.asyncio
     async def test_direct_logs_input(self, mock_hdc: MagicMock, unwrap_result):
         from harmonyos_dev_mcp.tools.log import logs_query

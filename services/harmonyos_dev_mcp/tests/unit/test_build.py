@@ -47,15 +47,13 @@ class TestBuildApp:
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
-    async def test_build_with_release_mode(self, mock_hvigor_cls):
+    async def test_build_rejects_non_debug_mode(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
 
-        mock_hvigor = MagicMock()
-        mock_hvigor.build_hap.return_value = {"success": True}
-        mock_hvigor_cls.return_value = mock_hvigor
+        sc = unwrap_result(await build.build_app("/path/to/project", build_mode="release"))
 
-        await build.build_app("/path/to/project", build_mode="release")
-        mock_hvigor.build_hap.assert_called_once_with(build_mode="release")
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_BUILD_MODE"
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
