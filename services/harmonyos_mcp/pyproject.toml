@@ -3,8 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "harmonyos-mcp"
+name = "harmonyos-dev-mcp"
 version = "0.3.0"
+description = "HarmonyOS MCP server for AI assistants"
+readme = "../../README.md"
+authors = [
+    { name = "Deslord319" }
+]
 requires-python = ">=3.10"
 dependencies = [
     "harmonyos-mcp-common",
@@ -15,6 +20,10 @@ dependencies = [
     "loguru>=0.7.0",
     "typing-extensions>=4.8.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Deslord319/mcp_ho_dev"
+Repository = "https://github.com/Deslord319/mcp_ho_dev.git"
 
 [project.scripts]
 harmonyos-mcp = "harmonyos_mcp:main"

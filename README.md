@@ -1,5 +1,8 @@
 # HarmonyOS MCP Server
 
+[![PyPI - harmonyos-dev-mcp](https://img.shields.io/pypi/v/harmonyos-dev-mcp.svg?label=harmonyos-dev-mcp)](https://pypi.org/project/harmonyos-dev-mcp/)
+[![PyPI - harmonyos-mcp-common](https://img.shields.io/pypi/v/harmonyos-mcp-common.svg?label=harmonyos-mcp-common)](https://pypi.org/project/harmonyos-mcp-common/)
+
 MCP (Model Context Protocol) 服务器，为 HarmonyOS 应用开发提供 AI 辅助工具。
 
 ## 📋 目录结构

@@ -5,8 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "harmonyos-mcp-common"
 version = "0.3.0"
+description = "Common utilities and definitions for HarmonyOS MCP"
+readme = "../../README.md"
+authors = [
+    { name = "Deslord319" }
+]
 requires-python = ">=3.10"
 dependencies = ["loguru>=0.7.0", "typing-extensions>=4.8.0", "fastmcp>=0.1.0"]
+
+[project.urls]
+Homepage = "https://github.com/Deslord319/mcp_ho_dev"
+Repository = "https://github.com/Deslord319/mcp_ho_dev.git"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/common"]
