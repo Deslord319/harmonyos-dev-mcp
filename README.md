@@ -263,6 +263,13 @@ ui_tree = await client.call_tool("get_ui_tree", {
 
 ## 工具调用注意事项
 
+### `build_app`
+- 默认参数是 `build_mode="debug"`、`target="hap"`、`product="default"`。
+- 普通项目如果已在 `build-profile.json5` 中配置 `signingConfig`，`build_app` 直接返回 hvigor 生成的最终包。
+- 某些 MDM 项目会先生成 unsigned HAP，再调用 `project_root/hapsigner/2-<build_mode>-sign.bat` 脚本手工签名。
+- 对这类项目，`build_app` 现在会在识别到 unsigned HAP 后自动尝试项目内脚本签名；成功后 `output_path` 会切换到签名后的包，例如 `project_root/hapsigner/signApp.hap`。
+- 如果项目既没有 hvigor 签名配置，也没有项目内签名脚本，`build_app` 只能返回 unsigned HAP，后续安装会失败。
+
 ### `query_package`
 - 查询 `abilities`/`main_ability`/`permissions` 时必须提供 `bundle_name`
 
@@ -290,6 +297,13 @@ ui_tree = await client.call_tool("get_ui_tree", {
   "text": "security"
 }
 ```
+
+### `build_app` MDM 签名说明
+- 默认参数是 `build_mode="debug"`、`target="hap"`、`product="default"`。
+- 普通项目如果已在 `build-profile.json5` 中配置 `signingConfig`，`build_app` 直接返回 hvigor 生成的最终包。
+- 某些 MDM 项目会先生成 unsigned HAP，再调用 `project_root/hapsigner/2-<build_mode>-sign.bat` 脚本手工签名。
+- 对这类项目，`build_app` 现在会在识别到 unsigned HAP 后自动尝试项目内脚本签名；成功后 `output_path` 会切换到签名后的包，例如 `project_root/hapsigner/signApp.hap`。
+- 如果项目既没有 hvigor 签名配置，也没有项目内签名脚本，`build_app` 只能返回 unsigned HAP，后续安装会失败。
 
 ---
 

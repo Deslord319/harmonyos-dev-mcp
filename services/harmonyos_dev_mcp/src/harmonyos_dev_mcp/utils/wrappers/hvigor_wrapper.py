@@ -1,7 +1,9 @@
 """Wrapper around the DevEco hvigor build toolchain."""
 
+import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -287,6 +289,271 @@ class HvigorWrapper:
             logger.error(f"clean failed: {result['stderr']}")
         return result
 
+    def _build_profile_paths(self) -> List[Path]:
+        profiles: List[Path] = []
+        root_profile = self.project_path / "build-profile.json5"
+        if root_profile.exists():
+            profiles.append(root_profile)
+
+        for path in self.project_path.rglob("build-profile.json5"):
+            if path == root_profile:
+                continue
+            lowered_parts = {part.lower() for part in path.parts}
+            if lowered_parts & {"build", ".git", ".venv", "__pycache__"}:
+                continue
+            profiles.append(path)
+        return profiles
+
+    @staticmethod
+    def _looks_like_signing_path(value: str) -> bool:
+        lowered = value.lower()
+        if lowered.startswith(("http://", "https://")):
+            return False
+        if "\\" in value or "/" in value:
+            return True
+        return lowered.endswith(
+            (".p7b", ".p12", ".cer", ".jks", ".keystore", ".pfx", ".pem", ".der", ".mobileprovision")
+        )
+
+    def _find_missing_signing_files(self, profile_paths: List[Path]) -> List[str]:
+        missing: List[str] = []
+        key_pattern = re.compile(
+            r'(?i)["\']?(storefile|keystorefile|keystore|storepath|certpath|certfile|profile)["\']?\s*:\s*["\']([^"\']+)["\']'
+        )
+        for profile_path in profile_paths:
+            try:
+                content = profile_path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            for _, raw_value in key_pattern.findall(content):
+                value = raw_value.strip()
+                if not self._looks_like_signing_path(value):
+                    continue
+                candidates = []
+                path_value = Path(value)
+                if path_value.is_absolute():
+                    candidates.append(path_value)
+                else:
+                    candidates.append((profile_path.parent / path_value).resolve())
+                    candidates.append((self.project_path / path_value).resolve())
+                if any(candidate.exists() for candidate in candidates):
+                    continue
+                missing.append(value)
+        return sorted(set(missing))
+
+    def _validate_build_config(
+        self,
+        target: str,
+        build_mode: str,
+        product: str,
+        module_name: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        profile_paths = self._build_profile_paths()
+        if not profile_paths:
+            return {
+                "error_code": "BUILD_PROFILE_MISSING",
+                "stdout": "",
+                "stderr": "build-profile.json5 not found in project",
+                "success": False,
+                "output_path": None,
+            }
+
+        if target == "har":
+            return None
+
+        combined = "\n".join(path.read_text(encoding="utf-8", errors="ignore") for path in profile_paths)
+        if build_mode and re.search(r"(?i)\bbuildModeSet\b", combined):
+            if not re.search(rf'(?i)"name"\s*:\s*"{re.escape(build_mode)}"', combined):
+                return {
+                    "error_code": "INVALID_BUILD_MODE",
+                    "stdout": "",
+                    "stderr": f'build mode "{build_mode}" is not declared in build-profile.json5',
+                    "success": False,
+                    "output_path": None,
+                }
+
+        product_signing_match = re.search(
+            rf'(?is)"name"\s*:\s*"{re.escape(product)}".*?"signingConfig"\s*:\s*"([^"]+)"',
+            combined,
+        )
+        if not product_signing_match:
+            return None
+
+        signing_name = product_signing_match.group(1)
+        if not re.search(rf'(?is)"name"\s*:\s*"{re.escape(signing_name)}"', combined):
+            return {
+                "error_code": "SIGNING_CONFIG_MISSING",
+                "stdout": "",
+                "stderr": f'signing config "{signing_name}" referenced by product "{product}" was not found',
+                "success": False,
+                "output_path": None,
+            }
+
+        missing_files = self._find_missing_signing_files(profile_paths)
+        if missing_files:
+            return {
+                "error_code": "SIGNING_FILE_NOT_FOUND",
+                "stdout": "",
+                "stderr": (
+                    "signing files referenced by build-profile.json5 were not found: "
+                    + ", ".join(missing_files)
+                ),
+                "success": False,
+                "output_path": None,
+            }
+
+        logger.debug(
+            f"validated build config for target={target}, build_mode={build_mode}, product={product}, module_name={module_name or ''}"
+        )
+        return None
+
+    def _extract_output_path_from_logs(self, stdout: str, stderr: str, output_type: str) -> Optional[Path]:
+        extension = f".{output_type}"
+        token_pattern = re.compile(rf"([A-Za-z]:[\\/][^\s'\"<>]+?{re.escape(extension)}|[^\s'\"<>]+?{re.escape(extension)})")
+
+        for text in (stdout, stderr):
+            for raw_match in token_pattern.findall(text or ""):
+                candidate_text = raw_match.strip("\"'")
+                candidate = Path(candidate_text)
+                if candidate.is_absolute() and candidate.exists():
+                    return candidate
+
+                relative_candidates = [
+                    (self.project_path / candidate_text).resolve(),
+                    (self.project_path / Path(candidate_text).name).resolve(),
+                ]
+                for relative_candidate in relative_candidates:
+                    if relative_candidate.exists():
+                        return relative_candidate
+        return None
+
+    def _find_output_from_metadata(self, output_type: str, product: str, module_name: Optional[str]) -> Optional[Path]:
+        if output_type != "hap":
+            return None
+
+        module_root = self.project_path / (module_name or "entry")
+        metadata_path = module_root / "build" / product / "intermediates" / "hap_metadata" / product / "output_metadata.json"
+        if not metadata_path.exists():
+            return None
+
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+        if not isinstance(metadata, list):
+            return None
+
+        for item in metadata:
+            if not isinstance(item, dict):
+                continue
+            hap_name = item.get("hapName")
+            if not hap_name:
+                continue
+            candidate = module_root / "build" / product / "outputs" / product / hap_name
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _find_sign_fallback_script(self, build_mode: str) -> Optional[Path]:
+        candidates = [
+            self.project_path / "hapsigner" / f"2-{build_mode}-sign.bat",
+            self.project_path / "hapsigner" / f"sign-{build_mode}.bat",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _run_sign_fallback(self, build_mode: str) -> Dict[str, Any]:
+        script_path = self._find_sign_fallback_script(build_mode)
+        if script_path is None:
+            return {
+                "success": False,
+                "error_code": "SIGN_FALLBACK_SCRIPT_MISSING",
+                "stdout": "",
+                "stderr": f"sign fallback script not found for build_mode={build_mode}",
+                "output_path": None,
+            }
+
+        signed_output = script_path.parent / "signApp.hap"
+        if signed_output.exists():
+            signed_output.unlink(missing_ok=True)
+
+        runner_path = script_path.parent / f".mcp-sign-{build_mode}.bat"
+        try:
+            original_script = script_path.read_text(encoding="utf-8", errors="ignore")
+            runner_lines = [line for line in original_script.splitlines() if line.strip().lower() != "pause"]
+            runner_path.write_text("\n".join(runner_lines) + "\n", encoding="utf-8")
+
+            result = subprocess.run(
+                ["cmd.exe", "/c", str(runner_path)],
+                cwd=str(script_path.parent),
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=Config.BUILD_TIMEOUT,
+                close_fds=True,
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "error_code": "SIGN_FALLBACK_TIMEOUT",
+                "stdout": "",
+                "stderr": f"sign fallback timed out after {Config.BUILD_TIMEOUT}s",
+                "output_path": None,
+            }
+        except Exception as exc:
+            return {
+                "success": False,
+                "error_code": "SIGN_FALLBACK_ERROR",
+                "stdout": "",
+                "stderr": str(exc),
+                "output_path": None,
+            }
+        finally:
+            runner_path.unlink(missing_ok=True)
+
+        success = result.returncode == 0 and signed_output.exists()
+        return {
+            "success": success,
+            "error_code": None if success else "SIGN_FALLBACK_FAILED",
+            "stdout": result.stdout.replace("Press any key to continue . . .", "").strip(),
+            "stderr": result.stderr.replace("Press any key to continue . . .", "").strip(),
+            "output_path": str(signed_output) if success else None,
+        }
+
+    def _score_output_path(
+        self,
+        path: Path,
+        output_type: str,
+        build_mode: str,
+        product: str,
+        module_name: Optional[str],
+    ) -> tuple[int, float]:
+        lowered_name = path.name.lower()
+        lowered_path = str(path).lower()
+        score = 0
+
+        if output_type in lowered_name:
+            score += 20
+        if "signed" in lowered_name and "unsigned" not in lowered_name:
+            score += 30
+        if build_mode and build_mode.lower() in lowered_path:
+            score += 40
+        if product and product.lower() in lowered_path:
+            score += 40
+        if module_name and module_name.lower() in lowered_path:
+            score += 40
+        if "outputs" in lowered_path:
+            score += 10
+        if output_type == "hap" and "unsigned" in lowered_name:
+            score += 5
+        if path.parent.name.lower() == product.lower():
+            score += 10
+
+        return score, path.stat().st_mtime
+
     def build(
         self,
         target: str = "hap",
@@ -294,14 +561,6 @@ class HvigorWrapper:
         product: str = "default",
         module_name: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if build_mode != "debug":
-            return {
-                "error_code": "INVALID_BUILD_MODE",
-                "stdout": "",
-                "stderr": 'only build_mode="debug" is currently supported',
-                "success": False,
-                "output_path": None,
-            }
         if target not in {"hap", "har", "app"}:
             return {
                 "error_code": "INVALID_BUILD_TARGET",
@@ -319,11 +578,15 @@ class HvigorWrapper:
                 "output_path": None,
             }
 
+        validation_error = self._validate_build_config(target, build_mode, product, module_name)
+        if validation_error is not None:
+            return validation_error
+
         logger.info(f"build {target.upper()} for product={product}")
         args: List[str] = ["--no-daemon"]
         if target in {"hap", "har"}:
             args.extend(["--mode", "module"])
-        args.extend(["-p", f"product={product}"])
+        args.extend(["-p", f"product={product}", "-p", f"buildMode={build_mode}"])
         if target == "har" and module_name:
             args.extend(["-p", f"module={module_name}"])
         args.extend(
@@ -336,7 +599,35 @@ class HvigorWrapper:
         )
         result = self._execute_command(args)
         if result["success"]:
-            output_path = self._find_build_output(target, module_name or "")
+            output_path = self._find_output_from_metadata(target, product, module_name)
+            if output_path is None:
+                output_path = self._extract_output_path_from_logs(
+                    result.get("stdout", ""),
+                    result.get("stderr", ""),
+                    target,
+                )
+            if output_path is None:
+                output_path = self._find_build_output(target, build_mode, product, module_name)
+            if (
+                target == "hap"
+                and output_path is not None
+                and "unsigned" in output_path.name.lower()
+            ):
+                fallback_result = self._run_sign_fallback(build_mode)
+                if fallback_result["success"]:
+                    output_path = Path(fallback_result["output_path"])
+                    result["stdout"] = f"{result.get('stdout', '')}\n{fallback_result.get('stdout', '')}".strip()
+                    result["stderr"] = f"{result.get('stderr', '')}\n{fallback_result.get('stderr', '')}".strip()
+                elif fallback_result.get("error_code") != "SIGN_FALLBACK_SCRIPT_MISSING":
+                    return {
+                        "success": False,
+                        "error_code": fallback_result["error_code"],
+                        "stdout": f"{result.get('stdout', '')}\n{fallback_result.get('stdout', '')}".strip(),
+                        "stderr": (
+                            f"{result.get('stderr', '')}\n{fallback_result.get('stderr', '')}"
+                        ).strip(),
+                        "output_path": None,
+                    }
             result["output_path"] = str(output_path) if output_path else None
             logger.info(f"{target.upper()} build succeeded: {result['output_path']}")
         else:
@@ -344,14 +635,20 @@ class HvigorWrapper:
             logger.error(f"{target.upper()} build failed: {result['stderr']}")
         return result
 
-    def _find_build_output(self, output_type: str, search_key: str = "") -> Optional[Path]:
+    def _find_build_output(
+        self,
+        output_type: str,
+        build_mode: str = "debug",
+        product: str = "default",
+        module_name: Optional[str] = None,
+    ) -> Optional[Path]:
         """Return the newest build artifact for the requested output type."""
         output_dirs = [
             self.project_path / "build",
             self.project_path / "entry" / "build",
         ]
-        if output_type == "har" and search_key:
-            output_dirs.append(self.project_path / search_key / "build")
+        if module_name:
+            output_dirs.append(self.project_path / module_name / "build")
 
         matches: List[Path] = []
         extension = f".{output_type}"
@@ -363,15 +660,18 @@ class HvigorWrapper:
         if not matches:
             return None
 
-        if search_key:
+        if module_name:
             narrowed = [
                 path
                 for path in matches
-                if search_key.lower() in path.name.lower()
-                or search_key.lower() in str(path.parent).lower()
+                if module_name.lower() in path.name.lower()
+                or module_name.lower() in str(path.parent).lower()
             ]
             if narrowed:
                 matches = narrowed
 
-        matches.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        matches.sort(
+            key=lambda path: self._score_output_path(path, output_type, build_mode, product, module_name),
+            reverse=True,
+        )
         return matches[0]
