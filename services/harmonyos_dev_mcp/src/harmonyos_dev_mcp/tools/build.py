@@ -16,38 +16,56 @@ from .device_support import DeviceToolSupport
 from common.tools.response import error_result, from_action_result, mcp_response, ok_result
 
 MAX_ERRORS = 15
-BUILD_TIMEOUT_HINT = (
-    "HarmonyOS build is a long-running task. "
-    "Set MCP tools/call timeout to at least 60 seconds; 120 seconds is recommended for cold builds."
-)
+BUILD_TIMEOUT_HINT = "Set MCP tools/call timeout to at least 60 seconds; 120 seconds is recommended for cold builds."
 
 
 @mcp_tool(category="build")
 @mcp_response("build_app")
-@DeviceToolSupport.handle_tool_error("BUILD_ERROR", hap_path=None, duration=0)
-async def build_app(project_path: str, build_mode: str = "debug") -> BuildResult:
-    """Build HarmonyOS HAP. Set MCP tools/call timeout to at least 60 seconds; 120 seconds is recommended for cold builds."""
+@DeviceToolSupport.handle_tool_error("BUILD_ERROR", output_path=None, target="hap", duration=0)
+async def build_app(
+    project_path: str,
+    build_mode: str = "debug",
+    target: str = "hap",
+    module_name: Optional[str] = None,
+) -> BuildResult:
+    """Build HarmonyOS artifact."""
     if build_mode != "debug":
         return error_result(
             "INVALID_BUILD_MODE",
             'only build_mode="debug" is currently supported',
-            result={"hap_path": None, "duration": 0, "message": "", "hint": BUILD_TIMEOUT_HINT, "errors": [], "error_count": 0},
+            result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
+        )
+    if target not in {"hap", "har", "app"}:
+        return error_result(
+            "INVALID_BUILD_TARGET",
+            'target must be one of "hap", "har", or "app"',
+            result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
+        )
+    if target == "har" and not module_name:
+        return error_result(
+            "MISSING_MODULE_NAME",
+            'module_name is required when target="har"',
+            result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
         )
 
     start_time = time.time()
     logger.warning(
         f"build_app is a long-running task; ensure MCP client timeout is >= 60s, "
-        f"preferably 120s for cold builds (project={project_path}, mode={build_mode})"
+        f"preferably 120s for cold builds (project={project_path}, mode={build_mode}, target={target})"
     )
     hvigor = HvigorWrapper(project_path)
-    raw = await asyncio.to_thread(hvigor.build_hap, build_mode=build_mode)
+    raw = await asyncio.to_thread(
+        hvigor.build,
+        target=target,
+        build_mode=build_mode,
+        module_name=module_name,
+    )
     elapsed = round(time.time() - start_time, 2)
 
     payload: dict = {
-        "hap_path": raw.get("hap_path"),
-        "message": f"build {'success' if raw.get('success') else 'failed'}, duration: {DeviceToolSupport.format_duration(elapsed)}",
+        "output_path": raw.get("output_path"),
+        "target": target,
         "duration": elapsed,
-        "hint": BUILD_TIMEOUT_HINT,
         "errors": [],
         "error_count": 0,
     }

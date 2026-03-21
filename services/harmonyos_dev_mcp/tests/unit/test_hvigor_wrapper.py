@@ -161,9 +161,10 @@ class TestHvigorWrapper:
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
-        result = wrapper.build_hap()
+        result = wrapper.build()
 
         assert result["success"] is True
+        assert result["output_path"] is None
         assert captured["cmd"][0] == str(node)
         assert captured["cmd"][1] == str(hvigor)
         assert captured["cmd"][2] == "--no-daemon"
@@ -271,7 +272,7 @@ class TestHvigorWrapper:
         wrapper = HvigorWrapper(str(project))
         hvigor_home = wrapper.hvigor_user_home
 
-        result = wrapper.build_hap()
+        result = wrapper.build()
 
         assert result["success"] is True
         assert not hvigor_home.exists()
@@ -339,7 +340,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
-        result = wrapper.build_hap()
+        result = wrapper.build()
 
         assert result["success"] is False
 
@@ -373,13 +374,13 @@ class TestHvigorWrapper:
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
-        result = wrapper.build_hap()
+        result = wrapper.build()
 
         assert result["success"] is False
         assert result["error_code"] == "BUILD_TIMEOUT"
         assert "timed out" in result["stderr"]
 
-    def test_build_hap_rejects_non_debug_mode(self, tmp_path, monkeypatch):
+    def test_build_rejects_non_debug_mode(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
         project.mkdir()
 
@@ -404,10 +405,40 @@ class TestHvigorWrapper:
         )
 
         wrapper = HvigorWrapper(str(project))
-        result = wrapper.build_hap(build_mode="release")
+        result = wrapper.build(build_mode="release")
 
         assert result["success"] is False
         assert result["error_code"] == "INVALID_BUILD_MODE"
+
+    def test_build_rejects_har_without_module_name(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="har")
+
+        assert result["success"] is False
+        assert result["error_code"] == "MISSING_MODULE_NAME"
 
     def test_find_build_output_prefers_latest_match(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"

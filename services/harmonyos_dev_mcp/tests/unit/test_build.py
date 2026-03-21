@@ -12,9 +12,9 @@ class TestBuildApp:
         from harmonyos_dev_mcp.tools import build
 
         mock_hvigor = MagicMock()
-        mock_hvigor.build_hap.return_value = {
+        mock_hvigor.build.return_value = {
             "success": True,
-            "hap_path": "/path/to/output.hap",
+            "output_path": "/path/to/output.hap",
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
@@ -22,9 +22,9 @@ class TestBuildApp:
 
         assert sc["ok"] is True
         assert sc["tool"] == "build_app"
-        assert sc["result"]["hap_path"] == "/path/to/output.hap"
+        assert sc["result"]["output_path"] == "/path/to/output.hap"
+        assert sc["result"]["target"] == "hap"
         assert "duration" in sc["result"]
-        assert "long-running task" in sc["result"]["hint"]
         assert sc["result"]["errors"] == []
         assert sc["result"]["error_count"] == 0
 
@@ -34,13 +34,12 @@ class TestBuildApp:
         from harmonyos_dev_mcp.tools import build
 
         mock_hvigor = MagicMock()
-        mock_hvigor.build_hap.return_value = {"success": False, "stderr": "compiler exited with code 1"}
+        mock_hvigor.build.return_value = {"success": False, "stderr": "compiler exited with code 1"}
         mock_hvigor_cls.return_value = mock_hvigor
 
         sc = unwrap_result(await build.build_app("/path/to/project"))
 
         assert sc["ok"] is False
-        assert "long-running task" in sc["result"]["hint"]
         assert sc["result"]["errors"] == []
         assert sc["result"]["error_count"] == 0
         assert sc["error"]["detail"] == "compiler exited with code 1"
@@ -51,7 +50,7 @@ class TestBuildApp:
         from harmonyos_dev_mcp.tools import build
 
         mock_hvigor = MagicMock()
-        mock_hvigor.build_hap.return_value = {
+        mock_hvigor.build.return_value = {
             "success": False,
             "error_code": "BUILD_TIMEOUT",
             "stderr": "build timed out after 600s",
@@ -81,7 +80,7 @@ class TestBuildApp:
         from harmonyos_dev_mcp.tools import build
 
         mock_hvigor = MagicMock()
-        mock_hvigor.build_hap.return_value = {
+        mock_hvigor.build.return_value = {
             "success": False,
             "stderr": (
                 "1 ERROR: 10505001 ArkTS Compiler Error\n"
@@ -97,6 +96,26 @@ class TestBuildApp:
         assert sc["ok"] is False
         assert "Error Message: ';' expected." in sc["error"]["detail"]
         assert "> hvigor ERROR: BUILD FAILED in 2 s 582 ms" in sc["error"]["detail"]
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_har_requires_module_name(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        sc = unwrap_result(await build.build_app("/path/to/project", target="har"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "MISSING_MODULE_NAME"
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_with_invalid_target(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        sc = unwrap_result(await build.build_app("/path/to/project", target="zip"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_BUILD_TARGET"
 
 
 class TestInstallApp:

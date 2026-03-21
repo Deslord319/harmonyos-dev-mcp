@@ -45,7 +45,8 @@ class BuildError(TypedDict, total=False):
 
 
 class BuildResult(BaseResult):
-    hap_path: Optional[str]
+    output_path: Optional[str]
+    target: Optional[str]
     duration: Optional[float]
     errors: Optional[List[BuildError]]
     error_count: Optional[int]
