@@ -10,8 +10,7 @@ import subprocess
 import tempfile
 import shutil
 import gzip
-from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from loguru import logger
 
 from ...config import Config, LogSecurityConfig

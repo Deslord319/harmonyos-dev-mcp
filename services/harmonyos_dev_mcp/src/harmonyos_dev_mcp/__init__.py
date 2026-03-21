@@ -1,6 +1,12 @@
 """HarmonyOS Dev MCP service package."""
 
-__version__ = "0.7.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("harmonyos-dev-mcp")
+except PackageNotFoundError:
+    __version__ = "0.7.3"
+
 __author__ = "HarmonyOS MCP Team"
 
 from common.exceptions import MCPError

@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 from common.tools.registry import mcp_tool
 
 from ..container import get_hdc, get_ui_operations
-from ..types import ListWindowsResult, UIElement, UITreeResult, WaitElementResult, WaitElementState
+from ..types import ListWindowsResult, UITreeResult, WaitElementResult, WaitElementState
 from ..utils.normalizers.element import normalize_element
 from ..utils.normalizers.window import normalize_windows
 from ..utils.ui_common import normalize_bundle_name

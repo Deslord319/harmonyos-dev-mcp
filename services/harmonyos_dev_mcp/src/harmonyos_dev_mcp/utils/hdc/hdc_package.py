@@ -399,7 +399,6 @@ class HdcPackage:
             return package_info
         
         abilities = package_info.get('abilities', [])
-        modules = package_info.get('modules', [])
         entry_module_name = package_info.get('entry_module_name', '')
         module_main_abilities = package_info.get('module_main_abilities', {})
         

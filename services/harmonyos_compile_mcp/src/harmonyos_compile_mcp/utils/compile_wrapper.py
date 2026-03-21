@@ -6,7 +6,6 @@ HarmonyOS 编译结果验证工具
 
 import os
 import subprocess
-from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from loguru import logger

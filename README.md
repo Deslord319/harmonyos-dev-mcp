@@ -186,6 +186,8 @@ hdc list targets
 
 ## 使用示例
 
+保留 3 个常用示例，其他接口请参考工具列表与 `docs/` 文档。
+
 ### 查询已安装应用
 
 ```python
@@ -196,27 +198,9 @@ result = await client.call_tool("query_package", {
 # 返回：{"packages": ["com.example.app"], "count": 1}
 ```
 
-### 查询应用详情（Ability 列表）
-
-```python
-result = await client.call_tool("query_package", {
-    "device_id": "3QC0124C11000711",
-    "bundle_name": "com.example.app",
-    "info_type": "abilities"
-})
-# 返回：{"abilities": [...], "modules": [...], "main_ability": {...}}
-```
-
 ### 点击 UI 元素
 
 ```python
-# 方式 1: 通过文本查找并点击
-await client.call_tool("click_element", {
-    "device_id": "3QC0124C11000711",
-    "text": "确定"
-})
-
-# 方式 2: 使用元素句柄（推荐）
 element = await client.call_tool("find_element", {
     "device_id": "3QC0124C11000711",
     "text": "登录"
@@ -234,41 +218,6 @@ ui_tree = await client.call_tool("get_ui_tree", {
     "device_id": "3QC0124C11000711"
 })
 # 返回：{"ui_tree": {...}, "node_count": 42}
-```
-
-### 等待元素出现
-
-```python
-result = await client.call_tool("wait_element", {
-    "device_id": "3QC0124C11000711",
-    "text": "欢迎",
-    "timeout_ms": 10000,
-    "interval_ms": 300
-})
-# 返回：{"state": "found", "satisfied": true, "elapsed_ms": 1200, "element": {...}}
-```
-
-### 构建并安装应用
-
-```python
-# 构建
-build_result = await client.call_tool("build_app", {
-    "project_path": "C:/Projects/MyApp"
-})
-hap_path = build_result["structuredContent"]["result"]["hap_path"]
-
-# 安装
-await client.call_tool("install_app", {
-    "device_id": "3QC0124C11000711",
-    "hap_path": hap_path
-})
-
-# 启动
-await client.call_tool("run_app", {
-    "device_id": "3QC0124C11000711",
-    "bundle_name": "com.example.myapplication",
-    "auto_detect": true
-})
 ```
 
 ---
@@ -315,8 +264,6 @@ await client.call_tool("run_app", {
 ## 工具调用注意事项
 
 ### `query_package`
-- `info_type` 仅支持：`list`、`abilities`、`main_ability`、`permissions`
-- `info_type="basic"` 不受支持
 - 查询 `abilities`/`main_ability`/`permissions` 时必须提供 `bundle_name`
 
 ### `input_text`
@@ -343,15 +290,6 @@ await client.call_tool("run_app", {
   "text": "security"
 }
 ```
-
-### `build_app`
-- 当前仅支持 `build_mode="debug"`
-- 是长时任务，确保 MCP 客户端超时设置 >= 60 秒
-
-### `logs_query`
-- 支持 `mode="errors"`（默认）和 `mode="markers"`
-- 默认实时采样，不回退到历史日志（除非 `fallback_to_historical=true`）
-- `package_name` 不再默认缩减为单个 pid
 
 ---
 
@@ -398,20 +336,6 @@ uv run pytest services/harmonyos_dev_mcp/tests/unit -v
 uv run pytest services/harmonyos_dev_mcp/tests/unit -v --cov=harmonyos_dev_mcp
 ```
 
-### 构建包
-
-```bash
-# 构建 common 包
-cd packages/common
-uv build
-
-# 构建 harmonyos-dev-mcp 包
-cd ../../services/harmonyos_dev_mcp
-uv build
-```
-
-产物输出到 `dist/` 目录。
-
 ### 发布到 PyPI
 
 ```bash
@@ -427,17 +351,6 @@ uv publish dist/*
 ## 相关文档
 
 - [`docs/logs_query.md`](services/harmonyos_dev_mcp/docs/logs_query.md) - 日志查询详细文档
-- [`docs/query_package.md`](services/harmonyos_dev_mcp/docs/query_package.md) - 包查询详细文档
-
----
-
-## 版本历史
-
-| 版本 | 日期 | 更新内容 |
-|------|------|----------|
-| 0.7.3 | 2026-03-19 | 添加 `harmonyos-dev-mcp` README 到包发布 |
-| 0.7.2 | 2026-03-19 | 更新作者邮箱，发布到 PyPI |
-| 0.7.0 | - | 新增 E2E 测试工具，改进窗口解析和构建体验 |
 
 ---
 

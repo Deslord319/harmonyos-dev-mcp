@@ -68,4 +68,3 @@ uv run pytest services/harmonyos_dev_mcp/tests/unit -v
 ## Docs
 
 - `docs/logs_query.md`
-- `docs/query_package.md`

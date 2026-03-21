@@ -11,7 +11,6 @@ from ..container import get_hdc, get_ui_operations
 from ..types import (
     ClickResult,
     DragResult,
-    ElementScreenshotResult,
     FindElementResult,
     InputTextResult,
     LongPressResult,
