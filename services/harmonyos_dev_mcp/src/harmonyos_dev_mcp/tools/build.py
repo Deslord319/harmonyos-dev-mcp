@@ -26,15 +26,10 @@ async def build_app(
     project_path: str,
     build_mode: str = "debug",
     target: str = "hap",
+    product: str = "default",
     module_name: Optional[str] = None,
 ) -> BuildResult:
     """Build HarmonyOS artifact."""
-    if build_mode != "debug":
-        return error_result(
-            "INVALID_BUILD_MODE",
-            'only build_mode="debug" is currently supported',
-            result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
-        )
     if target not in {"hap", "har", "app"}:
         return error_result(
             "INVALID_BUILD_TARGET",
@@ -58,6 +53,7 @@ async def build_app(
         hvigor.build,
         target=target,
         build_mode=build_mode,
+        product=product,
         module_name=module_name,
     )
     elapsed = round(time.time() - start_time, 2)

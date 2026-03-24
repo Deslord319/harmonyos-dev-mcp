@@ -27,6 +27,34 @@ class TestBuildApp:
         assert "duration" in sc["result"]
         assert sc["result"]["errors"] == []
         assert sc["result"]["error_count"] == 0
+        mock_hvigor.build.assert_called_once_with(
+            target="hap",
+            build_mode="debug",
+            product="default",
+            module_name=None,
+        )
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_passes_product(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build.return_value = {
+            "success": True,
+            "output_path": "/path/to/output.hap",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        sc = unwrap_result(await build.build_app("/path/to/project", product="qa"))
+
+        assert sc["ok"] is True
+        mock_hvigor.build.assert_called_once_with(
+            target="hap",
+            build_mode="debug",
+            product="qa",
+            module_name=None,
+        )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
@@ -66,13 +94,25 @@ class TestBuildApp:
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
-    async def test_build_rejects_non_debug_mode(self, mock_hvigor_cls, unwrap_result):
+    async def test_build_accepts_release_mode(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build.return_value = {
+            "success": True,
+            "output_path": "/path/to/output.hap",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
 
         sc = unwrap_result(await build.build_app("/path/to/project", build_mode="release"))
 
-        assert sc["ok"] is False
-        assert sc["error"]["code"] == "INVALID_BUILD_MODE"
+        assert sc["ok"] is True
+        mock_hvigor.build.assert_called_once_with(
+            target="hap",
+            build_mode="release",
+            product="default",
+            module_name=None,
+        )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
