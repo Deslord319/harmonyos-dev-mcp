@@ -22,6 +22,20 @@ from ..utils.normalizers.element import attach_element_metadata, build_lookup_hi
 from .device_support import DeviceToolSupport
 from common.tools.response import error_result, from_action_result, mcp_response
 
+_KEY_ALIASES = {
+    "home": "Home",
+    "back": "Back",
+    "power": "Power",
+    "volumeup": "VolumeUp",
+    "volume_up": "VolumeUp",
+    "volup": "VolumeUp",
+    "vol_up": "VolumeUp",
+    "volumedown": "VolumeDown",
+    "volume_down": "VolumeDown",
+    "voldown": "VolumeDown",
+    "vol_down": "VolumeDown",
+}
+
 
 def _with_success_message(raw: Any, message: str) -> Any:
     if not isinstance(raw, dict):
@@ -36,6 +50,14 @@ def _is_close(a: Any, b: Any, tolerance: int = 12) -> bool:
     if a is None or b is None:
         return False
     return abs(int(a) - int(b)) <= tolerance
+
+
+def _normalize_key_name(key: str) -> Optional[str]:
+    normalized = str(key).strip()
+    if not normalized:
+        return None
+    alias_key = normalized.replace("-", "_").replace(" ", "_").lower()
+    return _KEY_ALIASES.get(alias_key, normalized)
 
 
 def _match_handle_candidates(candidates: list[Dict[str, Any]], handle: Dict[str, Any]) -> list[Dict[str, Any]]:
@@ -80,6 +102,30 @@ def _resolved_result(
         "resolved_via": resolved_via,
         "handle_refreshed": handle_refreshed,
     }
+
+
+async def _perform_resolved_action(
+    *,
+    action_fn,
+    device_id: str,
+    resolved: Dict[str, Any],
+    success_message: str,
+    default_code: str,
+    default_detail: str,
+    extra_args: tuple = (),
+    extra_result: Optional[Dict[str, Any]] = None,
+) -> dict:
+    raw = await asyncio.to_thread(action_fn, device_id, resolved["x"], resolved["y"], *extra_args)
+    raw = _with_success_message(raw, success_message)
+    default_result = dict(resolved)
+    if extra_result:
+        default_result.update(extra_result)
+    return from_action_result(
+        raw,
+        default_code=default_code,
+        default_detail=default_detail,
+        default_result=default_result,
+    )
 
 
 async def _resolve_handle_coords(
@@ -250,32 +296,32 @@ async def click_element(
     click_fn = ui_ops.double_click if double_click else ui_ops.click
 
     if has_coords:
-        raw = await asyncio.to_thread(click_fn, device_id, x, y)
-        raw = _with_success_message(raw, "click succeeded" if not double_click else "double click succeeded")
-        return from_action_result(
-            raw,
-            default_code="CLICK_ERROR",
-            default_detail="click failed",
-            default_result={
+        return await _perform_resolved_action(
+            action_fn=click_fn,
+            device_id=device_id,
+            resolved={
                 "x": x,
                 "y": y,
                 "resolved_via": "coordinates",
                 "handle_refreshed": False,
                 "element_handle": None,
             },
+            success_message="click succeeded" if not double_click else "double click succeeded",
+            default_code="CLICK_ERROR",
+            default_detail="click failed",
         )
 
     if has_handle:
         ok, resolved = await _resolve_handle_coords(device_id, element_handle)
         if not ok:
             return resolved
-        raw = await asyncio.to_thread(click_fn, device_id, resolved["x"], resolved["y"])
-        raw = _with_success_message(raw, "click succeeded" if not double_click else "double click succeeded")
-        return from_action_result(
-            raw,
+        return await _perform_resolved_action(
+            action_fn=click_fn,
+            device_id=device_id,
+            resolved=resolved,
+            success_message="click succeeded" if not double_click else "double click succeeded",
             default_code="CLICK_ERROR",
             default_detail="click failed",
-            default_result=resolved,
         )
 
     if has_search:
@@ -289,19 +335,19 @@ async def click_element(
         if not ok:
             return coords
         ex, ey = coords
-        raw = await asyncio.to_thread(click_fn, device_id, ex, ey)
-        raw = _with_success_message(raw, "click succeeded" if not double_click else "double click succeeded")
-        return from_action_result(
-            raw,
-            default_code="CLICK_ERROR",
-            default_detail="click failed",
-            default_result={
+        return await _perform_resolved_action(
+            action_fn=click_fn,
+            device_id=device_id,
+            resolved={
                 "x": ex,
                 "y": ey,
                 "resolved_via": "search",
                 "handle_refreshed": False,
                 "element_handle": None,
             },
+            success_message="click succeeded" if not double_click else "double click succeeded",
+            default_code="CLICK_ERROR",
+            default_detail="click failed",
         )
 
     return error_result(
@@ -335,32 +381,32 @@ async def long_press_element(
         )
 
     if x is not None and y is not None:
-        raw = await asyncio.to_thread(ui_ops.long_click, device_id, x, y)
-        raw = _with_success_message(raw, "long press succeeded")
-        return from_action_result(
-            raw,
-            default_code="LONG_PRESS_ERROR",
-            default_detail="long press failed",
-            default_result={
+        return await _perform_resolved_action(
+            action_fn=ui_ops.long_click,
+            device_id=device_id,
+            resolved={
                 "x": x,
                 "y": y,
                 "resolved_via": "coordinates",
                 "handle_refreshed": False,
                 "element_handle": None,
             },
+            success_message="long press succeeded",
+            default_code="LONG_PRESS_ERROR",
+            default_detail="long press failed",
         )
 
     if element_handle is not None:
         ok, resolved = await _resolve_handle_coords(device_id, element_handle)
         if not ok:
             return resolved
-        raw = await asyncio.to_thread(ui_ops.long_click, device_id, resolved["x"], resolved["y"])
-        raw = _with_success_message(raw, "long press succeeded")
-        return from_action_result(
-            raw,
+        return await _perform_resolved_action(
+            action_fn=ui_ops.long_click,
+            device_id=device_id,
+            resolved=resolved,
+            success_message="long press succeeded",
             default_code="LONG_PRESS_ERROR",
             default_detail="long press failed",
-            default_result=resolved,
         )
 
     if text or element_type or element_id:
@@ -374,19 +420,19 @@ async def long_press_element(
         if not ok:
             return coords
         ex, ey = coords
-        raw = await asyncio.to_thread(ui_ops.long_click, device_id, ex, ey)
-        raw = _with_success_message(raw, "long press succeeded")
-        return from_action_result(
-            raw,
-            default_code="LONG_PRESS_ERROR",
-            default_detail="long press failed",
-            default_result={
+        return await _perform_resolved_action(
+            action_fn=ui_ops.long_click,
+            device_id=device_id,
+            resolved={
                 "x": ex,
                 "y": ey,
                 "resolved_via": "search",
                 "handle_refreshed": False,
                 "element_handle": None,
             },
+            success_message="long press succeeded",
+            default_code="LONG_PRESS_ERROR",
+            default_detail="long press failed",
         )
 
     return error_result(
@@ -479,13 +525,10 @@ async def input_text(
         )
 
     if x is not None and y is not None:
-        raw = await asyncio.to_thread(ui_ops.input_text, device_id, x, y, text)
-        raw = _with_success_message(raw, "input text succeeded")
-        return from_action_result(
-            raw,
-            default_code="INPUT_TEXT_ERROR",
-            default_detail="input text failed",
-            default_result={
+        return await _perform_resolved_action(
+            action_fn=ui_ops.input_text,
+            device_id=device_id,
+            resolved={
                 "text": text,
                 "x": x,
                 "y": y,
@@ -493,19 +536,25 @@ async def input_text(
                 "handle_refreshed": False,
                 "element_handle": None,
             },
+            success_message="input text succeeded",
+            default_code="INPUT_TEXT_ERROR",
+            default_detail="input text failed",
+            extra_args=(text,),
         )
 
     if element_handle is not None:
         ok, resolved = await _resolve_handle_coords(device_id, element_handle)
         if not ok:
             return resolved
-        raw = await asyncio.to_thread(ui_ops.input_text, device_id, resolved["x"], resolved["y"], text)
-        raw = _with_success_message(raw, "input text succeeded")
-        return from_action_result(
-            raw,
+        return await _perform_resolved_action(
+            action_fn=ui_ops.input_text,
+            device_id=device_id,
+            resolved=resolved,
+            success_message="input text succeeded",
             default_code="INPUT_TEXT_ERROR",
             default_detail="input text failed",
-            default_result={**resolved, "text": text},
+            extra_args=(text,),
+            extra_result={"text": text},
         )
 
     if element_text or element_type or element_id:
@@ -523,13 +572,10 @@ async def input_text(
                 )
             return coords
         ex, ey = coords
-        raw = await asyncio.to_thread(ui_ops.input_text, device_id, ex, ey, text)
-        raw = _with_success_message(raw, "input text succeeded")
-        return from_action_result(
-            raw,
-            default_code="INPUT_TEXT_ERROR",
-            default_detail="input text failed",
-            default_result={
+        return await _perform_resolved_action(
+            action_fn=ui_ops.input_text,
+            device_id=device_id,
+            resolved={
                 "text": text,
                 "x": ex,
                 "y": ey,
@@ -537,6 +583,10 @@ async def input_text(
                 "handle_refreshed": False,
                 "element_handle": None,
             },
+            success_message="input text succeeded",
+            default_code="INPUT_TEXT_ERROR",
+            default_detail="input text failed",
+            extra_args=(text,),
         )
 
     return error_result(
@@ -553,15 +603,21 @@ async def input_text(
 async def press_key(device_id: Optional[str] = None, key: Optional[str] = None) -> PressKeyResult:
     if not key:
         return error_result("MISSING_KEY", "key is required", result={"key": ""})
+    normalized_key = _normalize_key_name(key)
+    if not normalized_key:
+        return error_result("MISSING_KEY", "key is required", result={"key": ""})
 
     ui_ops = get_ui_operations()
-    raw = await asyncio.to_thread(ui_ops.press_key, device_id, key)
+    raw = await asyncio.to_thread(ui_ops.press_key, device_id, normalized_key)
+    if isinstance(raw, dict):
+        raw = dict(raw)
+        raw["key"] = normalized_key
     raw = _with_success_message(raw, "key press succeeded")
     return from_action_result(
         raw,
         default_code="PRESS_KEY_ERROR",
         default_detail="press key failed",
-        default_result={"key": key},
+        default_result={"key": normalized_key},
     )
 
 

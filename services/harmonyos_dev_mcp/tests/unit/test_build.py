@@ -1,5 +1,6 @@
 ﻿"""Build tool tests with standardized MCP response envelope."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,7 +19,7 @@ class TestBuildApp:
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
-        sc = unwrap_result(await build.build_app("/path/to/project"))
+        sc = unwrap_result(await build.build_app(str(Path.cwd())))
 
         assert sc["ok"] is True
         assert sc["tool"] == "build_app"
@@ -46,7 +47,7 @@ class TestBuildApp:
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
-        sc = unwrap_result(await build.build_app("/path/to/project", product="qa"))
+        sc = unwrap_result(await build.build_app(str(Path.cwd()), product="qa"))
 
         assert sc["ok"] is True
         mock_hvigor.build.assert_called_once_with(
@@ -65,7 +66,7 @@ class TestBuildApp:
         mock_hvigor.build.return_value = {"success": False, "stderr": "compiler exited with code 1"}
         mock_hvigor_cls.return_value = mock_hvigor
 
-        sc = unwrap_result(await build.build_app("/path/to/project"))
+        sc = unwrap_result(await build.build_app(str(Path.cwd())))
 
         assert sc["ok"] is False
         assert sc["result"]["errors"] == []
@@ -85,7 +86,7 @@ class TestBuildApp:
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
-        sc = unwrap_result(await build.build_app("/path/to/project"))
+        sc = unwrap_result(await build.build_app(str(Path.cwd())))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "BUILD_TIMEOUT"
@@ -104,7 +105,7 @@ class TestBuildApp:
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
-        sc = unwrap_result(await build.build_app("/path/to/project", build_mode="release"))
+        sc = unwrap_result(await build.build_app(str(Path.cwd()), build_mode="release"))
 
         assert sc["ok"] is True
         mock_hvigor.build.assert_called_once_with(
@@ -131,7 +132,7 @@ class TestBuildApp:
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
-        sc = unwrap_result(await build.build_app("/path/to/project"))
+        sc = unwrap_result(await build.build_app(str(Path.cwd())))
 
         assert sc["ok"] is False
         assert "Error Message: ';' expected." in sc["error"]["detail"]
@@ -139,10 +140,50 @@ class TestBuildApp:
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
+    async def test_build_extracts_file_colon_error_format(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build.return_value = {
+            "success": False,
+            "stderr": "entry/src/main/ets/pages/Index.ets:23:17 - error Type mismatch",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        sc = unwrap_result(await build.build_app(str(Path.cwd())))
+
+        assert sc["ok"] is False
+        assert sc["result"]["error_count"] == 1
+        assert sc["result"]["errors"][0]["file"] == "entry/src/main/ets/pages/Index.ets"
+        assert sc["result"]["errors"][0]["line"] == 23
+        assert sc["result"]["errors"][0]["column"] == 17
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_extracts_error_file_line_column_format(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build.return_value = {
+            "success": False,
+            "stderr": "ERROR File: /tmp/build-profile.json5 line: 12 column: 3 - invalid trailing comma",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        sc = unwrap_result(await build.build_app(str(Path.cwd())))
+
+        assert sc["ok"] is False
+        assert sc["result"]["error_count"] == 1
+        assert sc["result"]["errors"][0]["file"] == "build-profile.json5"
+        assert sc["result"]["errors"][0]["line"] == 12
+        assert sc["result"]["errors"][0]["column"] == 3
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
     async def test_build_har_requires_module_name(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
 
-        sc = unwrap_result(await build.build_app("/path/to/project", target="har"))
+        sc = unwrap_result(await build.build_app(str(Path.cwd()), target="har"))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "MISSING_MODULE_NAME"
@@ -152,10 +193,32 @@ class TestBuildApp:
     async def test_build_with_invalid_target(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
 
-        sc = unwrap_result(await build.build_app("/path/to/project", target="zip"))
+        sc = unwrap_result(await build.build_app(str(Path.cwd()), target="zip"))
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "INVALID_BUILD_TARGET"
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_rejects_invalid_project_path(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        sc = unwrap_result(await build.build_app("Z:/path/that/does/not/exist"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_PROJECT_PATH"
+        mock_hvigor_cls.assert_not_called()
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_rejects_invalid_build_mode(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        sc = unwrap_result(await build.build_app(str(Path.cwd()), build_mode="profile"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_BUILD_MODE"
+        mock_hvigor_cls.assert_not_called()
 
 
 class TestInstallApp:
@@ -192,6 +255,7 @@ class TestInstallApp:
             staticmethod(
                 lambda device_id=None: (
                     False,
+                    None,
                     {
                         "tool": "with_device",
                         "ok": False,
@@ -228,6 +292,26 @@ class TestInstallApp:
         assert sc["ok"] is False
         assert sc["error"]["detail"] == "[INSTALL_FAILED] install bundle failed, code:9568320"
         assert sc["result"]["hap_path"] == "/path/to/app.hap"
+
+    @pytest.mark.asyncio
+    async def test_install_requires_package_path(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
+        from harmonyos_dev_mcp.tools import build
+
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
+        sc = unwrap_result(await build.install_app("", device_id="device_001"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "MISSING_HAP_PATH"
+
+    @pytest.mark.asyncio
+    async def test_install_rejects_invalid_package_suffix(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
+        from harmonyos_dev_mcp.tools import build
+
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
+        sc = unwrap_result(await build.install_app("/path/to/app.zip", device_id="device_001"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_APP_PACKAGE"
 
 
 class TestRunApp:
@@ -283,6 +367,7 @@ class TestRunApp:
             staticmethod(
                 lambda device_id=None: (
                     False,
+                    None,
                     {
                         "tool": "with_device",
                         "ok": False,
@@ -359,3 +444,13 @@ class TestUninstallApp:
         assert sc["ok"] is False
         assert sc["error"]["detail"] == "uninstall failed: bundle is not installed"
         assert sc["result"]["bundle_name"] == "com.example.app"
+
+    @pytest.mark.asyncio
+    async def test_uninstall_requires_bundle_name(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
+        from harmonyos_dev_mcp.tools import build
+
+        monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
+        sc = unwrap_result(await build.uninstall_app("", device_id="device_001"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "MISSING_BUNDLE_NAME"

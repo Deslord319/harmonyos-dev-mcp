@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
@@ -256,7 +255,7 @@ def _load_lines_from_files(paths: List[str], filters: dict, query_mode: str) -> 
     return all_lines
 
 
-def _collect_realtime_lines(
+async def _collect_realtime_lines(
     *,
     hdc,
     device_id: str,
@@ -271,7 +270,7 @@ def _collect_realtime_lines(
     seen = set()
 
     for index in range(attempts):
-        text = hdc.get_realtime_logs(device_id, lines=lines, tag=tag, pid=pid)
+        text = await asyncio.to_thread(hdc.get_realtime_logs, device_id, lines=lines, tag=tag, pid=pid)
         for line in (text.splitlines() if text else []):
             normalized = line.strip()
             if not normalized or normalized in seen:
@@ -279,7 +278,7 @@ def _collect_realtime_lines(
             seen.add(normalized)
             merged.append(normalized)
         if index < attempts - 1 and delay_seconds > 0:
-            time.sleep(delay_seconds)
+            await asyncio.sleep(delay_seconds)
     return merged
 
 
@@ -292,7 +291,7 @@ def _get_related_pids(hdc, device_id: str, package_name: Optional[str], explicit
     return [app_pid] if app_pid else []
 
 
-def _collect_lines(
+async def _collect_lines(
     *,
     device_id: Optional[str],
     logs: Optional[List[str]],
@@ -317,10 +316,11 @@ def _collect_lines(
         paths = list(input_files or [])
         if input_file and input_file not in paths:
             paths.append(input_file)
-        return [("file", _load_lines_from_files(paths, filters, query_mode), {})], device_id or "", None
+        loaded = await asyncio.to_thread(_load_lines_from_files, paths, filters, query_mode)
+        return [("file", loaded, {})], device_id or "", None
 
     hdc = get_hdc()
-    ok, resolved_device = DeviceToolSupport.get_device_id(device_id)
+    ok, resolved_device, _ = DeviceToolSupport.get_device_id(device_id)
     if not ok:
         raise LogQueryError("DEVICE_NOT_FOUND", "no device found", _default_result(filters, query_mode=query_mode))
 
@@ -329,7 +329,7 @@ def _collect_lines(
     prefer_historical = bool(start_time or end_time) or _needs_historical_logs(start_time, seconds)
 
     if prefer_historical:
-        hist = fetch_historical_logs(resolved_device, start_time, end_time, lines)
+        hist = await asyncio.to_thread(fetch_historical_logs, resolved_device, start_time, end_time, lines)
         if not hist.get("success", False):
             raise LogQueryError(
                 hist.get("error_code", "HISTORICAL_LOGS_ERROR"),
@@ -353,7 +353,7 @@ def _collect_lines(
         )
         return sources, resolved_device, hdc
 
-    realtime_lines = _collect_realtime_lines(
+    realtime_lines = await _collect_realtime_lines(
         hdc=hdc,
         device_id=resolved_device,
         lines=fetch_n,
@@ -364,7 +364,7 @@ def _collect_lines(
     sources.append(("realtime_buffer", realtime_lines, {}))
 
     if fallback_to_historical:
-        hist = fetch_historical_logs(resolved_device, start_time, end_time, lines)
+        hist = await asyncio.to_thread(fetch_historical_logs, resolved_device, start_time, end_time, lines)
         if hist.get("success", False):
             sources.append(
                 (
@@ -437,7 +437,7 @@ def _fetch_crash_info(hdc, device_id: str, package_name: Optional[str], start_ti
         return None
 
 
-def _query_impl(
+async def _query_impl(
     device_id=None,
     logs=None,
     input_file=None,
@@ -497,7 +497,7 @@ def _query_impl(
     )
 
     try:
-        source_batches, resolved_device, hdc = _collect_lines(
+        source_batches, resolved_device, hdc = await _collect_lines(
             device_id=device_id,
             logs=logs,
             input_file=input_file,
@@ -576,7 +576,9 @@ def _query_impl(
 
         if save_path is not None:
             try:
-                payload.update(_save_logs(save_path, resolved_device, payload["items"], filters, query_mode))
+                payload.update(
+                    await asyncio.to_thread(_save_logs, save_path, resolved_device, payload["items"], filters, query_mode)
+                )
             except LogQueryError as exc:
                 return error_result(exc.code, exc.detail, result=payload)
 
@@ -630,8 +632,7 @@ async def logs_query(
     success or failure markers such as picker save results.
     """
 
-    return await asyncio.to_thread(
-        _query_impl,
+    return await _query_impl(
         device_id=device_id,
         logs=logs,
         input_file=input_file,

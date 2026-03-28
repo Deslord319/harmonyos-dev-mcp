@@ -87,6 +87,16 @@ class TestQueryPackage:
         assert sc["result"]["requested_permissions"] == ["ohos.permission.INTERNET"]
         assert sc["result"]["permission_count"] == 1
 
+    @pytest.mark.asyncio
+    async def test_bundle_name_with_list_request_echoes_requested_type(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools import general
+
+        sc = unwrap_result(await general.query_package(bundle_name="com.example.app", info_type="list"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["requested_info_type"] == "list"
+        assert sc["result"]["info_type"] == "abilities"
+
 
 class TestUiTree:
     @pytest.mark.asyncio
@@ -129,6 +139,7 @@ class TestUiTree:
 
         assert sc["ok"] is True
         assert sc["result"]["count"] == 1
+        assert sc["result"]["total_count"] == 2
         assert sc["result"]["windows"][0]["bundle_name"] == "com.huawei.hmos.settings"
 
     @pytest.mark.asyncio
@@ -303,6 +314,17 @@ class TestUiTree:
 
         assert sc["ok"] is False
         assert sc["error"]["code"] == "WINDOW_BUNDLE_MISMATCH"
+
+    @pytest.mark.asyncio
+    async def test_get_ui_tree_rejects_invalid_payload_shape(self, mock_hdc: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools import e2e
+
+        mock_hdc.get_ui_tree_raw.return_value = {"success": True, "ui_tree": 123}
+
+        sc = unwrap_result(await e2e.get_ui_tree())
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_UI_TREE_PAYLOAD"
 
 
 class TestLogsQuery:

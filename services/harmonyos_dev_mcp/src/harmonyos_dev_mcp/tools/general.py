@@ -37,19 +37,20 @@ async def query_package(
     info_type: str = "list",
 ) -> QueryPackageResult:
     hdc = get_hdc()
+    requested_info_type = info_type
 
     if info_type not in _ALLOWED_QUERY_INFO_TYPES:
         return error_result(
             "INVALID_INFO_TYPE",
             'invalid info_type. supported values: list, abilities, main_ability, permissions; "basic" is not supported',
-            result={"device_id": device_id, "info_type": info_type},
+            result={"device_id": device_id, "info_type": info_type, "requested_info_type": requested_info_type},
         )
 
     if info_type in ("abilities", "main_ability", "permissions") and not bundle_name:
         return error_result(
             "MISSING_BUNDLE_NAME",
             f'info_type="{info_type}" requires bundle_name. supported values: list, abilities, main_ability, permissions',
-            result={"device_id": device_id, "info_type": info_type},
+            result={"device_id": device_id, "info_type": info_type, "requested_info_type": requested_info_type},
         )
 
     if bundle_name and info_type == "list":
@@ -64,6 +65,7 @@ async def query_package(
             default_result={
                 "device_id": device_id,
                 "info_type": "list",
+                "requested_info_type": requested_info_type,
                 "packages": raw.get("packages", []) if isinstance(raw, dict) else [],
                 "count": raw.get("count", len(raw.get("packages", []))) if isinstance(raw, dict) else 0,
                 "keyword": keyword or "",
@@ -79,6 +81,7 @@ async def query_package(
                 result={
                     "device_id": device_id,
                     "info_type": "abilities",
+                    "requested_info_type": requested_info_type,
                     "bundle_name": bundle_name,
                     **_ABILITIES_ERROR_DEFAULTS,
                 },
@@ -104,6 +107,7 @@ async def query_package(
             {
                 "device_id": device_id,
                 "info_type": "abilities",
+                "requested_info_type": requested_info_type,
                 "bundle_name": bundle_name,
                 "abilities": abilities,
                 "modules": modules,
@@ -121,6 +125,7 @@ async def query_package(
                 result={
                     "device_id": device_id,
                     "info_type": "main_ability",
+                    "requested_info_type": requested_info_type,
                     "bundle_name": bundle_name,
                     **_MAIN_ABILITY_ERROR_DEFAULTS,
                 },
@@ -139,6 +144,7 @@ async def query_package(
             {
                 "device_id": device_id,
                 "info_type": "main_ability",
+                "requested_info_type": requested_info_type,
                 "bundle_name": bundle_name,
                 "ability_name": ability_name,
                 "module_name": module_name,
@@ -156,6 +162,7 @@ async def query_package(
             default_result={
                 "device_id": device_id,
                 "info_type": "permissions",
+                "requested_info_type": requested_info_type,
                 "bundle_name": bundle_name,
                 "requested_permissions": raw.get("requested_permissions", []) if isinstance(raw, dict) else [],
                 "permission_count": raw.get("permission_count", 0) if isinstance(raw, dict) else 0,
@@ -165,5 +172,5 @@ async def query_package(
     return error_result(
         "INVALID_INFO_TYPE",
         'invalid info_type. supported values: list, abilities, main_ability, permissions; "basic" is not supported',
-        result={"device_id": device_id, "info_type": info_type},
+        result={"device_id": device_id, "info_type": info_type, "requested_info_type": requested_info_type},
     )

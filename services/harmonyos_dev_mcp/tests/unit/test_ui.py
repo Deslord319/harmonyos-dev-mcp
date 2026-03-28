@@ -321,6 +321,17 @@ class TestPressKey:
         assert sc["ok"] is False
         assert sc["error"]["code"] == "MISSING_KEY"
 
+    async def test_press_key_normalizes_common_aliases(
+        self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result
+    ):
+        from harmonyos_dev_mcp.tools import ui
+
+        sc = unwrap_result(await ui.press_key(key="volume_down"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["key"] == "VolumeDown"
+        mock_ui_operations.press_key.assert_called_once_with("device_001", "VolumeDown")
+
 
 class TestFindElement:
     async def test_find_by_text(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):

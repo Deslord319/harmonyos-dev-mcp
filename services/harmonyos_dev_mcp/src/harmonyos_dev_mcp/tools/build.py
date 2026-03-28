@@ -1,6 +1,7 @@
 ﻿"""Build/deploy tools for HarmonyOS."""
 
 import asyncio
+import os
 import re
 import time
 from typing import Any, Dict, List, Optional
@@ -17,6 +18,7 @@ from common.tools.response import error_result, from_action_result, mcp_response
 
 MAX_ERRORS = 15
 BUILD_TIMEOUT_HINT = "Set MCP tools/call timeout to at least 60 seconds; 120 seconds is recommended for cold builds."
+ALLOWED_BUILD_MODES = {"debug", "release"}
 
 
 @mcp_tool(category="build")
@@ -30,6 +32,18 @@ async def build_app(
     module_name: Optional[str] = None,
 ) -> BuildResult:
     """Build HarmonyOS artifact."""
+    if not project_path or not os.path.isdir(project_path):
+        return error_result(
+            "INVALID_PROJECT_PATH",
+            "project_path must be an existing directory",
+            result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
+        )
+    if build_mode not in ALLOWED_BUILD_MODES:
+        return error_result(
+            "INVALID_BUILD_MODE",
+            'build_mode must be one of "debug" or "release"',
+            result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
+        )
     if target not in {"hap", "har", "app"}:
         return error_result(
             "INVALID_BUILD_TARGET",
@@ -103,6 +117,8 @@ def _parse_errors_from_text(text: str, source: str) -> List[Dict[str, Any]]:
         re.compile(r"Error Message:\s*(.+?)\s*At File:\s*(.+?\.(?:ts|ets|js)):?(\d+):?(\d+)", re.IGNORECASE),
         re.compile(r"^(.+?\.(?:ts|ets|js))\((\d+),(\d+)\):\s*(?:error|ERROR)\s*(?:\w+)?\s*:\s*(.+)$"),
         re.compile(r"^(?:ERROR|Error)\s*[:：]?\s*(.+?\.(?:ts|ets|js|json5?)):(\d+)(?::(\d+))?\s*[-:]?\s*(.+)$"),
+        re.compile(r"^(.+?\.(?:ts|ets|js|json5?)):(\d+):(\d+)\s*[-:]?\s*(?:error|ERROR)\s*(.+)$"),
+        re.compile(r"^(?:ERROR|Error)\s+File:\s*(.+?\.(?:ts|ets|js|json5?))\s+line:\s*(\d+)\s+column:\s*(\d+)\s*[-:]?\s*(.+)$"),
     ]
 
     for line in cleaned.splitlines():
@@ -141,18 +157,22 @@ def _extract_detailed_error_output(build_result: Dict[str, Any]) -> str:
 
 
 def _normalize_path(path: str) -> str:
+    normalized = path.replace("\\", "/")
+    is_absolute = normalized.startswith("/") or ":" in normalized[:3]
+    if not is_absolute:
+        return path
+
     prefixes = ["/entry/", "/build/", "/src/", "\\entry\\", "\\build\\", "\\src\\"]
     for prefix in prefixes:
         if prefix in path or prefix.replace("/", "\\") in path:
             idx = max(path.find(prefix), path.find(prefix.replace("/", "\\")))
             if idx >= 0:
                 return path[idx + 1 :]
-    if path.startswith("/") or ":" in path[:3]:
-        parts = path.replace("\\", "/").split("/")
-        for i, part in enumerate(parts):
-            if part in ["src", "entry", "build"]:
-                return "/".join(parts[i:])
-    return path
+    parts = normalized.split("/")
+    for i, part in enumerate(parts):
+        if part in ["src", "entry", "build"]:
+            return "/".join(parts[i:])
+    return parts[-1] if parts else path
 
 
 def _classify_error(message: str) -> str:
@@ -177,6 +197,18 @@ def _classify_error(message: str) -> str:
 @DeviceToolSupport.handle_tool_error("INSTALL_ERROR", hap_path="")
 @DeviceToolSupport.with_device(hap_path="")
 async def install_app(hap_path: str, device_id: Optional[str] = None) -> InstallResult:
+    if not hap_path:
+        return error_result(
+            "MISSING_HAP_PATH",
+            "hap_path is required",
+            result={"device_id": device_id, "hap_path": ""},
+        )
+    if not hap_path.lower().endswith((".hap", ".app")):
+        return error_result(
+            "INVALID_APP_PACKAGE",
+            "hap_path must point to a .hap or .app package",
+            result={"device_id": device_id, "hap_path": hap_path},
+        )
     hdc = get_hdc()
     raw = await asyncio.to_thread(hdc.install_app, device_id, hap_path)
     if isinstance(raw, bool):
@@ -317,6 +349,12 @@ def _resolve_ability(
 @DeviceToolSupport.handle_tool_error("UNINSTALL_ERROR", bundle_name="")
 @DeviceToolSupport.with_device(bundle_name="")
 async def uninstall_app(bundle_name: str, device_id: Optional[str] = None) -> UninstallResult:
+    if not bundle_name:
+        return error_result(
+            "MISSING_BUNDLE_NAME",
+            "bundle_name is required",
+            result={"device_id": device_id, "bundle_name": ""},
+        )
     hdc = get_hdc()
     raw = await asyncio.to_thread(hdc.uninstall_app, device_id, bundle_name)
     if isinstance(raw, bool):
