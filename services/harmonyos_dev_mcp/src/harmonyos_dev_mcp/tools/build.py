@@ -229,6 +229,22 @@ async def run_app(
         auto_detect,
     )
 
+    if not final_ability:
+        return error_result(
+            "ABILITY_RESOLUTION_FAILED",
+            "failed to resolve launch ability automatically; provide ability_name explicitly",
+            result={
+                "device_id": device_id,
+                "bundle_name": bundle_name,
+                "ability_name": "",
+                "module_name": final_module or module_name or "entry",
+                "auto_detected": auto_detected,
+                "command_success": False,
+                "window_found": False,
+                "window": None,
+            },
+        )
+
     start_result = await asyncio.to_thread(hdc.start_app, device_id, bundle_name, final_ability, final_module)
 
     payload = {
@@ -292,10 +308,6 @@ def _resolve_ability(
                             final_module = final_module or ability.get("module", "entry")
                             auto_detected = True
                             break
-
-    if not final_ability:
-        final_ability = "MainAbility"
-        auto_detected = True if auto_detect else auto_detected
 
     return (final_ability, final_module or "entry", auto_detected)
 

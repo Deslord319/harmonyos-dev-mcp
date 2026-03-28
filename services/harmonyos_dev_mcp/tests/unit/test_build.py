@@ -257,17 +257,19 @@ class TestRunApp:
         assert sc["result"]["auto_detected"] is False
 
     @pytest.mark.asyncio
-    async def test_use_default_ability_when_detection_fails(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
+    async def test_run_fails_when_ability_detection_fails(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
         from harmonyos_dev_mcp.tools import build
 
         monkeypatch.setattr(build, "get_hdc", lambda: mock_hdc)
         mock_hdc.get_main_ability.return_value = {"success": False, "error": "Package not found"}
+        mock_hdc.get_package_info.return_value = {"success": False, "error": "Package not found"}
 
         sc = unwrap_result(await build.run_app("com.example.app"))
 
-        assert sc["result"]["ability_name"] == "MainAbility"
-        assert sc["result"]["module_name"] == "entry"
-        assert sc["result"]["auto_detected"] is True
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "ABILITY_RESOLUTION_FAILED"
+        assert sc["result"]["ability_name"] == ""
+        assert sc["result"]["command_success"] is False
 
     @pytest.mark.asyncio
     async def test_run_fails_when_no_device(self, no_device_mock: MagicMock, unwrap_result, monkeypatch):

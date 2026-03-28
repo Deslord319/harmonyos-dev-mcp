@@ -231,12 +231,13 @@ async def click_element(
     element_handle: Optional[Dict[str, Any]] = None,
     text: Optional[str] = None,
     element_type: Optional[str] = None,
+    element_id: Optional[str] = None,
     double_click: bool = False,
     bundle_name: Optional[str] = None,
 ) -> ClickResult:
     has_coords = x is not None and y is not None
     has_handle = element_handle is not None
-    has_search = bool(text or element_type)
+    has_search = bool(text or element_type or element_id)
 
     if has_coords and (has_handle or has_search):
         return error_result(
@@ -278,7 +279,13 @@ async def click_element(
         )
 
     if has_search:
-        ok, coords = await _resolve_element_coords(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
+        ok, coords = await _resolve_element_coords(
+            device_id,
+            text=text,
+            element_type=element_type,
+            element_id=element_id,
+            bundle_name=bundle_name,
+        )
         if not ok:
             return coords
         ex, ey = coords
@@ -291,7 +298,7 @@ async def click_element(
             default_result={
                 "x": ex,
                 "y": ey,
-                "resolved_via": "lookup_hint",
+                "resolved_via": "search",
                 "handle_refreshed": False,
                 "element_handle": None,
             },
@@ -315,11 +322,12 @@ async def long_press_element(
     element_handle: Optional[Dict[str, Any]] = None,
     text: Optional[str] = None,
     element_type: Optional[str] = None,
+    element_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
 ) -> LongPressResult:
     ui_ops = get_ui_operations()
 
-    if x is not None and y is not None and (element_handle is not None or text or element_type):
+    if x is not None and y is not None and (element_handle is not None or text or element_type or element_id):
         return error_result(
             "PARAM_CONFLICT",
             "cannot provide coordinates together with element_handle or search criteria",
@@ -355,8 +363,14 @@ async def long_press_element(
             default_result=resolved,
         )
 
-    if text or element_type:
-        ok, coords = await _resolve_element_coords(device_id, text=text, element_type=element_type, bundle_name=bundle_name)
+    if text or element_type or element_id:
+        ok, coords = await _resolve_element_coords(
+            device_id,
+            text=text,
+            element_type=element_type,
+            element_id=element_id,
+            bundle_name=bundle_name,
+        )
         if not ok:
             return coords
         ex, ey = coords
@@ -369,7 +383,7 @@ async def long_press_element(
             default_result={
                 "x": ex,
                 "y": ey,
-                "resolved_via": "lookup_hint",
+                "resolved_via": "search",
                 "handle_refreshed": False,
                 "element_handle": None,
             },
@@ -404,6 +418,13 @@ async def swipe(
     }
 
     ui_ops = get_ui_operations()
+
+    if direction and any(v is not None for v in [from_x, from_y, to_x, to_y]):
+        return error_result(
+            "PARAM_CONFLICT",
+            "cannot provide direction together with explicit swipe coordinates",
+            result=default_result,
+        )
 
     if direction:
         raw = await asyncio.to_thread(ui_ops.swipe_direction, device_id, direction, speed)
@@ -440,6 +461,7 @@ async def input_text(
     element_handle: Optional[Any] = None,
     element_text: Optional[str] = None,
     element_type: Optional[str] = None,
+    element_id: Optional[str] = None,
     bundle_name: Optional[str] = None,
 ) -> InputTextResult:
     default_result = {"text": text or "", "x": x or 0, "y": y or 0}
@@ -449,7 +471,7 @@ async def input_text(
 
     ui_ops = get_ui_operations()
 
-    if x is not None and y is not None and (element_handle is not None or element_text or element_type):
+    if x is not None and y is not None and (element_handle is not None or element_text or element_type or element_id):
         return error_result(
             "PARAM_CONFLICT",
             "cannot provide coordinates together with element_handle or search criteria",
@@ -486,8 +508,14 @@ async def input_text(
             default_result={**resolved, "text": text},
         )
 
-    if element_text or element_type:
-        ok, coords = await _resolve_element_coords(device_id, text=element_text, element_type=element_type, bundle_name=bundle_name)
+    if element_text or element_type or element_id:
+        ok, coords = await _resolve_element_coords(
+            device_id,
+            text=element_text,
+            element_type=element_type,
+            element_id=element_id,
+            bundle_name=bundle_name,
+        )
         if not ok:
             if isinstance(coords, dict) and coords.get("error", {}).get("code") == "ELEMENT_NOT_FOUND":
                 coords["error"]["detail"] = (
@@ -505,7 +533,7 @@ async def input_text(
                 "text": text,
                 "x": ex,
                 "y": ey,
-                "resolved_via": "lookup_hint",
+                "resolved_via": "search",
                 "handle_refreshed": False,
                 "element_handle": None,
             },
@@ -613,6 +641,16 @@ async def screenshot(
     bottom: Optional[int] = None,
 ) -> ScreenshotResult:
     hdc = get_hdc()
+
+    has_partial_bounds = any(v is not None for v in [left, top, right, bottom]) and not all(
+        v is not None for v in [left, top, right, bottom]
+    )
+    if has_partial_bounds:
+        return error_result(
+            "PARAM_CONFLICT",
+            "left, top, right, and bottom must all be provided together for region screenshots",
+            result={"bounds": {"left": left, "top": top, "right": right, "bottom": bottom}},
+        )
 
     if not local_path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

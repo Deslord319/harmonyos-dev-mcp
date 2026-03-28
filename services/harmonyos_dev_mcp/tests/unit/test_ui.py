@@ -42,9 +42,18 @@ class TestClickElement:
         sc = unwrap_result(await ui.click_element(text="登录"))
 
         assert sc["ok"] is True
-        assert sc["result"]["resolved_via"] == "lookup_hint"
+        assert sc["result"]["resolved_via"] == "search"
         mock_ui_operations.find_element.assert_called_once()
         mock_ui_operations.click.assert_called_once()
+
+    async def test_click_by_element_id(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools import ui
+
+        sc = unwrap_result(await ui.click_element(element_id="btn_login"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["resolved_via"] == "search"
+        mock_ui_operations.find_element.assert_called_once()
 
     async def test_click_by_handle(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):
         from harmonyos_dev_mcp.tools import ui
@@ -195,6 +204,16 @@ class TestSwipe:
         assert sc["ok"] is True
         mock_ui_operations.swipe_direction.assert_called_once_with("device_001", "down", 1000)
 
+    async def test_swipe_rejects_direction_coordinate_conflict(
+        self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result
+    ):
+        from harmonyos_dev_mcp.tools import ui
+
+        sc = unwrap_result(await ui.swipe(direction="up", from_x=1, from_y=2, to_x=3, to_y=4))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "PARAM_CONFLICT"
+
 
 class TestInputText:
     async def test_input_rejects_json_string_handle(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):
@@ -224,9 +243,17 @@ class TestInputText:
         sc = unwrap_result(await ui.input_text(element_type="TextInput", text="Hello World"))
 
         assert sc["ok"] is True
-        assert sc["result"]["resolved_via"] == "lookup_hint"
+        assert sc["result"]["resolved_via"] == "search"
         mock_ui_operations.find_element.assert_called_once()
         mock_ui_operations.input_text.assert_called_once()
+
+    async def test_input_by_element_id(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools import ui
+
+        sc = unwrap_result(await ui.input_text(element_id="btn_login", text="Hello World"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["resolved_via"] == "search"
 
     async def test_input_by_handle(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):
         from harmonyos_dev_mcp.tools import ui
@@ -356,3 +383,22 @@ class TestLongPressElement:
         assert sc["ok"] is True
         assert sc["result"]["resolved_via"] == "handle"
         mock_ui_operations.long_click.assert_called_once_with("device_001", 100, 200)
+
+    async def test_long_press_by_element_id(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):
+        from harmonyos_dev_mcp.tools import ui
+
+        sc = unwrap_result(await ui.long_press_element(element_id="btn_login"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["resolved_via"] == "search"
+
+
+class TestScreenshot:
+    async def test_screenshot_rejects_partial_bounds(self, mock_hdc: MagicMock, unwrap_result, monkeypatch):
+        from harmonyos_dev_mcp.tools import ui
+
+        monkeypatch.setattr(ui, "get_hdc", lambda: mock_hdc)
+        sc = unwrap_result(await ui.screenshot(left=0, top=0, right=100))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "PARAM_CONFLICT"
