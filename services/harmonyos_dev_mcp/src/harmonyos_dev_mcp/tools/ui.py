@@ -35,6 +35,25 @@ _KEY_ALIASES = {
     "voldown": "VolumeDown",
     "vol_down": "VolumeDown",
 }
+_ALLOWED_KEYS = {
+    "Back",
+    "Camera",
+    "DPadCenter",
+    "DPadDown",
+    "DPadLeft",
+    "DPadRight",
+    "DPadUp",
+    "Enter",
+    "Escape",
+    "Home",
+    "Menu",
+    "Notification",
+    "Power",
+    "RecentApps",
+    "Search",
+    "VolumeDown",
+    "VolumeUp",
+}
 
 
 def _with_success_message(raw: Any, message: str) -> Any:
@@ -58,6 +77,13 @@ def _normalize_key_name(key: str) -> Optional[str]:
         return None
     alias_key = normalized.replace("-", "_").replace(" ", "_").lower()
     return _KEY_ALIASES.get(alias_key, normalized)
+
+
+def _validate_supported_key(key: str) -> Optional[str]:
+    normalized = _normalize_key_name(key)
+    if normalized in _ALLOWED_KEYS:
+        return normalized
+    return None
 
 
 def _match_handle_candidates(candidates: list[Dict[str, Any]], handle: Dict[str, Any]) -> list[Dict[str, Any]]:
@@ -603,9 +629,14 @@ async def input_text(
 async def press_key(device_id: Optional[str] = None, key: Optional[str] = None) -> PressKeyResult:
     if not key:
         return error_result("MISSING_KEY", "key is required", result={"key": ""})
-    normalized_key = _normalize_key_name(key)
+    normalized_key = _validate_supported_key(key)
     if not normalized_key:
-        return error_result("MISSING_KEY", "key is required", result={"key": ""})
+        supported = ", ".join(sorted(_ALLOWED_KEYS))
+        return error_result(
+            "INVALID_KEY",
+            f"unsupported key: {key}. supported values: {supported}",
+            result={"key": str(key).strip()},
+        )
 
     ui_ops = get_ui_operations()
     raw = await asyncio.to_thread(ui_ops.press_key, device_id, normalized_key)

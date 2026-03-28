@@ -30,6 +30,7 @@ async def build_app(
     target: str = "hap",
     product: str = "default",
     module_name: Optional[str] = None,
+    is_clean: bool = False,
 ) -> BuildResult:
     """Build HarmonyOS artifact."""
     if not project_path or not os.path.isdir(project_path):
@@ -69,12 +70,19 @@ async def build_app(
         build_mode=build_mode,
         product=product,
         module_name=module_name,
+        is_clean=is_clean,
     )
     elapsed = round(time.time() - start_time, 2)
 
     payload: dict = {
         "output_path": raw.get("output_path"),
+        "artifact_source": raw.get("artifact_source"),
+        "sign_status": raw.get("sign_status", "unknown"),
         "target": target,
+        "build_mode": build_mode,
+        "product": product,
+        "module_name": module_name,
+        "is_clean": is_clean,
         "duration": elapsed,
         "errors": [],
         "error_count": 0,

@@ -83,6 +83,29 @@ def _clean_dict(values: dict) -> dict:
     return {key: value for key, value in values.items() if value is not None}
 
 
+def _normalize_query_params(
+    *,
+    mode,
+    lines,
+    pid,
+    seconds,
+    realtime_wait_ms,
+    context_lines,
+    marker_keywords,
+) -> dict:
+    query_mode = _coerce_mode(mode)
+    normalized_marker_keywords = _normalize_keywords(marker_keywords)
+    return {
+        "query_mode": query_mode,
+        "lines": _coerce_optional_int("lines", lines) or 100,
+        "pid": _coerce_optional_int("pid", pid),
+        "seconds": _coerce_optional_int("seconds", seconds),
+        "realtime_wait_ms": _coerce_optional_int("realtime_wait_ms", realtime_wait_ms) or 0,
+        "context_lines": _coerce_optional_int("context_lines", context_lines) or 0,
+        "active_marker_keywords": _resolve_marker_keywords(normalized_marker_keywords),
+    }
+
+
 def _default_result(
     filters: dict,
     *,
@@ -105,6 +128,39 @@ def _default_result(
     if device_id:
         result["device_id"] = device_id
     return result
+
+
+def _build_filters(
+    *,
+    query_mode: str,
+    level,
+    tag,
+    tag_search,
+    keyword,
+    domain,
+    pid,
+    package_name,
+    seconds,
+    start_time,
+    end_time,
+    marker_keywords,
+) -> dict:
+    return _clean_dict(
+        {
+            "mode": query_mode,
+            "level": level,
+            "tag": tag,
+            "tag_search": tag_search,
+            "keyword": keyword,
+            "domain": domain,
+            "pid": pid,
+            "package_name": package_name,
+            "seconds": seconds,
+            "start_time": start_time,
+            "end_time": end_time,
+            "marker_keywords": marker_keywords or None,
+        }
+    )
 
 
 def _resolve_time_window(
@@ -437,6 +493,146 @@ def _fetch_crash_info(hdc, device_id: str, package_name: Optional[str], start_ti
         return None
 
 
+async def _resolve_source_batches(
+    *,
+    device_id,
+    logs,
+    input_file,
+    input_files,
+    lines,
+    tag,
+    pid,
+    package_name,
+    start_time,
+    end_time,
+    seconds,
+    realtime_wait_ms,
+    fallback_to_historical,
+    filters,
+    query_mode,
+):
+    return await _collect_lines(
+        device_id=device_id,
+        logs=logs,
+        input_file=input_file,
+        input_files=input_files,
+        lines=lines,
+        tag=tag,
+        pid=pid,
+        package_name=package_name,
+        start_time=start_time,
+        end_time=end_time,
+        seconds=seconds,
+        realtime_wait_ms=realtime_wait_ms,
+        fallback_to_historical=fallback_to_historical,
+        filters=filters,
+        query_mode=query_mode,
+    )
+
+
+def _process_source_batches(
+    *,
+    source_batches,
+    resolved_device,
+    hdc,
+    filters,
+    query_mode,
+    lines,
+    level,
+    tag,
+    tag_search,
+    keyword,
+    domain,
+    pid,
+    package_name,
+    seconds,
+    start_time,
+    end_time,
+    active_marker_keywords,
+    context_lines,
+):
+    related_pids = _get_related_pids(hdc, resolved_device, package_name, pid) if hdc else ([pid] if pid else [])
+    related_keywords = list(LogParser.DEFAULT_RELATED_KEYWORDS) if query_mode == "markers" else []
+    time_range = _build_time_range(seconds, start_time, end_time)
+
+    attempted = [source_name for source_name, _, _ in source_batches]
+    payload = _default_result(
+        filters,
+        query_mode=query_mode,
+        device_id=resolved_device,
+        source_attempted=attempted,
+        source_used=attempted[0] if attempted else "",
+    )
+
+    for source_name, raw_lines, extra in source_batches:
+        entries = LogParser.parse_logs(raw_lines or [])
+        filtered = LogParser.filter_entries(
+            entries,
+            level=level,
+            tag=tag,
+            tag_search=tag_search,
+            keyword=keyword,
+            domain=domain,
+            time_range=time_range,
+            pid=pid,
+            seconds=seconds,
+            package_name=package_name if package_name else None,
+            related_pids=related_pids,
+            related_keywords=related_keywords,
+            allow_related_without_package=query_mode == "markers" and bool(package_name),
+        )
+        extraction = _extract_items(
+            entries=filtered,
+            query_mode=query_mode,
+            lines=lines,
+            marker_keywords=active_marker_keywords,
+            context_lines=context_lines,
+            package_name=package_name,
+            related_pids=related_pids,
+        )
+        items = extraction["items"]
+        payload.update(extra)
+        payload["source_used"] = source_name
+        payload["items"] = items
+        payload["matched"] = bool(items)
+        if query_mode == "markers":
+            payload["match_count"] = extraction["match_count"]
+            payload["group_count"] = extraction["group_count"]
+        else:
+            payload["match_count"] = len(items)
+            payload["group_count"] = len(items)
+        payload["fallback_triggered"] = source_name == "persist_file" and len(attempted) > 1
+        if items or source_name == attempted[-1]:
+            break
+
+    return payload, time_range
+
+
+async def _apply_optional_persist_actions(
+    *,
+    payload: dict,
+    save_path,
+    resolved_device,
+    filters,
+    query_mode,
+    include_crash,
+    hdc,
+    package_name,
+    time_range,
+):
+    if save_path is not None:
+        payload.update(await asyncio.to_thread(_save_logs, save_path, resolved_device, payload["items"], filters, query_mode))
+
+    if include_crash and hdc and resolved_device and package_name:
+        start_dt = time_range.get("start") if time_range else None
+        end_dt = time_range.get("end") if time_range else None
+        crash_info = _fetch_crash_info(hdc, resolved_device, package_name, start_dt, end_dt)
+        if crash_info:
+            payload["crash_info"] = crash_info
+
+    return payload
+
+
 async def _query_impl(
     device_id=None,
     logs=None,
@@ -466,38 +662,44 @@ async def _query_impl(
     _check_and_cleanup_saved_logs()
 
     try:
-        query_mode = _coerce_mode(mode)
-        lines = _coerce_optional_int("lines", lines) or 100
-        pid = _coerce_optional_int("pid", pid)
-        seconds = _coerce_optional_int("seconds", seconds)
-        realtime_wait_ms = _coerce_optional_int("realtime_wait_ms", realtime_wait_ms) or 0
-        context_lines = _coerce_optional_int("context_lines", context_lines) or 0
-        marker_keywords = _normalize_keywords(marker_keywords)
+        normalized = _normalize_query_params(
+            mode=mode,
+            lines=lines,
+            pid=pid,
+            seconds=seconds,
+            realtime_wait_ms=realtime_wait_ms,
+            context_lines=context_lines,
+            marker_keywords=marker_keywords,
+        )
     except LogQueryError as exc:
         return error_result(exc.code, exc.detail, result=exc.result or {})
 
-    active_marker_keywords = _resolve_marker_keywords(marker_keywords)
+    query_mode = normalized["query_mode"]
+    lines = normalized["lines"]
+    pid = normalized["pid"]
+    seconds = normalized["seconds"]
+    realtime_wait_ms = normalized["realtime_wait_ms"]
+    context_lines = normalized["context_lines"]
+    active_marker_keywords = normalized["active_marker_keywords"]
 
     start_time, end_time = _resolve_time_window(start_time, end_time, seconds, time_expr)
-    filters = _clean_dict(
-        {
-            "mode": query_mode,
-            "level": level,
-            "tag": tag,
-            "tag_search": tag_search,
-            "keyword": keyword,
-            "domain": domain,
-            "pid": pid,
-            "package_name": package_name,
-            "seconds": seconds,
-            "start_time": start_time,
-            "end_time": end_time,
-            "marker_keywords": active_marker_keywords or None,
-        }
+    filters = _build_filters(
+        query_mode=query_mode,
+        level=level,
+        tag=tag,
+        tag_search=tag_search,
+        keyword=keyword,
+        domain=domain,
+        pid=pid,
+        package_name=package_name,
+        seconds=seconds,
+        start_time=start_time,
+        end_time=end_time,
+        marker_keywords=active_marker_keywords,
     )
 
     try:
-        source_batches, resolved_device, hdc = await _collect_lines(
+        source_batches, resolved_device, hdc = await _resolve_source_batches(
             device_id=device_id,
             logs=logs,
             input_file=input_file,
@@ -516,78 +718,49 @@ async def _query_impl(
         )
     except LogQueryError as exc:
         if exc.code == "DEVICE_NOT_FOUND":
-            return _with_device_error_defaults({"success": False, "error": exc.detail, "error_code": exc.code}, filters, query_mode)
+            return _with_device_error_defaults(
+                {"success": False, "error": exc.detail, "error_code": exc.code},
+                filters,
+                query_mode,
+            )
         return error_result(exc.code, exc.detail, result=exc.result or _default_result(filters, query_mode=query_mode))
 
     try:
-        related_pids = _get_related_pids(hdc, resolved_device, package_name, pid) if hdc else ([pid] if pid else [])
-        related_keywords = list(LogParser.DEFAULT_RELATED_KEYWORDS) if query_mode == "markers" else []
-        time_range = _build_time_range(seconds, start_time, end_time)
-
-        attempted = [source_name for source_name, _, _ in source_batches]
-        payload = _default_result(
-            filters,
+        payload, time_range = _process_source_batches(
+            source_batches=source_batches,
+            resolved_device=resolved_device,
+            hdc=hdc,
+            filters=filters,
             query_mode=query_mode,
-            device_id=resolved_device,
-            source_attempted=attempted,
-            source_used=attempted[0] if attempted else "",
+            lines=lines,
+            level=level,
+            tag=tag,
+            tag_search=tag_search,
+            keyword=keyword,
+            domain=domain,
+            pid=pid,
+            package_name=package_name,
+            seconds=seconds,
+            start_time=start_time,
+            end_time=end_time,
+            active_marker_keywords=active_marker_keywords,
+            context_lines=context_lines,
         )
 
-        for source_name, raw_lines, extra in source_batches:
-            entries = LogParser.parse_logs(raw_lines or [])
-            filtered = LogParser.filter_entries(
-                entries,
-                level=level,
-                tag=tag,
-                tag_search=tag_search,
-                keyword=keyword,
-                domain=domain,
-                time_range=time_range,
-                pid=pid,
-                seconds=seconds,
-                package_name=package_name if package_name else None,
-                related_pids=related_pids,
-                related_keywords=related_keywords,
-                allow_related_without_package=query_mode == "markers" and bool(package_name),
-            )
-            extraction = _extract_items(
-                entries=filtered,
+        try:
+            payload = await _apply_optional_persist_actions(
+                payload=payload,
+                save_path=save_path,
+                resolved_device=resolved_device,
+                filters=filters,
                 query_mode=query_mode,
-                lines=lines,
-                marker_keywords=active_marker_keywords,
-                context_lines=context_lines,
+                include_crash=include_crash,
+                hdc=hdc,
                 package_name=package_name,
-                related_pids=related_pids,
+                time_range=time_range,
             )
-            items = extraction["items"]
-            payload.update(extra)
-            payload["source_used"] = source_name
-            payload["items"] = items
-            payload["matched"] = bool(items)
-            if query_mode == "markers":
-                payload["match_count"] = extraction["match_count"]
-                payload["group_count"] = extraction["group_count"]
-            else:
-                payload["match_count"] = len(items)
-                payload["group_count"] = len(items)
-            payload["fallback_triggered"] = source_name == "persist_file" and len(attempted) > 1
-            if items or source_name == attempted[-1]:
-                break
-
-        if save_path is not None:
-            try:
-                payload.update(
-                    await asyncio.to_thread(_save_logs, save_path, resolved_device, payload["items"], filters, query_mode)
-                )
-            except LogQueryError as exc:
-                return error_result(exc.code, exc.detail, result=payload)
-
-        if include_crash and hdc and resolved_device and package_name:
-            start_dt = time_range.get("start") if time_range else None
-            end_dt = time_range.get("end") if time_range else None
-            crash_info = _fetch_crash_info(hdc, resolved_device, package_name, start_dt, end_dt)
-            if crash_info:
-                payload["crash_info"] = crash_info
+        except LogQueryError as exc:
+            return error_result(exc.code, exc.detail, result=payload)
 
         return ok_result(payload)
 

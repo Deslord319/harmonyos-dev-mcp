@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -154,6 +155,10 @@ class HvigorWrapper:
                 return candidate
         return candidates[0]
 
+    @staticmethod
+    def _has_java_executable(candidate: Path, java_names: List[str]) -> bool:
+        return any((candidate / "bin" / java_exe).exists() for java_exe in java_names)
+
     def _find_java_home(self) -> Optional[Path]:
         java_names = ["java", "java.exe"]
         if platform.system() == "Windows":
@@ -164,30 +169,36 @@ class HvigorWrapper:
             if not env_java_home:
                 continue
             candidate = Path(env_java_home).expanduser()
-            for java_exe in java_names:
-                if (candidate / "bin" / java_exe).exists():
-                    return candidate
+            if self._has_java_executable(candidate, java_names):
+                return candidate
 
         java_in_path = shutil.which("java")
         if java_in_path:
             java_path = Path(java_in_path).resolve()
             java_home = java_path.parent.parent
-            for java_exe in java_names:
-                if (java_home / "bin" / java_exe).exists():
-                    return java_home
+            if self._has_java_executable(java_home, java_names):
+                return java_home
+
+        home = Path.home()
+        local_app_data = Path(os.getenv("LOCALAPPDATA", home / "AppData" / "Local"))
+        program_files = Path(os.getenv("ProgramFiles", r"C:\Program Files"))
+        program_files_x86 = Path(os.getenv("ProgramFiles(x86)", r"C:\Program Files (x86)"))
 
         candidates = [
             self.deveco_path / "jbr",
             self.deveco_path / "jbr" / "Contents" / "Home",
             self.deveco_path / "Contents" / "jbr",
             self.deveco_path / "Contents" / "jbr" / "Contents" / "Home",
-            Path.home() / "AppData" / "Local" / "Programs" / "DevEco Studio" / "jbr",
-            Path.home() / "AppData" / "Local" / "Programs" / "Huawei" / "DevEco Studio" / "jbr",
+            local_app_data / "Programs" / "DevEco Studio" / "jbr",
+            local_app_data / "Programs" / "Huawei" / "DevEco Studio" / "jbr",
+            program_files / "DevEco Studio" / "jbr",
+            program_files / "Huawei" / "DevEco Studio" / "jbr",
+            program_files_x86 / "DevEco Studio" / "jbr",
+            program_files_x86 / "Huawei" / "DevEco Studio" / "jbr",
         ]
         for candidate in candidates:
-            for java_exe in java_names:
-                if (candidate / "bin" / java_exe).exists():
-                    return candidate
+            if self._has_java_executable(candidate, java_names):
+                return candidate
         return None
 
     def _build_command_env(self, include_hvigor_home: bool = False) -> Dict[str, str]:
@@ -271,23 +282,35 @@ class HvigorWrapper:
         except Exception as exc:
             logger.warning(f"failed to remove hvigor_user_home {self.hvigor_user_home}: {exc}")
 
-    def clean(self, product: str = "default") -> Dict[str, Any]:
+    def clean(self, product: str = "default", module_name: Optional[str] = None) -> Dict[str, Any]:
         logger.info(f"clean build outputs for product={product}")
         args = [
             "--no-daemon",
-            "--sync",
+            "clean",
             "-p",
             f"product={product}",
             "--analyze=normal",
             "--parallel",
-            "--incremental",
         ]
+        if module_name:
+            args.extend(["--mode", "module", "-p", f"module={module_name}"])
         result = self._execute_command(args)
         if result["success"]:
             logger.info("clean succeeded")
         else:
             logger.error(f"clean failed: {result['stderr']}")
         return result
+
+    @staticmethod
+    def _is_fresh_output(path: Optional[Path], not_before: Optional[float]) -> bool:
+        if path is None or not path.exists():
+            return False
+        if not_before is None:
+            return True
+        try:
+            return path.stat().st_mtime >= (not_before - 1.0)
+        except OSError:
+            return False
 
     def _build_profile_paths(self) -> List[Path]:
         profiles: List[Path] = []
@@ -407,7 +430,13 @@ class HvigorWrapper:
         )
         return None
 
-    def _extract_output_path_from_logs(self, stdout: str, stderr: str, output_type: str) -> Optional[Path]:
+    def _extract_output_path_from_logs(
+        self,
+        stdout: str,
+        stderr: str,
+        output_type: str,
+        not_before: Optional[float] = None,
+    ) -> Optional[Path]:
         extension = f".{output_type}"
         token_pattern = re.compile(rf"([A-Za-z]:[\\/][^\s'\"<>]+?{re.escape(extension)}|[^\s'\"<>]+?{re.escape(extension)})")
 
@@ -415,7 +444,7 @@ class HvigorWrapper:
             for raw_match in token_pattern.findall(text or ""):
                 candidate_text = raw_match.strip("\"'")
                 candidate = Path(candidate_text)
-                if candidate.is_absolute() and candidate.exists():
+                if candidate.is_absolute() and self._is_fresh_output(candidate, not_before):
                     return candidate
 
                 relative_candidates = [
@@ -423,11 +452,17 @@ class HvigorWrapper:
                     (self.project_path / Path(candidate_text).name).resolve(),
                 ]
                 for relative_candidate in relative_candidates:
-                    if relative_candidate.exists():
+                    if self._is_fresh_output(relative_candidate, not_before):
                         return relative_candidate
         return None
 
-    def _find_output_from_metadata(self, output_type: str, product: str, module_name: Optional[str]) -> Optional[Path]:
+    def _find_output_from_metadata(
+        self,
+        output_type: str,
+        product: str,
+        module_name: Optional[str],
+        not_before: Optional[float] = None,
+    ) -> Optional[Path]:
         if output_type != "hap":
             return None
 
@@ -451,7 +486,7 @@ class HvigorWrapper:
             if not hap_name:
                 continue
             candidate = module_root / "build" / product / "outputs" / product / hap_name
-            if candidate.exists():
+            if self._is_fresh_output(candidate, not_before):
                 return candidate
         return None
 
@@ -476,9 +511,15 @@ class HvigorWrapper:
                 "output_path": None,
             }
 
-        signed_output = script_path.parent / "signApp.hap"
-        if signed_output.exists():
-            signed_output.unlink(missing_ok=True)
+        expected_output = script_path.parent / "signApp.hap"
+        if expected_output.exists():
+            expected_output.unlink(missing_ok=True)
+
+        existing_outputs = {
+            path.resolve()
+            for path in script_path.parent.glob("*.hap")
+            if path.is_file()
+        }
 
         runner_path = script_path.parent / f".mcp-sign-{build_mode}.bat"
         try:
@@ -515,14 +556,53 @@ class HvigorWrapper:
         finally:
             runner_path.unlink(missing_ok=True)
 
-        success = result.returncode == 0 and signed_output.exists()
+        signed_output = self._extract_output_path_from_logs(
+            result.stdout,
+            result.stderr,
+            "hap",
+        )
+        if signed_output is None:
+            signed_output = self._resolve_sign_fallback_output(script_path.parent, existing_outputs, expected_output)
+        success = result.returncode == 0 and signed_output is not None
         return {
             "success": success,
             "error_code": None if success else "SIGN_FALLBACK_FAILED",
             "stdout": result.stdout.replace("Press any key to continue . . .", "").strip(),
             "stderr": result.stderr.replace("Press any key to continue . . .", "").strip(),
-            "output_path": str(signed_output) if success else None,
+            "output_path": str(signed_output) if signed_output else None,
+            "artifact_source": "sign_fallback" if success else None,
         }
+
+    @staticmethod
+    def _resolve_sign_fallback_output(
+        output_dir: Path,
+        existing_outputs: set[Path],
+        expected_output: Path,
+    ) -> Optional[Path]:
+        if expected_output.exists():
+            return expected_output
+
+        candidates = [
+            path.resolve()
+            for path in output_dir.glob("*.hap")
+            if path.is_file() and path.resolve() not in existing_outputs
+        ]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        return candidates[0]
+
+    @staticmethod
+    def _resolve_sign_status(output_path: Optional[Path]) -> str:
+        if output_path is None:
+            return "unknown"
+        lowered_name = output_path.name.lower()
+        if lowered_name.endswith(".hap"):
+            if "unsigned" in lowered_name:
+                return "unsigned"
+            if "signed" in lowered_name:
+                return "signed"
+        return "unknown"
 
     def _score_output_path(
         self,
@@ -561,6 +641,7 @@ class HvigorWrapper:
         build_mode: str = "debug",
         product: str = "default",
         module_name: Optional[str] = None,
+        is_clean: bool = False,
     ) -> Dict[str, Any]:
         if target not in {"hap", "har", "app"}:
             return {
@@ -583,6 +664,18 @@ class HvigorWrapper:
         if validation_error is not None:
             return validation_error
 
+        build_started_at = time.time()
+        if is_clean:
+            clean_result = self.clean(product=product, module_name=module_name if target in {"hap", "har"} else None)
+            if not clean_result["success"]:
+                return {
+                    "success": False,
+                    "error_code": clean_result.get("error_code", "CLEAN_FAILED"),
+                    "stdout": clean_result.get("stdout", ""),
+                    "stderr": clean_result.get("stderr", "clean failed"),
+                    "output_path": None,
+                }
+
         logger.info(f"build {target.upper()} for product={product}")
         args: List[str] = ["--no-daemon"]
         if target in {"hap", "har"}:
@@ -600,15 +693,57 @@ class HvigorWrapper:
         )
         result = self._execute_command(args)
         if result["success"]:
-            output_path = self._find_output_from_metadata(target, product, module_name)
+            logged_output = None
+            artifact_source = ""
+            sign_status = "unknown"
+            output_path = self._find_output_from_metadata(target, product, module_name, not_before=build_started_at)
+            if output_path is not None:
+                artifact_source = "metadata"
+                sign_status = self._resolve_sign_status(output_path)
             if output_path is None:
-                output_path = self._extract_output_path_from_logs(
+                logged_output = self._extract_output_path_from_logs(
                     result.get("stdout", ""),
                     result.get("stderr", ""),
                     target,
                 )
+                output_path = self._extract_output_path_from_logs(
+                    result.get("stdout", ""),
+                    result.get("stderr", ""),
+                    target,
+                    not_before=build_started_at,
+                )
+                if output_path is not None:
+                    artifact_source = "logs"
+                    sign_status = self._resolve_sign_status(output_path)
             if output_path is None:
-                output_path = self._find_build_output(target, build_mode, product, module_name)
+                output_path = self._find_build_output(
+                    target,
+                    build_mode,
+                    product,
+                    module_name,
+                    not_before=build_started_at,
+                )
+                if output_path is not None:
+                    artifact_source = "scan"
+                    sign_status = self._resolve_sign_status(output_path)
+            if output_path is None and logged_output is not None and not self._is_fresh_output(logged_output, build_started_at):
+                return {
+                    "success": False,
+                    "error_code": "STALE_BUILD_ARTIFACT",
+                    "stdout": result.get("stdout", ""),
+                    "stderr": (
+                        "build output path resolved to an existing artifact, but it was not generated by the current build"
+                    ),
+                    "output_path": None,
+                }
+            if output_path is None:
+                return {
+                    "success": False,
+                    "error_code": "BUILD_OUTPUT_NOT_FOUND",
+                    "stdout": result.get("stdout", ""),
+                    "stderr": "build succeeded but no fresh output artifact could be resolved for the current run",
+                    "output_path": None,
+                }
             if (
                 target == "hap"
                 and output_path is not None
@@ -619,6 +754,8 @@ class HvigorWrapper:
                     output_path = Path(fallback_result["output_path"])
                     result["stdout"] = f"{result.get('stdout', '')}\n{fallback_result.get('stdout', '')}".strip()
                     result["stderr"] = f"{result.get('stderr', '')}\n{fallback_result.get('stderr', '')}".strip()
+                    artifact_source = fallback_result.get("artifact_source", "sign_fallback")
+                    sign_status = "signed"
                 elif fallback_result.get("error_code") != "SIGN_FALLBACK_SCRIPT_MISSING":
                     return {
                         "success": False,
@@ -630,6 +767,8 @@ class HvigorWrapper:
                         "output_path": None,
                     }
             result["output_path"] = str(output_path) if output_path else None
+            result["artifact_source"] = artifact_source or None
+            result["sign_status"] = sign_status
             logger.info(f"{target.upper()} build succeeded: {result['output_path']}")
         else:
             result["output_path"] = None
@@ -642,6 +781,7 @@ class HvigorWrapper:
         build_mode: str = "debug",
         product: str = "default",
         module_name: Optional[str] = None,
+        not_before: Optional[float] = None,
     ) -> Optional[Path]:
         """Return the newest build artifact for the requested output type."""
         output_dirs = [
@@ -657,6 +797,9 @@ class HvigorWrapper:
             if not output_dir.exists():
                 continue
             matches.extend(output_dir.rglob(f"*{extension}"))
+
+        if not_before is not None:
+            matches = [path for path in matches if self._is_fresh_output(path, not_before)]
 
         if not matches:
             return None

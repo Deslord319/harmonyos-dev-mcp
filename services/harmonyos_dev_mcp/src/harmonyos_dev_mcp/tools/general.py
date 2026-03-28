@@ -54,7 +54,11 @@ async def query_package(
         )
 
     if bundle_name and info_type == "list":
-        info_type = "abilities"
+        return error_result(
+            "PARAM_CONFLICT",
+            'info_type="list" cannot be used together with bundle_name; use info_type="abilities", "main_ability", or "permissions" instead',
+            result={"device_id": device_id, "info_type": info_type, "requested_info_type": requested_info_type},
+        )
 
     if info_type == "list":
         raw = await asyncio.to_thread(hdc.list_packages, device_id, keyword)

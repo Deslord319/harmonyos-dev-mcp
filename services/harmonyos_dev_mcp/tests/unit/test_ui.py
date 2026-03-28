@@ -332,6 +332,17 @@ class TestPressKey:
         assert sc["result"]["key"] == "VolumeDown"
         mock_ui_operations.press_key.assert_called_once_with("device_001", "VolumeDown")
 
+    async def test_press_key_rejects_unsupported_key(
+        self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result
+    ):
+        from harmonyos_dev_mcp.tools import ui
+
+        sc = unwrap_result(await ui.press_key(key="Ctrl"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "INVALID_KEY"
+        mock_ui_operations.press_key.assert_not_called()
+
 
 class TestFindElement:
     async def test_find_by_text(self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result):

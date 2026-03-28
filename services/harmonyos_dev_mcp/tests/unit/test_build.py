@@ -24,7 +24,13 @@ class TestBuildApp:
         assert sc["ok"] is True
         assert sc["tool"] == "build_app"
         assert sc["result"]["output_path"] == "/path/to/output.hap"
+        assert sc["result"]["artifact_source"] is None
+        assert sc["result"]["sign_status"] == "unknown"
         assert sc["result"]["target"] == "hap"
+        assert sc["result"]["build_mode"] == "debug"
+        assert sc["result"]["product"] == "default"
+        assert sc["result"]["module_name"] is None
+        assert sc["result"]["is_clean"] is False
         assert "duration" in sc["result"]
         assert sc["result"]["errors"] == []
         assert sc["result"]["error_count"] == 0
@@ -33,6 +39,7 @@ class TestBuildApp:
             build_mode="debug",
             product="default",
             module_name=None,
+            is_clean=False,
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
@@ -44,6 +51,7 @@ class TestBuildApp:
         mock_hvigor.build.return_value = {
             "success": True,
             "output_path": "/path/to/output.hap",
+            "artifact_source": "metadata",
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
@@ -55,6 +63,7 @@ class TestBuildApp:
             build_mode="debug",
             product="qa",
             module_name=None,
+            is_clean=False,
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
@@ -102,17 +111,47 @@ class TestBuildApp:
         mock_hvigor.build.return_value = {
             "success": True,
             "output_path": "/path/to/output.hap",
+            "artifact_source": "metadata",
         }
         mock_hvigor_cls.return_value = mock_hvigor
 
         sc = unwrap_result(await build.build_app(str(Path.cwd()), build_mode="release"))
 
         assert sc["ok"] is True
+        assert sc["result"]["build_mode"] == "release"
         mock_hvigor.build.assert_called_once_with(
             target="hap",
             build_mode="release",
             product="default",
             module_name=None,
+            is_clean=False,
+        )
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_echoes_is_clean_when_enabled(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build.return_value = {
+            "success": True,
+            "output_path": "/path/to/output.hap",
+            "artifact_source": "metadata",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        sc = unwrap_result(await build.build_app(str(Path.cwd()), is_clean=True))
+
+        assert sc["ok"] is True
+        assert sc["result"]["artifact_source"] == "metadata"
+        assert sc["result"]["sign_status"] == "unknown"
+        assert sc["result"]["is_clean"] is True
+        mock_hvigor.build.assert_called_once_with(
+            target="hap",
+            build_mode="debug",
+            product="default",
+            module_name=None,
+            is_clean=True,
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
