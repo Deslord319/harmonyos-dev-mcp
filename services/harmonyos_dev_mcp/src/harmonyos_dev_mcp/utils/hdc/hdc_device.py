@@ -3,6 +3,7 @@ hdc device helpers.
 
 Provides device listing, device info, install and uninstall operations.
 """
+
 import re
 from typing import Any, Dict, List
 
@@ -88,14 +89,23 @@ class HdcDevice:
 
     def install_app(self, device_id: str, hap_path: str) -> Dict[str, Any]:
         """Install a hap on the target device."""
-        logger.info(f"Installing app on {device_id}: {hap_path}")
+        from pathlib import Path
+
+        hap_file = Path(hap_path).resolve()
+        hap_dir = str(hap_file.parent)
+        hap_name = hap_file.name
+
+        logger.info(f"Installing app on {device_id}: {hap_file} (cwd={hap_dir})")
         result = self._execute_command(
-            ["-t", device_id, "install", hap_path],
+            ["-t", device_id, "install", hap_name],
             timeout=Config.INSTALL_TIMEOUT,
+            cwd=hap_dir,
         )
 
         combined_output = "\n".join(
-            part for part in ((result.get("stdout") or "").strip(), (result.get("stderr") or "").strip()) if part
+            part
+            for part in ((result.get("stdout") or "").strip(), (result.get("stderr") or "").strip())
+            if part
         )
         command_success = bool(result.get("success"))
         success = command_success and not self._looks_like_install_failure(combined_output)
@@ -124,7 +134,9 @@ class HdcDevice:
         result = self._execute_command(["-t", device_id, "uninstall", bundle_name])
 
         combined_output = "\n".join(
-            part for part in ((result.get("stdout") or "").strip(), (result.get("stderr") or "").strip()) if part
+            part
+            for part in ((result.get("stdout") or "").strip(), (result.get("stderr") or "").strip())
+            if part
         )
         command_success = bool(result.get("success"))
         success = command_success and not self._looks_like_uninstall_failure(combined_output)

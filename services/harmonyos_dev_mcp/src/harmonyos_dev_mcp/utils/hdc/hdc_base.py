@@ -1,238 +1,286 @@
 """
-hdc 命令行工具基础类
+Base utilities for the HarmonyOS `hdc` command-line tool.
 
-提供核心命令执行和 shell 命令校验功能。
+Provides core command execution helpers and shell command validation.
 """
+
 import asyncio
 import subprocess
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
 
-from harmonyos_dev_mcp.config import Config
 from common.utils.retry import is_transient_error, retry
+from harmonyos_dev_mcp.config import Config
 
 
 class HdcBase:
-    """HarmonyOS Device Connector (hdc) 工具基础类"""
+    """Base wrapper for HarmonyOS Device Connector (`hdc`)."""
 
-    # Shell 命令白名单：仅允许执行以下命令
+    # Shell command allowlist.
     SHELL_COMMAND_WHITELIST = [
-        'ls', 'cat', 'pidof', 'ps', 'cp', 'rm', 'mkdir',
-        'hilog', 'bm', 'aa', 'param', 'dumpsys', 'hidumper',
-        'uitest', 'snapshot_display', 'power-shell',
-        'getprop', 'settings', 'wm', 'input',
-        'chmod', 'chown', 'stat', 'df', 'du',
-        'echo', 'grep', 'find', 'head', 'tail', 'wc',
-        'date', 'id', 'whoami', 'uname',
+        "ls",
+        "cat",
+        "pidof",
+        "ps",
+        "cp",
+        "rm",
+        "mkdir",
+        "hilog",
+        "bm",
+        "aa",
+        "param",
+        "dumpsys",
+        "hidumper",
+        "uitest",
+        "snapshot_display",
+        "power-shell",
+        "getprop",
+        "settings",
+        "wm",
+        "input",
+        "chmod",
+        "chown",
+        "stat",
+        "df",
+        "du",
+        "echo",
+        "grep",
+        "find",
+        "head",
+        "tail",
+        "wc",
+        "date",
+        "id",
+        "whoami",
+        "uname",
     ]
 
-    # 危险字符模式：禁止命令中包含以下字符序列
-    SHELL_DANGEROUS_PATTERNS = ['&&', '||', '`', '$(', ';', '\\n', '\\r', '$((', '|}']
+    # Dangerous shell fragments that are not allowed.
+    SHELL_DANGEROUS_PATTERNS = ["&&", "||", "`", "$(", ";", "\\n", "\\r", "$((", "|}"]
 
-    # 禁止的危险命令（即使在白名单中也不允许）
+    # Explicitly forbidden commands, even if they would otherwise look harmless.
     SHELL_COMMAND_BLACKLIST = [
-        'base64', 'tar', 'zip', 'unzip', 'gzip', 'gunzip', 'bzip2', 'xz',
-        'wget', 'curl', 'nc', 'netcat', 'ncat', 'socat',
-        'python', 'python3', 'perl', 'ruby', 'php', 'node',
-        'bash', 'sh', 'dash', 'ash', 'zsh',
-        'chsh', 'passwd', 'su', 'sudo', 'login',
-        'dd', 'mkfs', 'fdisk', 'parted',
-        'reboot', 'shutdown', 'poweroff', 'halt',
-        'iptables', 'ufw', 'firewall-cmd',
-        'mount', 'umount', 'losetup',
+        "base64",
+        "tar",
+        "zip",
+        "unzip",
+        "gzip",
+        "gunzip",
+        "bzip2",
+        "xz",
+        "wget",
+        "curl",
+        "nc",
+        "netcat",
+        "ncat",
+        "socat",
+        "python",
+        "python3",
+        "perl",
+        "ruby",
+        "php",
+        "node",
+        "bash",
+        "sh",
+        "dash",
+        "ash",
+        "zsh",
+        "chsh",
+        "passwd",
+        "su",
+        "sudo",
+        "login",
+        "dd",
+        "mkfs",
+        "fdisk",
+        "parted",
+        "reboot",
+        "shutdown",
+        "poweroff",
+        "halt",
+        "iptables",
+        "ufw",
+        "firewall-cmd",
+        "mount",
+        "umount",
+        "losetup",
     ]
 
-    # 管道操作仅允许以下命令
-    PIPE_ALLOWED_COMMANDS = ['ls', 'ps', 'cat', 'grep', 'hilog', 'dumpsys']
+    # Only these commands may appear in pipe chains.
+    PIPE_ALLOWED_COMMANDS = ["ls", "ps", "cat", "grep", "hilog", "dumpsys"]
 
     def __init__(self, hdc_path: Optional[str] = None):
         """
-        初始化hdc包装器
-        
+        Initialize the hdc wrapper.
+
         Args:
-            hdc_path: hdc工具路径,如果为None则使用配置中的路径
+            hdc_path: Path to the `hdc` executable. If omitted, use config.
         """
         Config.ensure_init()
         self.hdc_path = hdc_path or Config.HDC_PATH
         if not self.hdc_path:
-            raise ValueError("hdc工具路径未配置")
-        
-        logger.info(f"初始化HdcWrapper, hdc路径: {self.hdc_path}")
+            raise ValueError("hdc tool path is not configured")
+
+        logger.info(f"Initialized HdcWrapper, hdc path: {self.hdc_path}")
 
     @retry(should_retry=is_transient_error)
-    def _execute_command(self, args: List[str], timeout: int = None) -> Dict[str, Any]:
+    def _execute_command(self, args: List[str], timeout: int = None, cwd: str = None) -> Dict[str, Any]:
         """
-        执行hdc命令
-        
+        Execute an `hdc` command synchronously.
+
         Args:
-            args: 命令参数列表
-            timeout: 超时时间(秒)
-        
+            args: Command argument list without the `hdc` executable itself.
+            timeout: Timeout in seconds.
+            cwd: Optional working directory.
+
         Returns:
-            包含returncode, stdout, stderr的字典
+            A result dict with `returncode`, `stdout`, `stderr`, and `success`.
         """
         cmd = [self.hdc_path] + args
         timeout = timeout or Config.COMMAND_TIMEOUT
-        
-        logger.debug(f"执行命令: {' '.join(cmd)}")
-        
+
+        logger.debug(f"Executing command: {' '.join(cmd)} (cwd={cwd or 'default'})")
+
         try:
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                encoding='utf-8',
-                errors='ignore'
+                encoding="utf-8",
+                errors="ignore",
+                cwd=cwd,
             )
-            
+
             return {
-                'returncode': result.returncode,
-                'stdout': result.stdout.strip(),
-                'stderr': result.stderr.strip(),
-                'success': result.returncode == 0
+                "returncode": result.returncode,
+                "stdout": result.stdout.strip(),
+                "stderr": result.stderr.strip(),
+                "success": result.returncode == 0,
             }
         except subprocess.TimeoutExpired:
-            logger.error(f"命令执行超时: {' '.join(cmd)}")
+            logger.error(f"Command timed out: {' '.join(cmd)}")
             return {
-                'returncode': -1,
-                'stdout': '',
-                'stderr': f'命令执行超时({timeout}秒)',
-                'success': False
+                "returncode": -1,
+                "stdout": "",
+                "stderr": f"command timed out ({timeout}s)",
+                "success": False,
             }
-        except Exception as e:
-            logger.error(f"命令执行失败: {e}")
-            return {
-                'returncode': -1,
-                'stdout': '',
-                'stderr': str(e),
-                'success': False
-            }
+        except Exception as exc:
+            logger.error(f"Command execution failed: {exc}")
+            return {"returncode": -1, "stdout": "", "stderr": str(exc), "success": False}
 
-    async def _execute_command_async(self, args: List[str], timeout: int = None) -> Dict[str, Any]:
+    async def _execute_command_async(self, args: List[str], timeout: int = None, cwd: str = None) -> Dict[str, Any]:
         """
-        异步执行hdc命令（使用 asyncio.create_subprocess_exec）
-        
-        与 _execute_command 语义一致，但不阻塞事件循环。
-        适用于在 async 上下文中调用，例如 FastMCP 异步工具函数。
-        
+        Execute an `hdc` command asynchronously.
+
         Args:
-            args: 命令参数列表
-            timeout: 超时时间(秒)
-        
+            args: Command argument list without the `hdc` executable itself.
+            timeout: Timeout in seconds.
+            cwd: Optional working directory.
+
         Returns:
-            包含returncode, stdout, stderr的字典
+            A result dict with `returncode`, `stdout`, `stderr`, and `success`.
         """
         cmd = [self.hdc_path] + args
         timeout = timeout or Config.COMMAND_TIMEOUT
-        
-        logger.debug(f"异步执行命令: {' '.join(cmd)}")
-        
+
+        logger.debug(f"Executing command asynchronously: {' '.join(cmd)} (cwd={cwd or 'default'})")
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
             )
-            
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
-            )
-            
+
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=timeout)
+
             return {
-                'returncode': process.returncode,
-                'stdout': stdout_bytes.decode('utf-8', errors='ignore').strip(),
-                'stderr': stderr_bytes.decode('utf-8', errors='ignore').strip(),
-                'success': process.returncode == 0
+                "returncode": process.returncode,
+                "stdout": stdout_bytes.decode("utf-8", errors="ignore").strip(),
+                "stderr": stderr_bytes.decode("utf-8", errors="ignore").strip(),
+                "success": process.returncode == 0,
             }
         except asyncio.TimeoutError:
-            logger.error(f"异步命令执行超时: {' '.join(cmd)}")
+            logger.error(f"Async command timed out: {' '.join(cmd)}")
             try:
                 process.kill()
                 await process.wait()
             except Exception as kill_err:
-                logger.warning(f"终止超时进程失败: {kill_err}")
+                logger.warning(f"Failed to terminate timed out process: {kill_err}")
             return {
-                'returncode': -1,
-                'stdout': '',
-                'stderr': f'命令执行超时({timeout}秒)',
-                'success': False
+                "returncode": -1,
+                "stdout": "",
+                "stderr": f"command timed out ({timeout}s)",
+                "success": False,
             }
-        except Exception as e:
-            logger.error(f"异步命令执行失败: {e}")
-            return {
-                'returncode': -1,
-                'stdout': '',
-                'stderr': str(e),
-                'success': False
-            }
+        except Exception as exc:
+            logger.error(f"Async command execution failed: {exc}")
+            return {"returncode": -1, "stdout": "", "stderr": str(exc), "success": False}
 
     def _validate_shell_command(self, command: str) -> None:
         """
-        校验 shell 命令安全性
-        
-        检查：
-        1. 命令是否在白名单中
-        2. 是否包含危险字符（&&, ||, ``, $() 等）
-        3. 管道操作是否合法
-        
+        Validate shell command safety.
+
+        Checks:
+        1. Command is not empty.
+        2. Command does not contain dangerous shell fragments.
+        3. Pipe chains only use allowed commands.
+        4. Top-level command is allowed and not blacklisted.
+
         Args:
-            command: 待校验的 shell 命令
-            
+            command: Shell command to validate.
+
         Raises:
-            ValueError: 命令不合法时
+            ValueError: If the command is not allowed.
         """
         stripped = command.strip()
         if not stripped:
-            raise ValueError("Shell 命令不能为空")
-        
-        # 检查危险模式
+            raise ValueError("shell command cannot be empty")
+
         for pattern in self.SHELL_DANGEROUS_PATTERNS:
             if pattern in stripped:
-                raise ValueError(
-                    f"Shell 命令包含危险字符 '{pattern}': {command!r}"
-                )
-        
-        # 检查管道
-        if '|' in stripped:
-            parts = [p.strip() for p in stripped.split('|')]
+                raise ValueError(f"shell command contains dangerous fragment '{pattern}': {command!r}")
+
+        if "|" in stripped:
+            parts = [part.strip() for part in stripped.split("|")]
             for part in parts:
-                cmd_name = part.split()[0] if part.split() else ''
+                cmd_name = part.split()[0] if part.split() else ""
                 if cmd_name not in self.PIPE_ALLOWED_COMMANDS:
                     raise ValueError(
-                        f"管道命令 '{cmd_name}' 不在允许列表中: {self.PIPE_ALLOWED_COMMANDS}"
+                        f"pipe command '{cmd_name}' is not allowed: {self.PIPE_ALLOWED_COMMANDS}"
                     )
             return
-        
-        # 提取主命令（处理 2>/dev/null 等重定向）
+
         cmd_name = stripped.split()[0]
 
-        # 检查黑名单
-        if hasattr(self, 'SHELL_COMMAND_BLACKLIST') and cmd_name in self.SHELL_COMMAND_BLACKLIST:
-            raise ValueError(f"Shell 命令 '{cmd_name}' 被禁止执行")
+        if cmd_name in self.SHELL_COMMAND_BLACKLIST:
+            raise ValueError(f"shell command '{cmd_name}' is forbidden")
 
         if cmd_name not in self.SHELL_COMMAND_WHITELIST:
             raise ValueError(
-                f"Shell 命令 '{cmd_name}' 不在白名单中。"
-                f"允许的命令: {self.SHELL_COMMAND_WHITELIST}"
+                f"shell command '{cmd_name}' is not in the allowlist: {self.SHELL_COMMAND_WHITELIST}"
             )
 
     def execute_shell(self, device_id: str, command: str, timeout: int = None) -> Dict[str, Any]:
         """
-        在设备上执行Shell命令（带白名单校验）
+        Execute a validated shell command on a device.
 
         Args:
-            device_id: 设备ID
-            command: Shell命令
-            timeout: 超时时间(秒)，默认使用 COMMAND_TIMEOUT
+            device_id: Target device ID.
+            command: Shell command to execute.
+            timeout: Optional timeout in seconds.
 
         Returns:
-            命令执行结果
+            Command execution result.
         """
-        # 安全校验
         self._validate_shell_command(command)
 
-        logger.debug(f"在设备 {device_id} 上执行Shell命令: {command}" + (f", 超时: {timeout}s" if timeout else ""))
-        result = self._execute_command(['-t', device_id, 'shell', command], timeout=timeout)
-        return result
+        logger.debug(
+            f"Executing shell command on device {device_id}: {command}"
+            + (f", timeout={timeout}s" if timeout else "")
+        )
+        return self._execute_command(["-t", device_id, "shell", command], timeout=timeout)

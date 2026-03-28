@@ -108,11 +108,6 @@ class HvigorWrapper:
             logger.info(f"auto-detected DevEco Studio: {path}")
             return path
 
-        for path in Config._get_deveco_search_paths():
-            if Config._is_valid_deveco_path(path):
-                logger.info(f"auto-detected DevEco Studio: {path}")
-                return path
-
         return None
 
     def _find_node_executable(self) -> Path:
@@ -195,6 +190,16 @@ class HvigorWrapper:
                     return candidate
         return None
 
+    def _build_command_env(self, include_hvigor_home: bool = False) -> Dict[str, str]:
+        env = os.environ.copy()
+        env["DEVECO_SDK_HOME"] = str(self.sdk_root)
+        if include_hvigor_home:
+            env["HVIGOR_USER_HOME"] = str(self.hvigor_user_home)
+        if self.java_home:
+            env["JAVA_HOME"] = str(self.java_home)
+            env["PATH"] = f"{self.java_home / 'bin'}{os.pathsep}{env.get('PATH', '')}"
+        return env
+
     def _execute_command(self, args: List[str], timeout: int = None) -> Dict[str, Any]:
         """Execute hvigor with the resolved toolchain and environment."""
         effective_args = list(args)
@@ -210,12 +215,7 @@ class HvigorWrapper:
 
         logger.debug(f"running hvigor command: {' '.join(cmd)}")
 
-        env = os.environ.copy()
-        env["DEVECO_SDK_HOME"] = str(self.sdk_root)
-        env["HVIGOR_USER_HOME"] = str(self.hvigor_user_home)
-        if self.java_home:
-            env["JAVA_HOME"] = str(self.java_home)
-            env["PATH"] = f"{self.java_home / 'bin'}{os.pathsep}{env.get('PATH', '')}"
+        env = self._build_command_env(include_hvigor_home=True)
 
         self.hvigor_user_home.mkdir(parents=True, exist_ok=True)
 
@@ -493,6 +493,7 @@ class HvigorWrapper:
                 text=True,
                 stdin=subprocess.DEVNULL,
                 timeout=Config.BUILD_TIMEOUT,
+                env=self._build_command_env(),
                 close_fds=True,
             )
         except subprocess.TimeoutExpired:
