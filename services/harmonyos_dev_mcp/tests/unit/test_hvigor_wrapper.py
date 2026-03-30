@@ -956,6 +956,9 @@ class TestHvigorWrapper:
 
         assert result["success"] is False
         assert result["error_code"] == "BUILD_OUTPUT_NOT_FOUND"
+        assert "could not locate a fresh artifact" in result["stderr"]
+        assert "is_clean=true" in result["stderr"]
+        assert "hapsigner directory" in result["stderr"]
 
     def test_init_raises_when_sdk_root_missing(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
