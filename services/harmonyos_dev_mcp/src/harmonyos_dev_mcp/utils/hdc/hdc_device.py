@@ -96,11 +96,20 @@ class HdcDevice:
         hap_name = hap_file.name
 
         logger.info(f"Installing app on {device_id}: {hap_file} (cwd={hap_dir})")
-        result = self._execute_command(
-            ["-t", device_id, "install", hap_name],
-            timeout=Config.INSTALL_TIMEOUT,
-            cwd=hap_dir,
-        )
+        command_args = ["-t", device_id, "install", hap_name]
+        try:
+            result = self._execute_command(
+                command_args,
+                timeout=Config.INSTALL_TIMEOUT,
+                cwd=hap_dir,
+            )
+        except TypeError as exc:
+            # Some tests and legacy subclasses still override _execute_command
+            # without the newer cwd parameter. Fall back to the old signature.
+            if "cwd" not in str(exc):
+                raise
+            logger.debug("Falling back to _execute_command without cwd support")
+            result = self._execute_command(command_args, timeout=Config.INSTALL_TIMEOUT)
 
         combined_output = "\n".join(
             part
