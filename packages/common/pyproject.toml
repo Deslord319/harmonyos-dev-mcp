@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "harmonyos-mcp-common"
-version = "0.7.4"
+version = "0.7.5"
 description = "HarmonyOS MCP 通用组件库 - 提供 MCP 服务器基础架构、工具注册、容器管理和通用工具类"
 requires-python = ">=3.12"
 dependencies = ["loguru>=0.7.0", "fastmcp>=0.1.0"]
