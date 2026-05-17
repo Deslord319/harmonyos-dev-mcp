@@ -280,7 +280,12 @@ class Config(ConfigBase):
         if not cls.HDC_PATH and cls.HARMONYOS_SDK_PATH:
             hdc_name = "hdc.exe" if system == "Windows" else "hdc"
             sdk = Path(cls.HARMONYOS_SDK_PATH)
-            for subdir in ["toolchains", "openharmony/toolchains"]:
+            for subdir in [
+                "toolchains",
+                "openharmony/toolchains",
+                "default/toolchains",
+                "default/openharmony/toolchains",
+            ]:
                 hdc_path = sdk / subdir / hdc_name
                 if hdc_path.exists():
                     cls.HDC_PATH = str(hdc_path)
@@ -317,7 +322,13 @@ class Config(ConfigBase):
         if not cls.HILOGTOOL_PATH and cls.HARMONYOS_SDK_PATH:
             hilogtool_name = "hilogtool.exe" if system == "Windows" else "hilogtool"
             sdk = Path(cls.HARMONYOS_SDK_PATH)
-            for subdir in ["hms/toolchains", "toolchains"]:
+            for subdir in [
+                "hms/toolchains",
+                "toolchains",
+                "default/hms/toolchains",
+                "default/toolchains",
+                "default/openharmony/toolchains",
+            ]:
                 candidate = sdk / subdir / hilogtool_name
                 if candidate.exists():
                     cls.HILOGTOOL_PATH = str(candidate)

@@ -273,6 +273,55 @@ class TestConfigInit:
             for key, value in original_values.items():
                 setattr(Config, key, value)
 
+    def test_init_detects_default_sdk_toolchains(self, monkeypatch):
+        original_values = {
+            "DEVECO_STUDIO_PATH": Config.DEVECO_STUDIO_PATH,
+            "HARMONYOS_SDK_PATH": Config.HARMONYOS_SDK_PATH,
+            "HDC_PATH": Config.HDC_PATH,
+            "HVIGOR_PATH": Config.HVIGOR_PATH,
+            "HILOGTOOL_PATH": Config.HILOGTOOL_PATH,
+            "NODE_PATH": Config.NODE_PATH,
+        }
+        monkeypatch.setattr("harmonyos_dev_mcp.config.platform.system", lambda: "Windows")
+        monkeypatch.delenv("DEVECO_STUDIO_PATH", raising=False)
+        monkeypatch.delenv("HARMONYOS_SDK_PATH", raising=False)
+        monkeypatch.delenv("HDC_PATH", raising=False)
+        monkeypatch.delenv("HILOGTOOL_PATH", raising=False)
+        monkeypatch.setattr("harmonyos_dev_mcp.config.ConfigBase.init", classmethod(lambda cls: None))
+        monkeypatch.setattr(
+            Config,
+            "_detect_deveco_studio_path",
+            classmethod(lambda cls: r"C:\Program Files\Huawei\DevEco Studio"),
+        )
+        monkeypatch.setattr(
+            Config,
+            "_detect_sdk_root",
+            classmethod(lambda cls, deveco_path: r"C:\Program Files\Huawei\DevEco Studio\sdk"),
+        )
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.config.Path.exists",
+            lambda self: str(self) in {
+                r"C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe",
+                r"C:\Program Files\Huawei\DevEco Studio\sdk\default\hms\toolchains\hilogtool.exe",
+            },
+        )
+        monkeypatch.setattr("harmonyos_dev_mcp.config.shutil.which", lambda name: None)
+
+        try:
+            Config.init()
+
+            assert (
+                Config.HDC_PATH
+                == r"C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"
+            )
+            assert (
+                Config.HILOGTOOL_PATH
+                == r"C:\Program Files\Huawei\DevEco Studio\sdk\default\hms\toolchains\hilogtool.exe"
+            )
+        finally:
+            for key, value in original_values.items():
+                setattr(Config, key, value)
+
     def test_init_preserves_explicit_valid_deveco_env(self, monkeypatch):
         original_values = {
             "DEVECO_STUDIO_PATH": Config.DEVECO_STUDIO_PATH,
