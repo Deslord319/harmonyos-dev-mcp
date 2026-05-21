@@ -193,7 +193,7 @@ Parameters:
 |---|---|---|---|---|
 | `project_path` | string | Yes | - | Must be an existing directory |
 | `build_mode` | string | No | `debug` | `debug` or `release` |
-| `target` | string | No | `hap` | `hap`, `har`, or `app` |
+| `target` | string | No | `hap` | `hap`, `har`, `app`, or `hnp` |
 | `product` | string | No | `default` | Hvigor product |
 | `module_name` | string | Conditional | `null` | Required when `target="har"` |
 | `is_clean` | bool | No | `false` | Clean before build |
@@ -202,6 +202,8 @@ Rules:
 
 - `project_path` must exist.
 - `module_name` is required when `target="har"`.
+- `target="hnp"` builds a base HAP, repacks module HNP packages from directories like `entry/hnp/arm64-v8a/*.hnp`, and signs the HAP with SDK tools.
+- `target="hnp"` does not run project-local `.bat`, `.ps1`, or `.sh` build scripts.
 - `build_app` is long-running. Set MCP timeout to at least `60s`; prefer `120s` for cold builds.
 
 Key result fields:
@@ -225,6 +227,10 @@ Common errors:
 - `INVALID_BUILD_TARGET`
 - `MISSING_MODULE_NAME`
 - `BUILD_TIMEOUT`
+- `HNP_PACKAGE_NOT_FOUND`
+- `HNP_TOOLCHAIN_NOT_FOUND`
+- `HNP_PACKAGING_INPUT_MISSING`
+- `HNP_SIGN_FAILED`
 
 Example:
 

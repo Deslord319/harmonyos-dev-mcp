@@ -2,7 +2,7 @@
 
 HarmonyOS device automation and E2E testing MCP workspace.
 
-[![Version](https://img.shields.io/badge/version-0.7.5-blue)](services/harmonyos_dev_mcp/pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.7.6-blue)](services/harmonyos_dev_mcp/pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-5.0+-green)](https://developer.huawei.com/consumer/cn/harmonyos/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
@@ -80,6 +80,7 @@ uv run pytest services/harmonyos_dev_mcp/tests/unit -v --cov=harmonyos_dev_mcp
 ## Notes
 
 - `build_app` is a long-running tool. Set MCP `tools/call timeout` to at least `60s`, and prefer `120s` for cold builds.
+- `build_app target="hnp"` builds a base HAP, injects module HNP packages from `entry/hnp`, and signs the HAP through the SDK packaging tools.
 - `logs_query` supports `errors` and `markers` modes.
 - The detailed parameter definitions for all tools are maintained in the tool reference, not in this top-level README.
 

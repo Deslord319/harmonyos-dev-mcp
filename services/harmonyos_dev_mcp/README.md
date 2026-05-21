@@ -61,6 +61,8 @@ That document covers:
 
 - `build_app` is long-running. Set MCP `tools/call timeout` to at least `60s`, and prefer `120s` for cold builds.
 - `build_app` defaults to `build_mode="debug"`, `target="hap"`, and `product="default"`.
+- `build_app target="hnp"` builds a normal HAP first, injects built HNP packages from the module `hnp` directory, and re-signs the output with SDK tools. It does not call project-local `.bat`, `.ps1`, or `.sh` scripts.
+- HNP signing reads `build-profile.json5`. If DevEco stores encrypted passwords there, set `HAP_SIGN_PASSWORD`, or set `HAP_KEY_PASSWORD` and `HAP_STORE_PASSWORD`, so `hap-sign-tool.jar` can sign with plaintext credentials.
 - If a project already defines hvigor signing in `build-profile.json5`, `build_app` returns the hvigor artifact directly.
 - If hvigor only produces an unsigned HAP and the project uses a project-local MDM signing flow, `build_app` tries `project_root/hapsigner/2-<build_mode>-sign.bat`.
 - `query_package.info_type` supports only `list`, `abilities`, `main_ability`, and `permissions`.
@@ -130,6 +132,14 @@ Run tests:
 ```bash
 uv run pytest services/harmonyos_dev_mcp/tests/unit -v
 ```
+
+## Release 0.7.6
+
+- Added `build_app target="hnp"` for direct HNP HAP packaging and signing.
+- Uses the SDK `app_packing_tool.jar` and `hap-sign-tool.jar` instead of project-local build scripts.
+- Detects HNP packages under module `hnp` directories such as `entry/hnp/arm64-v8a/*.hnp`.
+- Returns `artifact_source="hnp_direct"` and a signed `*-signed-hnp.hap` output.
+- Added edge-case coverage for missing HNP packages, missing SDK packaging jars, missing hvigor packaging inputs, and ordinary `target="hap"` builds that should not trigger HNP repackaging.
 
 ## Docs
 
