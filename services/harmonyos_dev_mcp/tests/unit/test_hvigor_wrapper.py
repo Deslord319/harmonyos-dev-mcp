@@ -866,6 +866,140 @@ class TestHvigorWrapper:
         assert result["error_code"] == "HNP_PACKAGE_NOT_FOUND"
         assert result["output_path"] is None
 
+    def test_build_hap_does_not_run_hnp_packaging_even_when_hnp_package_exists(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        app_packing_tool = deveco / "sdk" / "default" / "openharmony" / "toolchains" / "lib" / "app_packing_tool.jar"
+        hap_sign_tool = deveco / "sdk" / "default" / "openharmony" / "toolchains" / "lib" / "hap-sign-tool.jar"
+        artifact = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-signed.hap"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+        _write_file(app_packing_tool)
+        _write_file(hap_sign_tool)
+        _write_declared_build_profile(project)
+        _write_file(project / "entry" / "hnp" / "arm64-v8a" / "xrdp.hnp", "hnp")
+        _write_file(artifact, "signed")
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        calls = []
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            calls.append(cmd)
+            command = " ".join(str(part) for part in cmd)
+            assert "app_packing_tool.jar" not in command
+            assert "hap-sign-tool.jar" not in command
+            return CompletedProcess(cmd, 0, stdout=f"artifact: {artifact}", stderr="")
+
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="hap")
+
+        assert result["success"] is True
+        assert result["output_path"] == str(artifact)
+        assert len(calls) == 1
+
+    def test_build_hnp_fails_when_sdk_packaging_jars_are_missing(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+        _write_full_signing_build_profile(project)
+        _write_file(project / "entry" / "src" / "main" / "module.json5", "{}")
+        _write_file(project / "entry" / "hnp" / "arm64-v8a" / "xrdp.hnp", "hnp")
+        _write_hnp_packaging_inputs(project)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            return CompletedProcess(cmd, 0, stdout="hvigor ok", stderr="")
+
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="hnp")
+
+        assert result["success"] is False
+        assert result["error_code"] == "HNP_TOOLCHAIN_NOT_FOUND"
+        assert "app_packing_tool.jar" in result["stderr"]
+        assert "hap-sign-tool.jar" in result["stderr"]
+
+    def test_build_hnp_fails_when_packaging_inputs_are_missing(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        app_packing_tool = deveco / "sdk" / "default" / "openharmony" / "toolchains" / "lib" / "app_packing_tool.jar"
+        hap_sign_tool = deveco / "sdk" / "default" / "openharmony" / "toolchains" / "lib" / "hap-sign-tool.jar"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+        _write_file(app_packing_tool)
+        _write_file(hap_sign_tool)
+        _write_full_signing_build_profile(project)
+        _write_file(project / "entry" / "src" / "main" / "module.json5", "{}")
+        _write_file(project / "entry" / "hnp" / "arm64-v8a" / "xrdp.hnp", "hnp")
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            return CompletedProcess(cmd, 0, stdout="hvigor ok", stderr="")
+
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="hnp")
+
+        assert result["success"] is False
+        assert result["error_code"] == "HNP_PACKAGING_INPUT_MISSING"
+        assert "module.json" in result["stderr"]
+
     def test_build_uses_sign_fallback_for_unsigned_hap(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
         project.mkdir()
