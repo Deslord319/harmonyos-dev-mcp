@@ -19,6 +19,7 @@ from common.tools.response import error_result, from_action_result, mcp_response
 MAX_ERRORS = 15
 BUILD_TIMEOUT_HINT = "Set MCP tools/call timeout to at least 60 seconds; 120 seconds is recommended for cold builds."
 ALLOWED_BUILD_MODES = {"debug", "release"}
+ALLOWED_BUILD_TARGETS = {"hap", "har", "app", "hnp"}
 
 
 @mcp_tool(category="build")
@@ -45,10 +46,10 @@ async def build_app(
             'build_mode must be one of "debug" or "release"',
             result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
         )
-    if target not in {"hap", "har", "app"}:
+    if target not in ALLOWED_BUILD_TARGETS:
         return error_result(
             "INVALID_BUILD_TARGET",
-            'target must be one of "hap", "har", or "app"',
+            'target must be one of "hap", "har", "app", or "hnp"',
             result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
         )
     if target == "har" and not module_name:

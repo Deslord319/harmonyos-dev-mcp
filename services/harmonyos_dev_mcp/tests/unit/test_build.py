@@ -229,6 +229,34 @@ class TestBuildApp:
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
+    async def test_build_accepts_hnp_target(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build.return_value = {
+            "success": True,
+            "output_path": "/path/to/entry-default-signed-hnp.hap",
+            "artifact_source": "hnp_direct",
+            "sign_status": "signed",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        sc = unwrap_result(await build.build_app(str(Path.cwd()), target="hnp"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["target"] == "hnp"
+        assert sc["result"]["output_path"] == "/path/to/entry-default-signed-hnp.hap"
+        assert sc["result"]["artifact_source"] == "hnp_direct"
+        mock_hvigor.build.assert_called_once_with(
+            target="hnp",
+            build_mode="debug",
+            product="default",
+            module_name=None,
+            is_clean=False,
+        )
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
     async def test_build_with_invalid_target(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
 
