@@ -34,6 +34,7 @@ async def build_app(
     is_clean: bool = False,
     include_hsp: bool = False,
     hsp_module_name: Optional[str] = None,
+    hsp_module_names: Optional[List[str]] = None,
 ) -> BuildResult:
     """Build HarmonyOS artifact."""
     if not project_path or not os.path.isdir(project_path):
@@ -76,6 +77,7 @@ async def build_app(
         is_clean=is_clean,
         include_hsp=include_hsp,
         hsp_module_name=hsp_module_name,
+        hsp_module_names=hsp_module_names,
     )
     elapsed = round(time.time() - start_time, 2)
 
@@ -90,6 +92,7 @@ async def build_app(
         "is_clean": is_clean,
         "include_hsp": include_hsp,
         "hsp_module_name": hsp_module_name,
+        "hsp_module_names": hsp_module_names,
         "duration": elapsed,
         "errors": [],
         "error_count": 0,

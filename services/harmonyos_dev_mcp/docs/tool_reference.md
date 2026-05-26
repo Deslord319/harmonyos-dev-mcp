@@ -198,14 +198,16 @@ Parameters:
 | `module_name` | string | Conditional | `null` | Required when `target="har"` or `target="hsp"` |
 | `is_clean` | bool | No | `false` | Clean before build |
 | `include_hsp` | bool | No | `false` | Only used with `target="hap"`; build and inject HSP modules into the HAP |
-| `hsp_module_name` | string | No | `null` | Optional shared module name for HSP integration; omitted means auto-discover `type="shared"` modules |
+| `hsp_module_name` | string | No | `null` | Optional shared module name, or comma/semicolon separated module names |
+| `hsp_module_names` | string[] | No | `null` | Optional explicit shared module names for HSP integration; omitted with `hsp_module_name` means auto-discover `type="shared"` modules |
 
 Rules:
 
 - `project_path` must exist.
 - `module_name` is required when `target="har"` or `target="hsp"`.
 - `target="hsp"` builds one shared module through hvigor `assembleHsp`.
-- `target="hap" include_hsp=true` builds the base HAP, builds HSP shared modules, repacks the HAP with `--shared-libs-path`, and signs the HAP with SDK tools.
+- `target="hap" include_hsp=true` builds the base HAP, builds one or more HSP shared modules, repacks the HAP with `--shared-libs-path`, and signs the HAP with SDK tools.
+- `hsp_module_name="liba,libb"` and `hsp_module_names=["liba", "libb"]` are both supported; duplicates are ignored while preserving order.
 - HSP integration requires hvigor signing material in `build-profile.json5`; if DevEco stores encrypted passwords, set `HAP_SIGN_PASSWORD`, or set `HAP_KEY_PASSWORD` and `HAP_STORE_PASSWORD`.
 - `target="hnp"` builds a base HAP, repacks module HNP packages from directories like `entry/hnp/arm64-v8a/*.hnp`, and signs the HAP with SDK tools.
 - `target="hnp"` does not run project-local `.bat`, `.ps1`, or `.sh` build scripts.
@@ -223,6 +225,7 @@ Key result fields:
 - `is_clean`
 - `include_hsp`
 - `hsp_module_name`
+- `hsp_module_names`
 - `duration`
 - `errors`
 - `error_count`
@@ -262,7 +265,7 @@ Example:
   "project_path": "C:/work/security_tool",
   "target": "hap",
   "include_hsp": true,
-  "hsp_module_name": "library"
+  "hsp_module_names": ["library", "feature"]
 }
 ```
 

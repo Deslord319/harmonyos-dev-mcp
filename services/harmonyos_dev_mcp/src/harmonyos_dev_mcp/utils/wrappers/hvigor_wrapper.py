@@ -1367,16 +1367,20 @@ class HvigorWrapper:
         build_mode: str,
         product: str,
         hsp_module_name: Optional[str],
+        hsp_module_names: Optional[List[str]],
     ) -> Dict[str, Any]:
-        modules = [hsp_module_name] if hsp_module_name else self._discover_shared_modules()
+        modules = self._resolve_hsp_module_names(hsp_module_name, hsp_module_names)
+        if not modules:
+            modules = self._discover_shared_modules()
         if not modules:
             return {
                 "success": False,
                 "error_code": "HSP_MODULE_NOT_FOUND",
                 "stdout": "",
                 "stderr": (
-                    "include_hsp=true requires a shared module. Pass hsp_module_name or add a "
-                    'module whose src/main/module.json5 declares type="shared".'
+                    "include_hsp=true requires at least one shared module. Pass hsp_module_name, "
+                    "pass hsp_module_names, or add modules whose src/main/module.json5 declares "
+                    'type="shared".'
                 ),
                 "output_paths": [],
             }
@@ -1445,6 +1449,26 @@ class HvigorWrapper:
             "stderr": self._merge_outputs(*stderr_parts),
             "output_paths": outputs,
         }
+
+    @staticmethod
+    def _resolve_hsp_module_names(
+        hsp_module_name: Optional[str],
+        hsp_module_names: Optional[List[str]],
+    ) -> List[str]:
+        modules: List[str] = []
+
+        def add(raw_value: Optional[str]) -> None:
+            if not raw_value:
+                return
+            for item in re.split(r"[,;]", raw_value):
+                module = item.strip()
+                if module and module not in modules:
+                    modules.append(module)
+
+        add(hsp_module_name)
+        for raw_value in hsp_module_names or []:
+            add(raw_value)
+        return modules
 
     def _repack_and_sign_hap_with_hsp(
         self,
@@ -1606,6 +1630,7 @@ class HvigorWrapper:
         product: str,
         module_name: Optional[str],
         hsp_module_name: Optional[str],
+        hsp_module_names: Optional[List[str]],
         is_clean: bool,
     ) -> Dict[str, Any]:
         base_result = self._run_base_hap_build_for_repack(
@@ -1618,7 +1643,12 @@ class HvigorWrapper:
         if not base_result.get("success"):
             return base_result
 
-        hsp_result = self._build_hsp_outputs(build_mode, product, hsp_module_name)
+        hsp_result = self._build_hsp_outputs(
+            build_mode,
+            product,
+            hsp_module_name,
+            hsp_module_names,
+        )
         if not hsp_result.get("success"):
             return {
                 **hsp_result,
@@ -1673,6 +1703,7 @@ class HvigorWrapper:
         is_clean: bool = False,
         include_hsp: bool = False,
         hsp_module_name: Optional[str] = None,
+        hsp_module_names: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         if target not in {"hap", "har", "hsp", "app", "hnp"}:
             return {
@@ -1703,6 +1734,7 @@ class HvigorWrapper:
                 product,
                 module_name,
                 hsp_module_name,
+                hsp_module_names,
                 is_clean,
             )
 
