@@ -64,7 +64,7 @@ That document covers:
 - `build_app target="hsp"` builds a shared module through hvigor. Pass `module_name` for the shared module.
 - `build_app target="hap" include_hsp=true` builds the base HAP, builds one or more `type="shared"` HSP modules, injects them into `shared_libs/`, and re-signs the HAP with SDK tools.
 - HAP builds with `include_hsp=true` return `hsp_output_paths` so callers can install the generated HSP files alongside the HAP when the device installer requires shared modules as separate install units.
-- `hsp_module_name` can name one HSP module or a comma/semicolon separated list; `hsp_module_names` accepts an explicit list. When both are omitted, the tool discovers all modules whose `src/main/module.json5` declares `type="shared"`.
+- `hsp_module_names` accepts an explicit list of shared modules. When omitted or empty, the tool discovers all modules whose `src/main/module.json5` declares `type="shared"`.
 - `build_app target="hnp"` builds a normal HAP first, injects built HNP packages from the module `hnp` directory, and re-signs the output with SDK tools. It does not call project-local `.bat`, `.ps1`, or `.sh` scripts.
 - HNP signing reads `build-profile.json5`. If DevEco stores encrypted passwords there, set `HAP_SIGN_PASSWORD`, or set `HAP_KEY_PASSWORD` and `HAP_STORE_PASSWORD`, so `hap-sign-tool.jar` can sign with plaintext credentials.
 - If a project already defines hvigor signing in `build-profile.json5`, `build_app` returns the hvigor artifact directly.
@@ -149,7 +149,7 @@ uv run pytest services/harmonyos_dev_mcp/tests/unit -v
 
 - Added `build_app target="hsp"` for hvigor shared module builds.
 - Added `build_app target="hap" include_hsp=true` to build HSP modules, inject them under `shared_libs/`, and sign the integrated HAP with SDK tools.
-- Added auto-discovery for `type="shared"` modules, plus `hsp_module_name` / `hsp_module_names` to select one or more shared modules.
+- Added auto-discovery for `type="shared"` modules, plus `hsp_module_names` to select one or more shared modules.
 - Merged HSP `pack.info` metadata into the repacked HAP and returned `hsp_output_paths` for multi-file installation flows.
 - Added unit coverage for HSP module validation, HSP build command dispatch, and HAP repack/sign with `--shared-libs-path`.
 

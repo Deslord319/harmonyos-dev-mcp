@@ -198,8 +198,7 @@ Parameters:
 | `module_name` | string | Conditional | `null` | Required when `target="har"` or `target="hsp"` |
 | `is_clean` | bool | No | `false` | Clean before build |
 | `include_hsp` | bool | No | `false` | Only used with `target="hap"`; build and inject HSP modules into the HAP |
-| `hsp_module_name` | string | No | `null` | Optional shared module name, or comma/semicolon separated module names |
-| `hsp_module_names` | string[] | No | `null` | Optional explicit shared module names for HSP integration; omitted with `hsp_module_name` means auto-discover `type="shared"` modules |
+| `hsp_module_names` | string[] | No | `null` | Optional explicit shared module names for HSP integration; omitted or empty means auto-discover `type="shared"` modules |
 
 Rules:
 
@@ -207,7 +206,7 @@ Rules:
 - `module_name` is required when `target="har"` or `target="hsp"`.
 - `target="hsp"` builds one shared module through hvigor `assembleHsp`.
 - `target="hap" include_hsp=true` builds the base HAP, builds one or more HSP shared modules, repacks the HAP with `--shared-libs-path`, and signs the HAP with SDK tools.
-- `hsp_module_name="liba,libb"` and `hsp_module_names=["liba", "libb"]` are both supported; duplicates are ignored while preserving order.
+- `hsp_module_names=["liba", "libb"]` selects one or more shared modules; duplicates are ignored while preserving order.
 - HAP builds with `include_hsp=true` return `hsp_output_paths`; install those HSP files together with the HAP on devices that require dependent shared modules as separate install units.
 - HSP integration requires hvigor signing material in `build-profile.json5`; if DevEco stores encrypted passwords, set `HAP_SIGN_PASSWORD`, or set `HAP_KEY_PASSWORD` and `HAP_STORE_PASSWORD`.
 - `target="hnp"` builds a base HAP, repacks module HNP packages from directories like `entry/hnp/arm64-v8a/*.hnp`, and signs the HAP with SDK tools.
@@ -226,7 +225,6 @@ Key result fields:
 - `module_name`
 - `is_clean`
 - `include_hsp`
-- `hsp_module_name`
 - `hsp_module_names`
 - `duration`
 - `errors`

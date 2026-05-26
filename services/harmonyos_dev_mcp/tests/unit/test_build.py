@@ -41,7 +41,6 @@ class TestBuildApp:
             module_name=None,
             is_clean=False,
             include_hsp=False,
-            hsp_module_name=None,
             hsp_module_names=None,
         )
 
@@ -68,7 +67,6 @@ class TestBuildApp:
             module_name=None,
             is_clean=False,
             include_hsp=False,
-            hsp_module_name=None,
             hsp_module_names=None,
         )
 
@@ -132,7 +130,6 @@ class TestBuildApp:
             module_name=None,
             is_clean=False,
             include_hsp=False,
-            hsp_module_name=None,
             hsp_module_names=None,
         )
 
@@ -162,7 +159,6 @@ class TestBuildApp:
             module_name=None,
             is_clean=True,
             include_hsp=False,
-            hsp_module_name=None,
             hsp_module_names=None,
         )
 
@@ -277,7 +273,6 @@ class TestBuildApp:
             module_name="library",
             is_clean=False,
             include_hsp=False,
-            hsp_module_name=None,
             hsp_module_names=None,
         )
 
@@ -308,7 +303,6 @@ class TestBuildApp:
             module_name=None,
             is_clean=False,
             include_hsp=False,
-            hsp_module_name=None,
             hsp_module_names=None,
         )
 
@@ -332,7 +326,7 @@ class TestBuildApp:
                 str(Path.cwd()),
                 target="hap",
                 include_hsp=True,
-                hsp_module_name="library",
+                hsp_module_names=["library"],
             )
         )
 
@@ -340,7 +334,7 @@ class TestBuildApp:
         assert sc["result"]["artifact_source"] == "hsp_direct"
         assert sc["result"]["hsp_output_paths"] == ["/path/to/library-default-signed.hsp"]
         assert sc["result"]["include_hsp"] is True
-        assert sc["result"]["hsp_module_name"] == "library"
+        assert sc["result"]["hsp_module_names"] == ["library"]
         mock_hvigor.build.assert_called_once_with(
             target="hap",
             build_mode="debug",
@@ -348,8 +342,7 @@ class TestBuildApp:
             module_name=None,
             is_clean=False,
             include_hsp=True,
-            hsp_module_name="library",
-            hsp_module_names=None,
+            hsp_module_names=["library"],
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
@@ -392,7 +385,6 @@ class TestBuildApp:
             module_name=None,
             is_clean=False,
             include_hsp=True,
-            hsp_module_name=None,
             hsp_module_names=["library", "feature"],
         )
 

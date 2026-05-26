@@ -1288,7 +1288,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
-        result = wrapper.build(target="hap", include_hsp=True, hsp_module_name="library")
+        result = wrapper.build(target="hap", include_hsp=True, hsp_module_names=["library"])
 
         assert result["success"] is True
         assert result["output_path"] == str(signed_hap)
@@ -1388,7 +1388,7 @@ class TestHvigorWrapper:
         assert "shared_libs/library-default-signed.hsp" in names
         assert "shared_libs/feature-default-signed.hsp" in names
 
-    def test_build_hap_accepts_comma_separated_hsp_module_names(self, tmp_path, monkeypatch):
+    def test_resolve_hsp_module_names_deduplicates_list(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
         project.mkdir()
 
@@ -1415,7 +1415,7 @@ class TestHvigorWrapper:
 
         wrapper = HvigorWrapper(str(project))
 
-        assert wrapper._resolve_hsp_module_names("library, feature;library", None) == ["library", "feature"]
+        assert wrapper._resolve_hsp_module_names(["library", "feature", "library", " "]) == ["library", "feature"]
 
     def test_build_hap_with_hsp_retries_stale_hsp_output_with_clean(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"
@@ -1476,7 +1476,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
-        result = wrapper.build(target="hap", include_hsp=True, hsp_module_name="library")
+        result = wrapper.build(target="hap", include_hsp=True, hsp_module_names=["library"])
 
         assert result["success"] is True
         assert result["output_path"] == str(signed_hap)
@@ -1519,7 +1519,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
 
         wrapper = HvigorWrapper(str(project))
-        result = wrapper.build(target="hap", include_hsp=True, hsp_module_name="library")
+        result = wrapper.build(target="hap", include_hsp=True, hsp_module_names=["library"])
 
         assert result["success"] is False
         assert result["error_code"] == "HSP_SIGNING_CONFIG_MISSING"
