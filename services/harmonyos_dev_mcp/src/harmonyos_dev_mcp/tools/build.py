@@ -19,7 +19,7 @@ from common.tools.response import error_result, from_action_result, mcp_response
 MAX_ERRORS = 15
 BUILD_TIMEOUT_HINT = "Set MCP tools/call timeout to at least 60 seconds; 120 seconds is recommended for cold builds."
 ALLOWED_BUILD_MODES = {"debug", "release"}
-ALLOWED_BUILD_TARGETS = {"hap", "har", "app", "hnp"}
+ALLOWED_BUILD_TARGETS = {"hap", "har", "hsp", "app", "hnp"}
 
 
 @mcp_tool(category="build")
@@ -32,6 +32,8 @@ async def build_app(
     product: str = "default",
     module_name: Optional[str] = None,
     is_clean: bool = False,
+    include_hsp: bool = False,
+    hsp_module_name: Optional[str] = None,
 ) -> BuildResult:
     """Build HarmonyOS artifact."""
     if not project_path or not os.path.isdir(project_path):
@@ -49,13 +51,13 @@ async def build_app(
     if target not in ALLOWED_BUILD_TARGETS:
         return error_result(
             "INVALID_BUILD_TARGET",
-            'target must be one of "hap", "har", "app", or "hnp"',
+            'target must be one of "hap", "har", "hsp", "app", or "hnp"',
             result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
         )
-    if target == "har" and not module_name:
+    if target in {"har", "hsp"} and not module_name:
         return error_result(
             "MISSING_MODULE_NAME",
-            'module_name is required when target="har"',
+            f'module_name is required when target="{target}"',
             result={"output_path": None, "target": target, "duration": 0, "errors": [], "error_count": 0},
         )
 
@@ -72,6 +74,8 @@ async def build_app(
         product=product,
         module_name=module_name,
         is_clean=is_clean,
+        include_hsp=include_hsp,
+        hsp_module_name=hsp_module_name,
     )
     elapsed = round(time.time() - start_time, 2)
 
@@ -84,6 +88,8 @@ async def build_app(
         "product": product,
         "module_name": module_name,
         "is_clean": is_clean,
+        "include_hsp": include_hsp,
+        "hsp_module_name": hsp_module_name,
         "duration": elapsed,
         "errors": [],
         "error_count": 0,

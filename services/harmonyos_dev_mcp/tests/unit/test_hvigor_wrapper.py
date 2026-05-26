@@ -115,6 +115,88 @@ def _write_hnp_packaging_inputs(project: Path):
     _write_file(root / "outputs" / "default" / "pack.info", "{}")
 
 
+def _write_shared_module_build_profile(project: Path):
+    _write_full_signing_build_profile(project)
+    profile = project / "build-profile.json5"
+    content = profile.read_text(encoding="utf-8")
+    content = content.replace(
+        """
+            {
+              "name": "entry",
+              "srcPath": "./entry"
+            }
+        """,
+        """
+            {
+              "name": "entry",
+              "srcPath": "./entry"
+            },
+            {
+              "name": "library",
+              "srcPath": "./library"
+            }
+        """,
+    )
+    profile.write_text(content, encoding="utf-8")
+    _write_file(
+        project / "library" / "src" / "main" / "module.json5",
+        """
+        {
+          "module": {
+            "name": "library",
+            "type": "shared",
+            "deviceTypes": ["phone"]
+          }
+        }
+        """,
+    )
+
+
+def _write_unsigned_shared_module_build_profile(project: Path):
+    _write_file(
+        project / "build-profile.json5",
+        """
+        {
+          "app": {
+            "products": [
+              {
+                "name": "default",
+                "targetSdkVersion": "6.0.2(22)",
+                "compatibleSdkVersion": "6.0.2(22)"
+              }
+            ],
+            "buildModeSet": [
+              { "name": "debug" },
+              { "name": "release" }
+            ]
+          },
+          "modules": [
+            {
+              "name": "entry",
+              "srcPath": "./entry"
+            },
+            {
+              "name": "library",
+              "srcPath": "./library"
+            }
+          ]
+        }
+        """,
+    )
+    _write_file(
+        project / "library" / "src" / "main" / "module.json5",
+        """
+        {
+          "module": {
+            "name": "library",
+            "type": "shared",
+            "deviceTypes": ["phone"]
+          }
+        }
+        """,
+    )
+
+
 def _isolate_discovery_env(monkeypatch, *, clear_java=True, clear_path_java=False):
     for env_name in ("DEVECO_SDK_HOME", "HARMONYOS_SDK_PATH"):
         monkeypatch.delenv(env_name, raising=False)
@@ -999,6 +1081,252 @@ class TestHvigorWrapper:
         assert result["success"] is False
         assert result["error_code"] == "HNP_PACKAGING_INPUT_MISSING"
         assert "module.json" in result["stderr"]
+
+    def test_build_hsp_requires_module_name(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+        _write_minimal_build_profile(project)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="hsp")
+
+        assert result["success"] is False
+        assert result["error_code"] == "MISSING_MODULE_NAME"
+
+    def test_build_hsp_runs_assemble_hsp_and_returns_hsp_output(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        artifact = project / "library" / "build" / "default" / "outputs" / "default" / "library-default-signed.hsp"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+        _write_declared_build_profile(project)
+        _write_file(artifact, "hsp")
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        captured = {}
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            captured["cmd"] = cmd
+            return CompletedProcess(cmd, 0, stdout=f"artifact: {artifact}", stderr="")
+
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="hsp", module_name="library")
+
+        assert result["success"] is True
+        assert result["output_path"] == str(artifact)
+        assert "assembleHsp" in captured["cmd"]
+        assert "module=library" in captured["cmd"]
+
+    def test_build_hap_can_repack_and_sign_with_hsp(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        app_packing_tool = deveco / "sdk" / "default" / "openharmony" / "toolchains" / "lib" / "app_packing_tool.jar"
+        hap_sign_tool = deveco / "sdk" / "default" / "openharmony" / "toolchains" / "lib" / "hap-sign-tool.jar"
+        hsp_artifact = project / "library" / "build" / "default" / "outputs" / "default" / "library-default-signed.hsp"
+        unsigned_hap = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-unsigned-hsp.hap"
+        signed_hap = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-signed-hsp.hap"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+        _write_file(app_packing_tool)
+        _write_file(hap_sign_tool)
+        _write_shared_module_build_profile(project)
+        _write_file(project / "entry" / "src" / "main" / "module.json5", "{}")
+        _write_hnp_packaging_inputs(project)
+        _write_file(hsp_artifact, "hsp")
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        calls = []
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            calls.append(cmd)
+            command = " ".join(str(part) for part in cmd)
+            if "app_packing_tool.jar" in command:
+                assert "--shared-libs-path" in cmd
+                _write_hap(unsigned_hap, {"module.json": "{}", "shared_libs/library-default-signed.hsp": "hsp"})
+                return CompletedProcess(cmd, 0, stdout=f"packed {unsigned_hap}", stderr="")
+            if "hap-sign-tool.jar" in command:
+                if "000000167480EFDCA360901AC59CD0CC6BE9EAEE9D5AAB8213F99DD4A091C3E" in command:
+                    return CompletedProcess(cmd, 1, stdout="", stderr="keystore password was incorrect")
+                _write_hap(signed_hap, {"module.json": "{}", "shared_libs/library-default-signed.hsp": "hsp"})
+                return CompletedProcess(cmd, 0, stdout=f"signed {signed_hap}", stderr="")
+            if "assembleHsp" in cmd:
+                return CompletedProcess(cmd, 0, stdout=f"artifact: {hsp_artifact}", stderr="")
+            return CompletedProcess(cmd, 0, stdout="hvigor hap ok", stderr="")
+
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="hap", include_hsp=True, hsp_module_name="library")
+
+        assert result["success"] is True
+        assert result["output_path"] == str(signed_hap)
+        assert result["artifact_source"] == "hsp_direct"
+        assert result["sign_status"] == "signed"
+        assert any("assembleHsp" in call for call in calls)
+        assert any("--shared-libs-path" in call for call in calls)
+
+    def test_build_hap_with_hsp_retries_stale_hsp_output_with_clean(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        app_packing_tool = deveco / "sdk" / "default" / "openharmony" / "toolchains" / "lib" / "app_packing_tool.jar"
+        hap_sign_tool = deveco / "sdk" / "default" / "openharmony" / "toolchains" / "lib" / "hap-sign-tool.jar"
+        hsp_artifact = project / "library" / "build" / "default" / "outputs" / "default" / "library-default-signed.hsp"
+        unsigned_hap = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-unsigned-hsp.hap"
+        signed_hap = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-signed-hsp.hap"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+        _write_file(app_packing_tool)
+        _write_file(hap_sign_tool)
+        _write_shared_module_build_profile(project)
+        _write_file(project / "entry" / "src" / "main" / "module.json5", "{}")
+        _write_hnp_packaging_inputs(project)
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        hsp_build_count = 0
+        clean_count = 0
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            nonlocal hsp_build_count, clean_count
+            command = " ".join(str(part) for part in cmd)
+            if "app_packing_tool.jar" in command:
+                _write_hap(unsigned_hap, {"module.json": "{}", "shared_libs/library-default-signed.hsp": "hsp"})
+                return CompletedProcess(cmd, 0, stdout=f"packed {unsigned_hap}", stderr="")
+            if "hap-sign-tool.jar" in command:
+                _write_hap(signed_hap, {"module.json": "{}", "shared_libs/library-default-signed.hsp": "hsp"})
+                return CompletedProcess(cmd, 0, stdout=f"signed {signed_hap}", stderr="")
+            if "clean" in cmd and "module=library" in cmd:
+                clean_count += 1
+                return CompletedProcess(cmd, 0, stdout="clean library", stderr="")
+            if "assembleHsp" in cmd:
+                hsp_build_count += 1
+                if hsp_build_count == 2:
+                    _write_file(hsp_artifact, "hsp")
+                return CompletedProcess(cmd, 0, stdout="hsp ok", stderr="")
+            return CompletedProcess(cmd, 0, stdout="hvigor hap ok", stderr="")
+
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="hap", include_hsp=True, hsp_module_name="library")
+
+        assert result["success"] is True
+        assert result["output_path"] == str(signed_hap)
+        assert hsp_build_count == 2
+        assert clean_count == 1
+
+    def test_build_hap_with_hsp_uses_hsp_signing_error_prefix(self, tmp_path, monkeypatch):
+        project = tmp_path / "MyApplication"
+        project.mkdir()
+
+        deveco = tmp_path / "DevEco Studio"
+        node = deveco / "tools" / "node" / "node.exe"
+        hvigor = deveco / "tools" / "hvigor" / "bin" / "hvigorw.js"
+        sdk_pkg = deveco / "sdk" / "default" / "sdk-pkg.json"
+        java = deveco / "jbr" / "bin" / "java.exe"
+        hsp_artifact = project / "library" / "build" / "default" / "outputs" / "default" / "library-default-signed.hsp"
+        _write_file(node)
+        _write_file(hvigor)
+        _write_file(sdk_pkg, "{}")
+        _write_file(java)
+        _write_unsigned_shared_module_build_profile(project)
+        _write_hnp_packaging_inputs(project)
+        _write_file(hsp_artifact, "hsp")
+
+        monkeypatch.setattr(Config, "NODE_PATH", None)
+        monkeypatch.setattr(Config, "HVIGOR_PATH", None)
+        monkeypatch.setattr(Config, "HARMONYOS_SDK_PATH", None)
+        monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
+        _isolate_discovery_env(monkeypatch, clear_path_java=True)
+        monkeypatch.setattr(
+            "harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.platform.system",
+            lambda: "Windows"
+        )
+
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+            if "assembleHsp" in cmd:
+                return CompletedProcess(cmd, 0, stdout=f"artifact: {hsp_artifact}", stderr="")
+            return CompletedProcess(cmd, 0, stdout="hvigor hap ok", stderr="")
+
+        monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
+
+        wrapper = HvigorWrapper(str(project))
+        result = wrapper.build(target="hap", include_hsp=True, hsp_module_name="library")
+
+        assert result["success"] is False
+        assert result["error_code"] == "HSP_SIGNING_CONFIG_MISSING"
 
     def test_build_uses_sign_fallback_for_unsigned_hap(self, tmp_path, monkeypatch):
         project = tmp_path / "MyApplication"

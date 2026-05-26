@@ -193,15 +193,20 @@ Parameters:
 |---|---|---|---|---|
 | `project_path` | string | Yes | - | Must be an existing directory |
 | `build_mode` | string | No | `debug` | `debug` or `release` |
-| `target` | string | No | `hap` | `hap`, `har`, `app`, or `hnp` |
+| `target` | string | No | `hap` | `hap`, `har`, `hsp`, `app`, or `hnp` |
 | `product` | string | No | `default` | Hvigor product |
-| `module_name` | string | Conditional | `null` | Required when `target="har"` |
+| `module_name` | string | Conditional | `null` | Required when `target="har"` or `target="hsp"` |
 | `is_clean` | bool | No | `false` | Clean before build |
+| `include_hsp` | bool | No | `false` | Only used with `target="hap"`; build and inject HSP modules into the HAP |
+| `hsp_module_name` | string | No | `null` | Optional shared module name for HSP integration; omitted means auto-discover `type="shared"` modules |
 
 Rules:
 
 - `project_path` must exist.
-- `module_name` is required when `target="har"`.
+- `module_name` is required when `target="har"` or `target="hsp"`.
+- `target="hsp"` builds one shared module through hvigor `assembleHsp`.
+- `target="hap" include_hsp=true` builds the base HAP, builds HSP shared modules, repacks the HAP with `--shared-libs-path`, and signs the HAP with SDK tools.
+- HSP integration requires hvigor signing material in `build-profile.json5`; if DevEco stores encrypted passwords, set `HAP_SIGN_PASSWORD`, or set `HAP_KEY_PASSWORD` and `HAP_STORE_PASSWORD`.
 - `target="hnp"` builds a base HAP, repacks module HNP packages from directories like `entry/hnp/arm64-v8a/*.hnp`, and signs the HAP with SDK tools.
 - `target="hnp"` does not run project-local `.bat`, `.ps1`, or `.sh` build scripts.
 - `build_app` is long-running. Set MCP timeout to at least `60s`; prefer `120s` for cold builds.
@@ -216,6 +221,8 @@ Key result fields:
 - `product`
 - `module_name`
 - `is_clean`
+- `include_hsp`
+- `hsp_module_name`
 - `duration`
 - `errors`
 - `error_count`
@@ -231,6 +238,14 @@ Common errors:
 - `HNP_TOOLCHAIN_NOT_FOUND`
 - `HNP_PACKAGING_INPUT_MISSING`
 - `HNP_SIGN_FAILED`
+- `HSP_MODULE_NOT_FOUND`
+- `HSP_SIGNING_CONFIG_MISSING`
+- `HSP_SIGNING_CONFIG_INCOMPLETE`
+- `HSP_SIGNING_FILE_NOT_FOUND`
+- `HSP_TOOLCHAIN_NOT_FOUND`
+- `HSP_PACKAGING_INPUT_MISSING`
+- `HSP_SIGN_FAILED`
+- `HSP_NOT_IN_HAP`
 
 Example:
 
@@ -239,6 +254,15 @@ Example:
   "project_path": "C:/work/security_tool",
   "build_mode": "debug",
   "target": "hap"
+}
+```
+
+```json
+{
+  "project_path": "C:/work/security_tool",
+  "target": "hap",
+  "include_hsp": true,
+  "hsp_module_name": "library"
 }
 ```
 

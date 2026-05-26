@@ -40,6 +40,8 @@ class TestBuildApp:
             product="default",
             module_name=None,
             is_clean=False,
+            include_hsp=False,
+            hsp_module_name=None,
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
@@ -64,6 +66,8 @@ class TestBuildApp:
             product="qa",
             module_name=None,
             is_clean=False,
+            include_hsp=False,
+            hsp_module_name=None,
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
@@ -125,6 +129,8 @@ class TestBuildApp:
             product="default",
             module_name=None,
             is_clean=False,
+            include_hsp=False,
+            hsp_module_name=None,
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
@@ -152,6 +158,8 @@ class TestBuildApp:
             product="default",
             module_name=None,
             is_clean=True,
+            include_hsp=False,
+            hsp_module_name=None,
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
@@ -229,6 +237,47 @@ class TestBuildApp:
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
     @pytest.mark.asyncio
+    async def test_build_hsp_requires_module_name(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        sc = unwrap_result(await build.build_app(str(Path.cwd()), target="hsp"))
+
+        assert sc["ok"] is False
+        assert sc["error"]["code"] == "MISSING_MODULE_NAME"
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_accepts_hsp_target(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build.return_value = {
+            "success": True,
+            "output_path": "/path/to/library-default-signed.hsp",
+            "artifact_source": "scan",
+            "sign_status": "signed",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        sc = unwrap_result(
+            await build.build_app(str(Path.cwd()), target="hsp", module_name="library")
+        )
+
+        assert sc["ok"] is True
+        assert sc["result"]["target"] == "hsp"
+        assert sc["result"]["output_path"] == "/path/to/library-default-signed.hsp"
+        mock_hvigor.build.assert_called_once_with(
+            target="hsp",
+            build_mode="debug",
+            product="default",
+            module_name="library",
+            is_clean=False,
+            include_hsp=False,
+            hsp_module_name=None,
+        )
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
     async def test_build_accepts_hnp_target(self, mock_hvigor_cls, unwrap_result):
         from harmonyos_dev_mcp.tools import build
 
@@ -253,6 +302,45 @@ class TestBuildApp:
             product="default",
             module_name=None,
             is_clean=False,
+            include_hsp=False,
+            hsp_module_name=None,
+        )
+
+    @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
+    @pytest.mark.asyncio
+    async def test_build_hap_can_request_hsp_integration(self, mock_hvigor_cls, unwrap_result):
+        from harmonyos_dev_mcp.tools import build
+
+        mock_hvigor = MagicMock()
+        mock_hvigor.build.return_value = {
+            "success": True,
+            "output_path": "/path/to/entry-default-signed-hsp.hap",
+            "artifact_source": "hsp_direct",
+            "sign_status": "signed",
+        }
+        mock_hvigor_cls.return_value = mock_hvigor
+
+        sc = unwrap_result(
+            await build.build_app(
+                str(Path.cwd()),
+                target="hap",
+                include_hsp=True,
+                hsp_module_name="library",
+            )
+        )
+
+        assert sc["ok"] is True
+        assert sc["result"]["artifact_source"] == "hsp_direct"
+        assert sc["result"]["include_hsp"] is True
+        assert sc["result"]["hsp_module_name"] == "library"
+        mock_hvigor.build.assert_called_once_with(
+            target="hap",
+            build_mode="debug",
+            product="default",
+            module_name=None,
+            is_clean=False,
+            include_hsp=True,
+            hsp_module_name="library",
         )
 
     @patch("harmonyos_dev_mcp.tools.build.HvigorWrapper")
