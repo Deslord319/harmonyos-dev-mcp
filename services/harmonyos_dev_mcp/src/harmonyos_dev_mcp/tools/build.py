@@ -83,6 +83,7 @@ async def build_app(
 
     payload: dict = {
         "output_path": raw.get("output_path"),
+        "hsp_output_paths": raw.get("hsp_output_paths", []),
         "artifact_source": raw.get("artifact_source"),
         "sign_status": raw.get("sign_status", "unknown"),
         "target": target,

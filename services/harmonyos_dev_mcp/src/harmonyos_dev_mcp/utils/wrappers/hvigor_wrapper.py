@@ -237,6 +237,8 @@ class HvigorWrapper:
                 cwd=str(self.project_path),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 stdin=subprocess.DEVNULL,
                 timeout=timeout,
                 env=env,
@@ -533,6 +535,8 @@ class HvigorWrapper:
                 cwd=str(script_path.parent),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 stdin=subprocess.DEVNULL,
                 timeout=Config.BUILD_TIMEOUT,
                 env=self._build_command_env(),
@@ -986,6 +990,81 @@ class HvigorWrapper:
             shutil.copy2(hsp_path, staging_root / hsp_path.name)
         return staging_root
 
+    def _merge_hsp_pack_info(
+        self,
+        base_pack_info: Path,
+        hsp_paths: List[Path],
+        outputs_root: Path,
+        module_root: Path,
+    ) -> Dict[str, Any]:
+        merged_pack_info = (outputs_root / "hsp_pack_info" / "pack.info").resolve()
+        if not self._path_inside(merged_pack_info, module_root):
+            return {
+                "success": False,
+                "error_code": "HSP_PACK_INFO_ERROR",
+                "stderr": f"refusing to write merged pack.info outside module root: {merged_pack_info}",
+            }
+
+        try:
+            merged = json.loads(base_pack_info.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return {
+                "success": False,
+                "error_code": "HSP_PACK_INFO_ERROR",
+                "stderr": f"failed to read base pack.info: {exc}",
+            }
+
+        summary = merged.setdefault("summary", {})
+        merged_modules = summary.setdefault("modules", [])
+        merged_packages = merged.setdefault("packages", [])
+        module_names = {
+            module.get("distro", {}).get("moduleName")
+            for module in merged_modules
+            if isinstance(module, dict)
+        }
+        package_names = {
+            package.get("name")
+            for package in merged_packages
+            if isinstance(package, dict)
+        }
+
+        for hsp_path in hsp_paths:
+            try:
+                with zipfile.ZipFile(hsp_path) as archive:
+                    hsp_pack = json.loads(archive.read("pack.info").decode("utf-8"))
+            except (OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
+                return {
+                    "success": False,
+                    "error_code": "HSP_PACK_INFO_ERROR",
+                    "stderr": f"failed to read pack.info from HSP {hsp_path}: {exc}",
+                }
+
+            for module in hsp_pack.get("summary", {}).get("modules", []):
+                module_name = module.get("distro", {}).get("moduleName") if isinstance(module, dict) else None
+                if module_name and module_name not in module_names:
+                    merged_modules.append(module)
+                    module_names.add(module_name)
+            for package in hsp_pack.get("packages", []):
+                package_name = package.get("name") if isinstance(package, dict) else None
+                if package_name and package_name not in package_names:
+                    merged_packages.append(package)
+                    package_names.add(package_name)
+
+        try:
+            merged_pack_info.parent.mkdir(parents=True, exist_ok=True)
+            merged_pack_info.write_text(
+                json.dumps(merged, ensure_ascii=False, separators=(",", ":")),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            return {
+                "success": False,
+                "error_code": "HSP_PACK_INFO_ERROR",
+                "stderr": f"failed to write merged pack.info: {exc}",
+            }
+
+        return {"success": True, "pack_info": merged_pack_info}
+
     def _find_toolchain_jar(self, jar_name: str) -> Optional[Path]:
         candidates = [
             self.sdk_root / "default" / "openharmony" / "toolchains" / "lib" / jar_name,
@@ -1016,6 +1095,8 @@ class HvigorWrapper:
                 cwd=str(self.project_path),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 stdin=subprocess.DEVNULL,
                 timeout=Config.BUILD_TIMEOUT,
                 env=self._build_command_env(),
@@ -1516,6 +1597,20 @@ class HvigorWrapper:
 
         outputs.mkdir(parents=True, exist_ok=True)
         shared_libs_root = self._stage_hsp_outputs(hsp_paths, outputs, module_root)
+        merged_pack_info = self._merge_hsp_pack_info(
+            packaging_inputs["pack_info"],
+            hsp_paths,
+            outputs,
+            module_root,
+        )
+        if not merged_pack_info.get("success"):
+            return {
+                "success": False,
+                "error_code": merged_pack_info["error_code"],
+                "stdout": "",
+                "stderr": merged_pack_info["stderr"],
+                "output_path": None,
+            }
         module = module_root.name
         unsigned_hap = outputs / f"{module}-{product}-unsigned-hsp.hap"
         signed_hap = outputs / f"{module}-{product}-signed-hsp.hap"
@@ -1541,7 +1636,7 @@ class HvigorWrapper:
             "--index-path",
             str(packaging_inputs["index"]),
             "--pack-info-path",
-            str(packaging_inputs["pack_info"]),
+            str(merged_pack_info["pack_info"]),
             "--pkg-context-path",
             str(packaging_inputs["pkg_context"]),
             "--force",
@@ -1678,6 +1773,7 @@ class HvigorWrapper:
             product,
             signing,
         )
+        result["hsp_output_paths"] = [str(path) for path in hsp_result["output_paths"]]
         result["stdout"] = self._merge_outputs(
             base_result.get("stdout"),
             hsp_result.get("stdout"),

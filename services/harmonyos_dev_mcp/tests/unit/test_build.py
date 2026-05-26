@@ -321,6 +321,7 @@ class TestBuildApp:
         mock_hvigor.build.return_value = {
             "success": True,
             "output_path": "/path/to/entry-default-signed-hsp.hap",
+            "hsp_output_paths": ["/path/to/library-default-signed.hsp"],
             "artifact_source": "hsp_direct",
             "sign_status": "signed",
         }
@@ -337,6 +338,7 @@ class TestBuildApp:
 
         assert sc["ok"] is True
         assert sc["result"]["artifact_source"] == "hsp_direct"
+        assert sc["result"]["hsp_output_paths"] == ["/path/to/library-default-signed.hsp"]
         assert sc["result"]["include_hsp"] is True
         assert sc["result"]["hsp_module_name"] == "library"
         mock_hvigor.build.assert_called_once_with(
@@ -359,6 +361,10 @@ class TestBuildApp:
         mock_hvigor.build.return_value = {
             "success": True,
             "output_path": "/path/to/entry-default-signed-hsp.hap",
+            "hsp_output_paths": [
+                "/path/to/library-default-signed.hsp",
+                "/path/to/feature-default-signed.hsp",
+            ],
             "artifact_source": "hsp_direct",
             "sign_status": "signed",
         }
@@ -375,6 +381,10 @@ class TestBuildApp:
 
         assert sc["ok"] is True
         assert sc["result"]["hsp_module_names"] == ["library", "feature"]
+        assert sc["result"]["hsp_output_paths"] == [
+            "/path/to/library-default-signed.hsp",
+            "/path/to/feature-default-signed.hsp",
+        ]
         mock_hvigor.build.assert_called_once_with(
             target="hap",
             build_mode="debug",

@@ -1,5 +1,6 @@
 ﻿from pathlib import Path
 from subprocess import CompletedProcess
+import json
 import tempfile
 import subprocess
 import os
@@ -19,6 +20,37 @@ def _write_hap(path: Path, entries: dict[str, str]):
     with zipfile.ZipFile(path, "w") as archive:
         for name, content in entries.items():
             archive.writestr(name, content)
+
+
+def _write_hsp(path: Path, module_name: str):
+    _write_hap(
+        path,
+        {
+            "module.json": f'{{"module":{{"name":"{module_name}","type":"shared"}}}}',
+            "pack.info": json.dumps(
+                {
+                    "summary": {
+                        "modules": [
+                            {
+                                "distro": {
+                                    "moduleType": "shared",
+                                    "moduleName": module_name,
+                                    "deliveryWithInstall": True,
+                                }
+                            }
+                        ]
+                    },
+                    "packages": [
+                        {
+                            "moduleType": "shared",
+                            "name": f"{module_name}-default",
+                        }
+                    ],
+                },
+                separators=(",", ":"),
+            ),
+        },
+    )
 
 
 def _write_minimal_build_profile(project: Path):
@@ -379,7 +411,7 @@ class TestHvigorWrapper:
         artifact = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-unsigned.hap"
         _write_file(artifact, "ok")
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             captured["cmd"] = cmd
             captured["cwd"] = cwd
             captured["timeout"] = timeout
@@ -496,7 +528,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             Path(env["HVIGOR_USER_HOME"], "cache.txt").write_text("ok", encoding="utf-8")
             artifact = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-unsigned.hap"
             _write_file(artifact, "ok")
@@ -565,7 +597,7 @@ class TestHvigorWrapper:
         monkeypatch.setattr(Config, "DEVECO_STUDIO_PATH", str(deveco))
         _isolate_discovery_env(monkeypatch, clear_path_java=True)
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             return CompletedProcess(
                 cmd,
                 0,
@@ -646,7 +678,7 @@ class TestHvigorWrapper:
         artifact = project / "entry" / "build" / "default" / "outputs" / "default" / "entry-default-signed.hap"
         _write_file(artifact, "ok")
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             captured["cmd"] = cmd
             return CompletedProcess(cmd, 0, stdout=f"artifact: {artifact}", stderr="")
 
@@ -831,7 +863,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             return CompletedProcess(cmd, 0, stdout=f"artifact: {artifact}", stderr="")
 
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
@@ -873,7 +905,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             return CompletedProcess(cmd, 0, stdout=f"artifact: {unsigned_artifact}", stderr="")
 
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
@@ -922,7 +954,7 @@ class TestHvigorWrapper:
 
         calls = []
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             calls.append((cmd, cwd, env))
             command = " ".join(str(part) for part in cmd)
             if "app_packing_tool.jar" in command:
@@ -978,7 +1010,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             return CompletedProcess(cmd, 0, stdout="hvigor ok", stderr="")
 
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
@@ -1024,7 +1056,7 @@ class TestHvigorWrapper:
 
         calls = []
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             calls.append(cmd)
             command = " ".join(str(part) for part in cmd)
             assert "app_packing_tool.jar" not in command
@@ -1068,7 +1100,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             return CompletedProcess(cmd, 0, stdout="hvigor ok", stderr="")
 
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
@@ -1112,7 +1144,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             return CompletedProcess(cmd, 0, stdout="hvigor ok", stderr="")
 
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
@@ -1184,7 +1216,7 @@ class TestHvigorWrapper:
 
         captured = {}
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             captured["cmd"] = cmd
             return CompletedProcess(cmd, 0, stdout=f"artifact: {artifact}", stderr="")
 
@@ -1221,7 +1253,7 @@ class TestHvigorWrapper:
         _write_shared_module_build_profile(project)
         _write_file(project / "entry" / "src" / "main" / "module.json5", "{}")
         _write_hnp_packaging_inputs(project)
-        _write_file(hsp_artifact, "hsp")
+        _write_hsp(hsp_artifact, "library")
 
         monkeypatch.setattr(Config, "NODE_PATH", None)
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
@@ -1235,11 +1267,13 @@ class TestHvigorWrapper:
 
         calls = []
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             calls.append(cmd)
             command = " ".join(str(part) for part in cmd)
             if "app_packing_tool.jar" in command:
                 assert "--shared-libs-path" in cmd
+                pack_info = Path(cmd[cmd.index("--pack-info-path") + 1])
+                assert '"moduleName":"library"' in pack_info.read_text(encoding="utf-8")
                 _write_hap(unsigned_hap, {"module.json": "{}", "shared_libs/library-default-signed.hsp": "hsp"})
                 return CompletedProcess(cmd, 0, stdout=f"packed {unsigned_hap}", stderr="")
             if "hap-sign-tool.jar" in command:
@@ -1258,6 +1292,7 @@ class TestHvigorWrapper:
 
         assert result["success"] is True
         assert result["output_path"] == str(signed_hap)
+        assert result["hsp_output_paths"] == [str(hsp_artifact)]
         assert result["artifact_source"] == "hsp_direct"
         assert result["sign_status"] == "signed"
         assert any("assembleHsp" in call for call in calls)
@@ -1289,8 +1324,8 @@ class TestHvigorWrapper:
         _write_two_shared_module_build_profile(project)
         _write_file(project / "entry" / "src" / "main" / "module.json5", "{}")
         _write_hnp_packaging_inputs(project)
-        for artifact in artifacts.values():
-            _write_file(artifact, "hsp")
+        for module, artifact in artifacts.items():
+            _write_hsp(artifact, module)
 
         monkeypatch.setattr(Config, "NODE_PATH", None)
         monkeypatch.setattr(Config, "HVIGOR_PATH", None)
@@ -1304,13 +1339,16 @@ class TestHvigorWrapper:
 
         hsp_modules = []
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             command = " ".join(str(part) for part in cmd)
             if "app_packing_tool.jar" in command:
                 assert "--shared-libs-path" in cmd
                 shared_libs = Path(cmd[cmd.index("--shared-libs-path") + 1])
+                pack_info = Path(cmd[cmd.index("--pack-info-path") + 1]).read_text(encoding="utf-8")
                 assert (shared_libs / "library-default-signed.hsp").exists()
                 assert (shared_libs / "feature-default-signed.hsp").exists()
+                assert '"moduleName":"library"' in pack_info
+                assert '"moduleName":"feature"' in pack_info
                 _write_hap(
                     unsigned_hap,
                     {
@@ -1343,6 +1381,7 @@ class TestHvigorWrapper:
 
         assert result["success"] is True
         assert result["output_path"] == str(signed_hap)
+        assert result["hsp_output_paths"] == [str(artifacts["library"]), str(artifacts["feature"])]
         assert hsp_modules == ["library", "feature"]
         with zipfile.ZipFile(signed_hap) as archive:
             names = archive.namelist()
@@ -1415,7 +1454,7 @@ class TestHvigorWrapper:
         hsp_build_count = 0
         clean_count = 0
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             nonlocal hsp_build_count, clean_count
             command = " ".join(str(part) for part in cmd)
             if "app_packing_tool.jar" in command:
@@ -1430,7 +1469,7 @@ class TestHvigorWrapper:
             if "assembleHsp" in cmd:
                 hsp_build_count += 1
                 if hsp_build_count == 2:
-                    _write_file(hsp_artifact, "hsp")
+                    _write_hsp(hsp_artifact, "library")
                 return CompletedProcess(cmd, 0, stdout="hsp ok", stderr="")
             return CompletedProcess(cmd, 0, stdout="hvigor hap ok", stderr="")
 
@@ -1472,7 +1511,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env, close_fds, **kwargs):
             if "assembleHsp" in cmd:
                 return CompletedProcess(cmd, 0, stdout=f"artifact: {hsp_artifact}", stderr="")
             return CompletedProcess(cmd, 0, stdout="hvigor hap ok", stderr="")
@@ -1517,7 +1556,7 @@ class TestHvigorWrapper:
 
         call_index = {"count": 0}
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True, **kwargs):
             if cmd[0] == "cmd.exe":
                 _write_file(signed_artifact, "signed")
                 return CompletedProcess(cmd, 0, stdout="signed", stderr="")
@@ -1565,7 +1604,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True, **kwargs):
             if cmd[0] == "cmd.exe":
                 _write_file(signed_artifact, "signed")
                 return CompletedProcess(cmd, 0, stdout="signed", stderr="")
@@ -1616,7 +1655,7 @@ class TestHvigorWrapper:
 
         calls = []
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True, **kwargs):
             calls.append(cmd)
             return CompletedProcess(cmd, 0, stdout=f"artifact: {unsigned_artifact}", stderr="")
 
@@ -1699,7 +1738,7 @@ class TestHvigorWrapper:
             lambda: 500.0
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True, **kwargs):
             return CompletedProcess(cmd, 0, stdout=f"artifact: {stale_unsigned}", stderr="")
 
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
@@ -1735,7 +1774,7 @@ class TestHvigorWrapper:
             lambda: "Windows"
         )
 
-        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True):
+        def fake_run(cmd, cwd, capture_output, text, stdin, timeout, env=None, close_fds=True, **kwargs):
             return CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
         monkeypatch.setattr("harmonyos_dev_mcp.utils.wrappers.hvigor_wrapper.subprocess.run", fake_run)
@@ -1949,4 +1988,3 @@ class TestHvigorWrapper:
         wrapper = HvigorWrapper(str(project))
 
         assert wrapper.java_home == huawei_java_home
-

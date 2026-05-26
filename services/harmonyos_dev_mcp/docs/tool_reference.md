@@ -208,6 +208,7 @@ Rules:
 - `target="hsp"` builds one shared module through hvigor `assembleHsp`.
 - `target="hap" include_hsp=true` builds the base HAP, builds one or more HSP shared modules, repacks the HAP with `--shared-libs-path`, and signs the HAP with SDK tools.
 - `hsp_module_name="liba,libb"` and `hsp_module_names=["liba", "libb"]` are both supported; duplicates are ignored while preserving order.
+- HAP builds with `include_hsp=true` return `hsp_output_paths`; install those HSP files together with the HAP on devices that require dependent shared modules as separate install units.
 - HSP integration requires hvigor signing material in `build-profile.json5`; if DevEco stores encrypted passwords, set `HAP_SIGN_PASSWORD`, or set `HAP_KEY_PASSWORD` and `HAP_STORE_PASSWORD`.
 - `target="hnp"` builds a base HAP, repacks module HNP packages from directories like `entry/hnp/arm64-v8a/*.hnp`, and signs the HAP with SDK tools.
 - `target="hnp"` does not run project-local `.bat`, `.ps1`, or `.sh` build scripts.
@@ -216,6 +217,7 @@ Rules:
 Key result fields:
 
 - `output_path`
+- `hsp_output_paths`
 - `artifact_source`
 - `sign_status`
 - `target`
@@ -247,6 +249,7 @@ Common errors:
 - `HSP_SIGNING_FILE_NOT_FOUND`
 - `HSP_TOOLCHAIN_NOT_FOUND`
 - `HSP_PACKAGING_INPUT_MISSING`
+- `HSP_PACK_INFO_ERROR`
 - `HSP_SIGN_FAILED`
 - `HSP_NOT_IN_HAP`
 
