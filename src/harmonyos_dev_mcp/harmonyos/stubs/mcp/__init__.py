@@ -1,0 +1,1 @@
+"""mcp stub — empty package."""
