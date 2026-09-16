@@ -198,7 +198,7 @@ class HdcBase:
             cwd=cwd,
         )
 
-    def _execute_via_tcp(self, args: List[str], timeout: int = None) -> Dict[str, Any]:
+    def _execute_via_tcp(self, args: List[str], timeout: int = None, cwd: str = None) -> Dict[str, Any]:
         """
         Execute hdc command via direct TCP connection (HarmonyOS mode).
 
@@ -268,6 +268,9 @@ class HdcBase:
         # install <hap_path> → transfer + bm install
         if len(remaining) >= 2 and remaining[0] == "install":
             hap_path = remaining[-1]
+            # Resolve relative path using cwd (install_app passes filename + cwd)
+            if cwd and not os.path.isabs(hap_path):
+                hap_path = os.path.join(cwd, hap_path)
             remote = "/data/local/tmp/_install.hap"
             out, err, rc = tcp_file_send(hap_path, remote, connect_key, host, port, 120)
             if rc != 0:
@@ -306,7 +309,7 @@ class HdcBase:
         """
         # HarmonyOS TCP mode: bypass subprocess, connect directly to hdc server
         if os.getenv("HDC_USE_TCP") == "1":
-            return self._execute_via_tcp(args, timeout=timeout)
+            return self._execute_via_tcp(args, timeout=timeout, cwd=cwd)
 
         cmd = [self.hdc_path] + args
         timeout = timeout or Config.COMMAND_TIMEOUT
