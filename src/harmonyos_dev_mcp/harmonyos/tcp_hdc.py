@@ -13,6 +13,7 @@ import os
 import socket
 import struct
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Protocol constants
 BANNER = b"OHOS HDC"
@@ -141,10 +142,12 @@ def tcp_file_send(
     port: int = 8710,
     timeout: int = 120,
 ) -> tuple:
-    """Send a file to the device via base64 chunks over TCP.
+    """Send a file to the device via parallel base64 chunks over TCP.
 
-    Uses 48KB raw data per chunk (max ARG_MAX-safe on HarmonyOS),
-    printf instead of echo for reliability, and no artificial delays.
+    Splits file into 48KB chunks (near HarmonyOS ARG_MAX limit), sends
+    them concurrently via ThreadPoolExecutor (4 workers), then merges
+    and decodes on device. Each chunk writes to a separate part file
+    to avoid ordering issues with parallel writes.
 
     Returns (stdout, stderr, returncode).
     """
@@ -155,21 +158,38 @@ def tcp_file_send(
     # 48KB raw → ~64KB base64 + command overhead, safely under ARG_MAX (64KB)
     RAW_CHUNK = 49152
     B64_CHUNK = int(RAW_CHUNK * 4 / 3)
-    total = (len(b64) + B64_CHUNK - 1) // B64_CHUNK
+    chunks = [
+        b64[i * B64_CHUNK : (i + 1) * B64_CHUNK]
+        for i in range((len(b64) + B64_CHUNK - 1) // B64_CHUNK)
+    ]
+    total = len(chunks)
 
-    # Clear temp
-    tcp_exec(f"shell rm -f {remote_path}.b64", connect_key, host, port, timeout=10)
+    # Clear old parts
+    tcp_exec(f"shell rm -f {remote_path}.b64.*", connect_key, host, port, timeout=10)
 
-    for i in range(total):
-        chunk = b64[i * B64_CHUNK : (i + 1) * B64_CHUNK]
-        op = ">" if i == 0 else ">>"
-        cmd = f"shell printf '%s' '{chunk}' {op} {remote_path}.b64"
+    def _send_chunk(idx, chunk):
+        part_file = f"{remote_path}.b64.{idx}"
+        cmd = f"shell printf '%s' '{chunk}' > {part_file}"
         out, err, rc = tcp_exec(cmd, connect_key, host, port, timeout=15)
-        if rc != 0:
-            return out, err, rc
+        return idx, rc, err
 
-    tcp_exec(f"shell base64 -d {remote_path}.b64 > {remote_path}", connect_key, host, port, timeout=30)
-    tcp_exec(f"shell rm -f {remote_path}.b64", connect_key, host, port, timeout=10)
+    # Send chunks in parallel (4 workers)
+    workers = min(4, total)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_send_chunk, i, c): i for i, c in enumerate(chunks)
+        }
+        for fut in as_completed(futures):
+            idx, rc, err = fut.result()
+            if rc != 0:
+                # Cleanup on failure
+                tcp_exec(f"shell rm -f {remote_path}.b64.*", connect_key, host, port, 10)
+                return "", f"chunk {idx} failed: {err}", rc
+
+    # Merge parts in order + decode
+    parts = " ".join(f"{remote_path}.b64.{i}" for i in range(total))
+    tcp_exec(f"shell cat {parts} | base64 -d > {remote_path}", connect_key, host, port, timeout=30)
+    tcp_exec(f"shell rm -f {remote_path}.b64.*", connect_key, host, port, timeout=10)
     out, _, _ = tcp_exec(f"shell ls -la {remote_path}", connect_key, host, port, timeout=10)
     return out, "", 0
 
