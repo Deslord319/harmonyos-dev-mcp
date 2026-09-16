@@ -70,8 +70,8 @@ def tcp_exec(
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.settimeout(timeout)
-    # Small delay to avoid overwhelming hdc server with rapid connections
-    time.sleep(0.15)
+    # Minimal delay to avoid overwhelming hdc server with rapid connections
+    time.sleep(0.02)
     try:
         sock.connect((host, port))
     except Exception as e:
@@ -143,20 +143,27 @@ def tcp_file_send(
 ) -> tuple:
     """Send a file to the device via base64 chunks over TCP.
 
+    Uses 48KB raw data per chunk (max ARG_MAX-safe on HarmonyOS),
+    printf instead of echo for reliability, and no artificial delays.
+
     Returns (stdout, stderr, returncode).
     """
     with open(local_path, "rb") as f:
         data = f.read()
     b64 = base64.b64encode(data).decode("ascii")
-    CHUNK = 3072
-    total = (len(b64) + CHUNK - 1) // CHUNK
+
+    # 48KB raw → ~64KB base64 + command overhead, safely under ARG_MAX (64KB)
+    RAW_CHUNK = 49152
+    B64_CHUNK = int(RAW_CHUNK * 4 / 3)
+    total = (len(b64) + B64_CHUNK - 1) // B64_CHUNK
 
     # Clear temp
     tcp_exec(f"shell rm -f {remote_path}.b64", connect_key, host, port, timeout=10)
 
     for i in range(total):
-        chunk = b64[i * CHUNK : (i + 1) * CHUNK]
-        cmd = f"shell echo -n '{chunk}' >> {remote_path}.b64"
+        chunk = b64[i * B64_CHUNK : (i + 1) * B64_CHUNK]
+        op = ">" if i == 0 else ">>"
+        cmd = f"shell printf '%s' '{chunk}' {op} {remote_path}.b64"
         out, err, rc = tcp_exec(cmd, connect_key, host, port, timeout=15)
         if rc != 0:
             return out, err, rc
