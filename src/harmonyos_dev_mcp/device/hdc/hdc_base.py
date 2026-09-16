@@ -5,6 +5,7 @@ Provides core command execution helpers and shell command validation.
 """
 
 import asyncio
+import os
 import subprocess
 from typing import Any, Dict, List, Optional
 
@@ -197,10 +198,99 @@ class HdcBase:
             cwd=cwd,
         )
 
+    def _execute_via_tcp(self, args: List[str], timeout: int = None) -> Dict[str, Any]:
+        """
+        Execute hdc command via direct TCP connection (HarmonyOS mode).
+
+        Bypasses subprocess entirely — connects to hdc server over TCP,
+        implements the hdc binary protocol in pure Python.
+
+        Activated when env var HDC_USE_TCP=1 is set.
+        """
+        from harmonyos_dev_mcp.harmonyos.tcp_hdc import (
+            tcp_exec,
+            tcp_file_send,
+            parse_hdc_args,
+        )
+
+        route_ip = self._normalize_optional(self._effective_hdc_server()) or "127.0.0.1:8710"
+        parsed = parse_hdc_args(args, route_ip)
+        command = parsed["command"]
+        connect_key = parsed["connect_key"]
+
+        host = "127.0.0.1"
+        port = 8710
+        if route_ip and ":" in route_ip:
+            parts = route_ip.rsplit(":", 1)
+            host = parts[0]
+            try:
+                port = int(parts[1])
+            except ValueError:
+                pass
+
+        actual_timeout = timeout or Config.COMMAND_TIMEOUT
+        remaining = command.split()
+
+        # file send <local> <remote>
+        if len(remaining) >= 4 and remaining[0] == "file" and remaining[1] == "send":
+            local_path = remaining[2]
+            remote_path = remaining[3]
+            out, err, rc = tcp_file_send(
+                local_path, remote_path, connect_key, host, port, max(actual_timeout, 120)
+            )
+            return {"returncode": rc, "stdout": out.strip(), "stderr": err.strip(), "success": rc == 0}
+
+        # file recv <remote> <local>
+        if len(remaining) >= 4 and remaining[0] == "file" and remaining[1] == "recv":
+            remote_path = remaining[2]
+            local_path = remaining[3]
+            b64out, _, _ = tcp_exec(f"base64 {remote_path}", connect_key, host, port, 60)
+            b64clean = b64out.replace("\n", "").replace("\r", "")
+            try:
+                import base64 as _b64
+
+                raw = _b64.b64decode(b64clean)
+                with open(local_path, "wb") as f:
+                    f.write(raw)
+                return {
+                    "returncode": 0,
+                    "stdout": f"recv file ok, size={len(raw)}",
+                    "stderr": "",
+                    "success": True,
+                }
+            except Exception as e:
+                return {"returncode": 1, "stdout": "", "stderr": str(e), "success": False}
+
+        # install <hap_path> → transfer + bm install
+        if len(remaining) >= 2 and remaining[0] == "install":
+            hap_path = remaining[-1]
+            remote = "/data/local/tmp/_install.hap"
+            out, err, rc = tcp_file_send(hap_path, remote, connect_key, host, port, 120)
+            if rc != 0:
+                return {"returncode": rc, "stdout": "", "stderr": f"transfer failed: {err}", "success": False}
+            out, err, rc = tcp_exec(f"bm install -p {remote}", connect_key, host, port, 60)
+            tcp_exec(f"rm -f {remote}", connect_key, host, port, 10)
+            return {"returncode": rc, "stdout": out.strip(), "stderr": err.strip(), "success": rc == 0}
+
+        # uninstall <bundle>
+        if len(remaining) >= 2 and remaining[0] == "uninstall":
+            bundle = remaining[-1]
+            out, err, rc = tcp_exec(f"bm uninstall -n {bundle}", connect_key, host, port, 30)
+            return {"returncode": rc, "stdout": out.strip(), "stderr": err.strip(), "success": rc == 0}
+
+        # General command: shell, list targets, etc.
+        out, err, rc = tcp_exec(command, connect_key, host, port, actual_timeout)
+        return {"returncode": rc, "stdout": out.strip(), "stderr": err.strip(), "success": rc == 0}
+
     @retry(should_retry=is_transient_error)
     def _execute_command(self, args: List[str], timeout: int = None, cwd: str = None) -> Dict[str, Any]:
         """
         Execute an `hdc` command synchronously.
+
+        On HarmonyOS (when HDC_USE_TCP=1), uses direct TCP connection
+        to hdc server, bypassing subprocess entirely.
+
+        On macOS/Windows (default), uses subprocess.run() as before.
 
         Args:
             args: Command argument list without the `hdc` executable itself.
@@ -210,6 +300,10 @@ class HdcBase:
         Returns:
             A result dict with `returncode`, `stdout`, `stderr`, and `success`.
         """
+        # HarmonyOS TCP mode: bypass subprocess, connect directly to hdc server
+        if os.getenv("HDC_USE_TCP") == "1":
+            return self._execute_via_tcp(args, timeout=timeout)
+
         cmd = [self.hdc_path] + args
         timeout = timeout or Config.COMMAND_TIMEOUT
 
