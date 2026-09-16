@@ -57,10 +57,15 @@ def tcp_exec(
     host: str = "127.0.0.1",
     port: int = 8710,
     timeout: int = 30,
+    break_on_newline: bool = True,
 ) -> tuple:
     """Execute an hdc command via TCP.
 
     Returns (stdout, stderr, returncode).
+
+    When break_on_newline is False (used for large output like base64 file
+    dumps), the loop waits for idle timeout or connection close instead of
+    breaking on the first newline, preventing data truncation.
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -107,7 +112,9 @@ def tcp_exec(
                 if payload:
                     output += payload
                 text = output.decode("utf-8", errors="replace")
-                if text.endswith("\n") or "[Empty]" in text or "[Fail]" in text or "[Success]" in text:
+                if "[Empty]" in text or "[Fail]" in text or "[Success]" in text:
+                    break
+                if break_on_newline and text.endswith("\n"):
                     break
             except socket.timeout:
                 if output:
@@ -145,18 +152,18 @@ def tcp_file_send(
     total = (len(b64) + CHUNK - 1) // CHUNK
 
     # Clear temp
-    tcp_exec(f"rm -f {remote_path}.b64", connect_key, host, port, timeout=10)
+    tcp_exec(f"shell rm -f {remote_path}.b64", connect_key, host, port, timeout=10)
 
     for i in range(total):
         chunk = b64[i * CHUNK : (i + 1) * CHUNK]
-        cmd = f"echo -n '{chunk}' >> {remote_path}.b64"
+        cmd = f"shell echo -n '{chunk}' >> {remote_path}.b64"
         out, err, rc = tcp_exec(cmd, connect_key, host, port, timeout=15)
         if rc != 0:
             return out, err, rc
 
-    tcp_exec(f"base64 -d {remote_path}.b64 > {remote_path}", connect_key, host, port, timeout=30)
-    tcp_exec(f"rm -f {remote_path}.b64", connect_key, host, port, timeout=10)
-    out, _, _ = tcp_exec(f"ls -la {remote_path}", connect_key, host, port, timeout=10)
+    tcp_exec(f"shell base64 -d {remote_path}.b64 > {remote_path}", connect_key, host, port, timeout=30)
+    tcp_exec(f"shell rm -f {remote_path}.b64", connect_key, host, port, timeout=10)
+    out, _, _ = tcp_exec(f"shell ls -la {remote_path}", connect_key, host, port, timeout=10)
     return out, "", 0
 
 

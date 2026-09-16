@@ -244,8 +244,12 @@ class HdcBase:
         if len(remaining) >= 4 and remaining[0] == "file" and remaining[1] == "recv":
             remote_path = remaining[2]
             local_path = remaining[3]
-            b64out, _, _ = tcp_exec(f"base64 {remote_path}", connect_key, host, port, 60)
-            b64clean = b64out.replace("\n", "").replace("\r", "")
+            b64out, _, _ = tcp_exec(f"shell base64 {remote_path}", connect_key, host, port, max(actual_timeout, 60), break_on_newline=False)
+            b64clean = b64out.replace("\n", "").replace("\r", "").replace(" ", "")
+            # Fix padding (base64 requires length to be multiple of 4)
+            padding_needed = len(b64clean) % 4
+            if padding_needed:
+                b64clean += "=" * (4 - padding_needed)
             try:
                 import base64 as _b64
 
@@ -268,14 +272,14 @@ class HdcBase:
             out, err, rc = tcp_file_send(hap_path, remote, connect_key, host, port, 120)
             if rc != 0:
                 return {"returncode": rc, "stdout": "", "stderr": f"transfer failed: {err}", "success": False}
-            out, err, rc = tcp_exec(f"bm install -p {remote}", connect_key, host, port, 60)
-            tcp_exec(f"rm -f {remote}", connect_key, host, port, 10)
+            out, err, rc = tcp_exec(f"shell bm install -p {remote}", connect_key, host, port, 60)
+            tcp_exec(f"shell rm -f {remote}", connect_key, host, port, 10)
             return {"returncode": rc, "stdout": out.strip(), "stderr": err.strip(), "success": rc == 0}
 
         # uninstall <bundle>
         if len(remaining) >= 2 and remaining[0] == "uninstall":
             bundle = remaining[-1]
-            out, err, rc = tcp_exec(f"bm uninstall -n {bundle}", connect_key, host, port, 30)
+            out, err, rc = tcp_exec(f"shell bm uninstall -n {bundle}", connect_key, host, port, 30)
             return {"returncode": rc, "stdout": out.strip(), "stderr": err.strip(), "success": rc == 0}
 
         # General command: shell, list targets, etc.
