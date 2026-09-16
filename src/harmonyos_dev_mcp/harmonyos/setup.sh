@@ -81,7 +81,7 @@ except:
 
 # --- 3. 检测 SDK ---
 echo ""
-echo "[3/4] 检测 SDK..."
+echo "[3/5] 检测 SDK..."
 SDK_PATH="${HARMONYOS_SDK_PATH:-/data/service/hnp/sdk.org/sdk_1.0.0/default}"
 if [ -f "$SDK_PATH/sdk-pkg.json" ]; then
     echo "  ✅ $SDK_PATH"
@@ -94,9 +94,33 @@ else
     fi
 fi
 
+# --- 3b. 检测 Node.js 和 hvigor ---
+echo ""
+echo "[4/5] 检测 Node.js 和 hvigor..."
+NODE_BIN=""
+HVIGOR_JS=""
+for candidate in \
+    "/data/service/hnp/node.org/node_v24.18.1/bin/node" \
+    "$(which node 2>/dev/null)"; do
+    if [ -x "$candidate" ] 2>/dev/null; then
+        NODE_BIN="$candidate"
+        echo "  ✅ Node.js: $NODE_BIN"
+        break
+    fi
+done
+if [ -z "$NODE_BIN" ]; then
+    echo "  ⚠️  未找到 Node.js"
+fi
+HVIGOR_JS=$(find /data/service/hnp/hvigor.org -name "hvigorw.js" 2>/dev/null | head -1)
+if [ -n "$HVIGOR_JS" ]; then
+    echo "  ✅ hvigorw: $HVIGOR_JS"
+else
+    echo "  ⚠️  未找到 hvigorw.js"
+fi
+
 # --- 4. 输出可导入的 JSON ---
 echo ""
-echo "[4/4] 生成 MCP 配置..."
+echo "[5/5] 生成 MCP 配置..."
 echo ""
 
 STUBS_DIR="$SRC_DIR/harmonyos_dev_mcp/harmonyos/stubs"
@@ -111,7 +135,16 @@ ENV_ENTRIES="$ENV_ENTRIES
     \"HDC_USE_TCP\": \"1\",
     \"HARMONYOS_HDC_SERVER\": \"127.0.0.1:8710\",
     \"HARMONYOS_SDK_PATH\": \"$SDK_PATH\",
-    \"DEVECO_STUDIO_PATH\": \"$SDK_PATH\",
+    \"DEVECO_STUDIO_PATH\": \"$SDK_PATH\","
+if [ -n "$NODE_BIN" ]; then
+    ENV_ENTRIES="$ENV_ENTRIES
+    \"HARMONYOS_NODE_PATH\": \"$NODE_BIN\","
+fi
+if [ -n "$HVIGOR_JS" ]; then
+    ENV_ENTRIES="$ENV_ENTRIES
+    \"HARMONYOS_HVIGOR_PATH\": \"$HVIGOR_JS\","
+fi
+ENV_ENTRIES="$ENV_ENTRIES
     \"NODE_TLS_REJECT_UNAUTHORIZED\": \"0\",
     \"PATH\": \"/data/service/hnp/node.org/node_v24.18.1/bin:/data/service/hnp/bin:/data/app/bin:/system/bin\""
 
