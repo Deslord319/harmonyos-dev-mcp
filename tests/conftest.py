@@ -22,20 +22,17 @@ def pytest_configure(config):
 @pytest.fixture(autouse=True)
 def reset_container():
     yield
-    from harmonyos_dev_mcp.container import container
+    from harmonyos_dev_mcp.container import container, _set_registered
 
     container.reset()
-    import harmonyos_dev_mcp.container as container_mod
-
-    container_mod._registered = False
+    _set_registered(False)
 
 
 @pytest.fixture
 def mock_hdc() -> Generator[MagicMock, None, None]:
     import harmonyos_dev_mcp  # noqa: F401
     from harmonyos_dev_mcp.device.hdc import HdcWrapper
-    from harmonyos_dev_mcp.container import container
-    import harmonyos_dev_mcp.container as container_mod
+    from harmonyos_dev_mcp.container import container, _set_registered
 
     mock = MagicMock(spec=HdcWrapper)
 
@@ -152,7 +149,7 @@ def mock_hdc() -> Generator[MagicMock, None, None]:
     mock.get_realtime_logs.return_value = "01-31 10:00:00.123  1234  1234 I MyTag: Test log"
     mock.get_app_pid.return_value = 1234
     container.register(HdcWrapper, lambda: mock)
-    container_mod._registered = True
+    _set_registered(True)
 
     yield mock
 
@@ -182,8 +179,7 @@ def no_device_mock(mock_hdc: MagicMock) -> MagicMock:
 def mock_ui_operations() -> Generator[MagicMock, None, None]:
     import harmonyos_dev_mcp  # noqa: F401
     from harmonyos_dev_mcp.ui.operations import UiTestWrapper
-    from harmonyos_dev_mcp.container import container
-    import harmonyos_dev_mcp.container as container_mod
+    from harmonyos_dev_mcp.container import container, _set_registered
 
     mock = MagicMock(spec=UiTestWrapper)
 
@@ -250,7 +246,7 @@ def mock_ui_operations() -> Generator[MagicMock, None, None]:
     }
 
     container.register(UiTestWrapper, lambda: mock)
-    container_mod._registered = True
+    _set_registered(True)
 
     yield mock
 

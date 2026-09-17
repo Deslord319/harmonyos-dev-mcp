@@ -590,6 +590,74 @@ async def _resolve_input_search_target(
     )
 
 
+def _find_node_by_compid(nodes: List[Dict[str, Any]], compid: str) -> Optional[Dict[str, Any]]:
+    """Find the first tree node whose ``properties.compid`` equals ``compid``."""
+    for node in nodes:
+        props = node.get("properties") or {}
+        if props.get("compid") == compid:
+            return node
+        found = _find_node_by_compid(node.get("children") or [], compid)
+        if found is not None:
+            return found
+    return None
+
+
+def _collect_subtree_texts(node: Dict[str, Any]) -> List[str]:
+    """Collect every non-empty ``text`` value in ``node`` and its descendants."""
+    texts: List[str] = []
+    props = node.get("properties") or {}
+    text = props.get("text")
+    if text:
+        texts.append(text)
+    for child in node.get("children") or []:
+        texts.extend(_collect_subtree_texts(child))
+    return texts
+
+
+async def _read_subtree_input_text(
+    device_id: str,
+    active_handle: Dict[str, Any],
+    expected_text: str,
+    sentinel: Optional[str],
+) -> Optional[str]:
+    """Read the input value from the target element's subtree.
+
+    Composite components (e.g. ``Search``) keep the editable text in a
+    descendant node while the resolved element's own ``text`` stays empty.
+    When the element's own text is empty, walk its subtree in the window UI
+    tree and return the descendant text that holds the input value, so the
+    success and sentinel-cleanup branches observe the real field value.
+    """
+    compid = active_handle.get("compid")
+    window_id = active_handle.get("window_id")
+    if not compid or window_id is None:
+        return None
+    hdc = get_hdc()
+    raw = await asyncio.to_thread(hdc.get_ui_tree_raw, device_id, window_id)
+    if not isinstance(raw, dict) or not raw.get("success", False):
+        return None
+    from harmonyos_dev_mcp.ui.tree_parser import UITreeParser
+
+    parsed = UITreeParser().parse(raw.get("ui_tree") or "")
+    if not isinstance(parsed, dict):
+        return None
+    target = _find_node_by_compid(parsed.get("nodes") or [], compid)
+    if target is None:
+        return None
+    texts = _collect_subtree_texts(target)
+    if not texts:
+        return None
+    sentinel_value = f"{expected_text}{sentinel}" if sentinel else None
+    # Prefer exact matches so the existing success/cleanup branches fire.
+    if expected_text in texts:
+        return expected_text
+    if sentinel_value and sentinel_value in texts:
+        return sentinel_value
+    # Otherwise report the deepest non-empty value so the timeout message
+    # reflects what the field actually holds.
+    return texts[-1]
+
+
 async def _verify_input_handle(
     *,
     device_id: str,
@@ -625,6 +693,17 @@ async def _verify_input_handle(
         if verified_handle:
             active_handle = verified_handle
         actual_text = active_handle.get("text")
+
+        # Composite components (e.g. Search) keep the editable value in a
+        # descendant node while the resolved element's own text stays empty.
+        # Fall back to the subtree so verification and sentinel cleanup
+        # observe the real field value instead of the empty parent.
+        if actual_text != expected_text and not actual_text:
+            subtree_text = await _read_subtree_input_text(
+                device_id, active_handle, expected_text, sentinel
+            )
+            if subtree_text is not None:
+                actual_text = subtree_text
 
         if actual_text == expected_text:
             result_data.update(

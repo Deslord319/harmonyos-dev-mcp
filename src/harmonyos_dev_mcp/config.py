@@ -270,6 +270,12 @@ class Config(ConfigBase):
         cls.HILOGTOOL_PATH = os.getenv("HILOGTOOL_PATH")
         cls.DEFAULT_DEVICE_ID = os.getenv("HARMONYOS_DEVICE_ID")
 
+        # Allow direct env override for node/hvigor (needed on HarmonyOS
+        # where they live in system paths, not inside DevEco Studio)
+        # Use HARMONYOS_ prefix to avoid collision with Node.js standard NODE_PATH
+        cls.NODE_PATH = os.getenv("HARMONYOS_NODE_PATH")
+        cls.HVIGOR_PATH = os.getenv("HARMONYOS_HVIGOR_PATH")
+
         cls.UI_OPERATION_TIMEOUT = int(os.getenv("UI_OPERATION_TIMEOUT", str(cls.UI_OPERATION_TIMEOUT)))
         cls.UI_TREE_TIMEOUT = int(os.getenv("UI_TREE_TIMEOUT", str(cls.UI_TREE_TIMEOUT)))
         cls.INPUT_FOCUS_TIMEOUT_MS = int(

@@ -25,6 +25,21 @@ def _ensure_registered():
         _registered = True
 
 
+def _set_registered(value: bool) -> None:
+    """Test-only hook to set the module-level registration flag.
+
+    ``import harmonyos_dev_mcp.container as m`` resolves to the ``container``
+    singleton: the package ``__init__`` re-exports that instance under the same
+    name, shadowing the submodule reference. Assigning ``m._registered`` would
+    therefore mutate the instance, not the module global that
+    ``_ensure_registered`` reads. Tests must flip the real flag through here so
+    mock factories registered into the container are not overwritten by a
+    later ``_register_services`` call.
+    """
+    global _registered
+    _registered = value
+
+
 def get_hdc():
     from .device.hdc import HdcWrapper
 

@@ -129,6 +129,7 @@ mcp_ho_dev/
 |  |- tools/                   # Public MCP tool entrypoints
 |  |- ui/                      # UI tree parsing, selectors, actions, and normalization
 |  |- utils/                   # Compatibility wrappers
+|  |- harmonyos/               # HarmonyOS on-device adapter (TCP hdc client + standalone MCP server + stubs)
 |  `- _common/                 # Shared runtime infrastructure bundled in this package
 |- tests/unit/                 # Unit tests grouped by domain
 |- docs/                       # Public tool and log query documentation
@@ -144,6 +145,11 @@ mcp_ho_dev/
 - DevEco Studio 5.0+
 - HarmonyOS SDK toolchains, including `hdc`
 - `uv`
+
+### HarmonyOS on-device (additional)
+
+- No DevEco Studio or `pip`/`uv` needed — stubs are bundled in-repo
+- hdc server must be started in TCP mode from HiShell (see [Run](#harmonyos-on-device))
 
 ## Install
 
@@ -168,8 +174,48 @@ uv run python -c "import harmonyos_dev_mcp; print(harmonyos_dev_mcp.__file__)"
 
 ## Run
 
+### Windows / macOS
+
 ```bash
 uv run harmonyos-dev-mcp
+```
+
+### HarmonyOS (On-Device)
+
+On HarmonyOS devices, the sandbox blocks subprocess `hdc` calls (UDS isolation)
+and Python native extensions (`pydantic_core` .so blocked by SELinux). The
+`harmonyos/` adapter solves both:
+
+1. **TCP hdc client** — connects to hdc server over TCP directly, no subprocess
+2. **Standalone MCP server** — pure Python JSON-RPC over stdio, no `fastmcp`
+3. **Bundled stubs** — `fastmcp`/`mcp`/`loguru` stubs shipped in-repo
+
+All 18 tools work without modification — `hdc_base.py` checks `HDC_USE_TCP=1`
+and routes commands through TCP instead of subprocess.
+
+**Prerequisites** (one-time, in HiShell):
+
+```bash
+hdc -s 0.0.0.0:8710 start -r
+hdc tconn 127.0.0.1:$(param get persist.hdc.port)
+```
+
+**Run:**
+
+```bash
+HDC_USE_TCP=1 \
+HARMONYOS_HDC_SERVER=127.0.0.1:8710 \
+PYTHONPATH=<repo>/src/harmonyos_dev_mcp/harmonyos/stubs:<repo>/src \
+python3 -c "from harmonyos_dev_mcp.harmonyos.mcp_server import main; main()"
+```
+
+> `python3 -m` and script-file invocation fail on HarmonyOS due to
+> `libpython3.12.so` not loading in subprocess context. Use `-c` instead.
+
+**One-command setup** (auto-detects Python, SDK, hdc; outputs importable JSON):
+
+```bash
+bash src/harmonyos_dev_mcp/harmonyos/setup.sh
 ```
 
 Check connected devices:
@@ -250,6 +296,7 @@ uv build --out-dir dist --clear
 - `build_app target="hsp"` builds shared modules; `build_app target="hap" include_hsp=true` can integrate one or more HSP outputs into the HAP.
 - `logs_query` supports `errors` and `markers` modes.
 - The shared infrastructure that used to live in a separate common package is bundled in `harmonyos_dev_mcp._common`.
+- On HarmonyOS devices, set `HDC_USE_TCP=1` to switch from subprocess `hdc` calls to direct TCP connections. This bypasses the sandbox UDS isolation. See [HarmonyOS (On-Device)](#harmonyos-on-device) for details.
 
 ## License
 

@@ -132,6 +132,18 @@ class ToolchainDiscovery:
 
     @staticmethod
     def find_sdk_root(deveco_path: Path) -> Path:
+        # HarmonyOS: if deveco_path itself contains sdk-pkg.json,
+        # the SDK home is its parent directory
+        if (deveco_path / "sdk-pkg.json").exists():
+            return deveco_path.parent
+        # If a child of deveco_path contains sdk-pkg.json,
+        # deveco_path itself is the SDK home
+        try:
+            for child in deveco_path.iterdir():
+                if child.is_dir() and (child / "sdk-pkg.json").exists():
+                    return deveco_path
+        except OSError:
+            pass
         candidates = [
             deveco_path / "sdk",
             deveco_path / "Contents" / "sdk",

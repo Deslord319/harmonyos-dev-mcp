@@ -386,6 +386,97 @@ class TestInputText:
         assert sc["result"]["cleanup_performed"] is False
         assert sc["result"]["stage"] == "cleanup"
 
+    async def test_input_verifies_composite_component_via_subtree(
+        self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result
+    ):
+        """Composite components (e.g. Search) keep the editable value in a
+        descendant while the resolved element's own text stays empty.
+        Verification must read the subtree, and sentinel cleanup must fire
+        against the subtree value instead of the empty parent."""
+        import json as _json
+
+        from harmonyos_dev_mcp.tools import ui
+        from harmonyos_dev_mcp.ui.keycodes import KeyCode
+
+        search_element = {
+            "id": "41",
+            "compid": "588:41",
+            "type": "Search",
+            "text": "",
+            "x": 100,
+            "y": 200,
+            "window_id": 1,
+            "focused": True,
+            "visible": True,
+            "enabled": True,
+            "clickable": True,
+            "bounds": {"left": 80, "top": 180, "right": 120, "bottom": 220},
+        }
+        mock_ui_operations.find_element.return_value = {
+            "success": True,
+            "window_id": 1,
+            "elements": [search_element],
+        }
+
+        def _ui_tree(child_text: str) -> str:
+            return _json.dumps(
+                {
+                    "children": [
+                        {
+                            "attributes": {
+                                "type": "Search",
+                                "hashcode": "588:41",
+                                "text": "",
+                                "accessibilityId": "41",
+                                "bounds": "[80,180][120,220]",
+                                "focused": "true",
+                                "visible": "true",
+                            },
+                            "children": [
+                                {
+                                    "attributes": {
+                                        "type": "SearchField",
+                                        "hashcode": "588:42",
+                                        "text": child_text,
+                                        "accessibilityId": "42",
+                                        "bounds": "[80,180][120,220]",
+                                        "focused": "true",
+                                    },
+                                    "children": [],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            )
+
+        mock_hdc.get_ui_tree_raw.side_effect = [
+            {"success": True, "ui_tree": _ui_tree("wifi中")},
+            {"success": True, "ui_tree": _ui_tree("wifi")},
+        ]
+
+        handle = _sample_handle(with_lookup_hint=True)
+        handle.update(
+            {
+                "id": "41",
+                "compid": "588:41",
+                "type": "Search",
+                "text": "",
+            }
+        )
+
+        sc = unwrap_result(await ui.input_text(element_handle=handle, text="wifi"))
+
+        assert sc["ok"] is True
+        assert sc["result"]["verified"] is True
+        assert sc["result"]["actual_text"] == "wifi"
+        assert sc["result"]["cleanup_performed"] is True
+        assert sc["result"]["input_strategy"] == "forced_paste_sentinel"
+        mock_ui_operations.replace_focused_text.assert_called_once_with(
+            "device_001", 100, 200, "wifi中"
+        )
+        mock_ui_operations.press_key.assert_called_once_with("device_001", int(KeyCode.DEL))
+
     async def test_input_observes_until_ui_tree_reaches_expected_text(
         self, mock_hdc: MagicMock, mock_ui_operations: MagicMock, unwrap_result
     ):
