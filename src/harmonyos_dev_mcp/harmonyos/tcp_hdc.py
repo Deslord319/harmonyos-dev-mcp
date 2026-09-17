@@ -9,7 +9,6 @@ On macOS/Windows, the original subprocess approach works fine.
 """
 
 import base64
-import os
 import socket
 import struct
 import time
@@ -217,7 +216,7 @@ def parse_hdc_args(args: list, hdc_server: str = None) -> dict:
             i += 1
 
     # Determine connect key
-    server_addr = hdc_server or f"127.0.0.1:8710"
+    server_addr = hdc_server or "127.0.0.1:8710"
     if device_id and device_id == server_addr:
         connect_key = b"any"
     elif device_id:
