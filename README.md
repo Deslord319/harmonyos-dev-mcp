@@ -2,7 +2,7 @@
 
 `harmonyos_dev_mcp` provides HarmonyOS MCP tools for device discovery, app build and deployment, UI automation, E2E inspection, and log validation.
 
-[![Version](https://img.shields.io/badge/version-0.9.1-blue)](pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.10.0-blue)](pyproject.toml)
 [![PyPI](https://img.shields.io/pypi/v/harmonyos-dev-mcp.svg)](https://pypi.org/project/harmonyos-dev-mcp/)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/)
 
@@ -11,23 +11,24 @@
 - PyPI: [harmonyos-dev-mcp](https://pypi.org/project/harmonyos-dev-mcp/)
 - Tool reference: [docs/tool_reference.md](docs/tool_reference.md)
 - Logs query guide: [docs/logs_query.md](docs/logs_query.md)
+- Release notes: [0.10.0](docs/release_notes_0.10.0.md)
 
 ## What It Provides
 
 The package exposes 18 MCP tools:
 
-### 0.9.1 highlights
+### 0.10.0 highlights
 
-- `input_text` now selects an IME-safe strategy for digits, Unicode, and ASCII
-  text without changing the active input method.
-- Handle and unambiguous search targets are observed until their exact final
-  value is visible or the verification deadline expires.
-- Reliable text input verifies both foreground-window state and element focus
-  before any text or shortcut is dispatched.
-- UI mutations are serialized per HDC endpoint and device, while separate
-  devices remain concurrent.
-- `press_key` distinguishes event dispatch from application-level effect
-  verification.
+- Run all 18 MCP tools directly on HarmonyOS with a pure-Python stdio server,
+  bundled dependency stubs, and direct TCP HDC transport.
+- Route HDC commands through TCP when `HDC_USE_TCP=1`, including the shell
+  prefix required by the TCP protocol.
+- Transfer files over TCP in parallel chunks for substantially faster device
+  deployment.
+- Detect HarmonyOS SDK toolchains and use `HARMONYOS_NODE_PATH` without
+  colliding with the standard Node.js `NODE_PATH` variable.
+- Verify `input_text` results on composite UI components as well as ordinary
+  text fields.
 
 Parameter notation:
 

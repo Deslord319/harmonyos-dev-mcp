@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "harmonyos-dev-mcp"
-version = "0.9.1"
+version = "0.10.0"
 description = "HarmonyOS MCP service for device automation, app deployment, UI interaction, E2E support, and log validation."
 requires-python = ">=3.12"
 readme = "README.md"
